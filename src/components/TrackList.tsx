@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp, Track, Clip } from '../lib/store';
 import { Volume2, Sliders, Timer } from './Icons';
-import { MoreHorizontal, Trash2, Download, Scissors, Layers, Wand2, ArrowUp, ChevronDown, ChevronRight } from 'lucide-react';
+import { MoreHorizontal, Trash2, Download, Scissors, Layers, Wand2, ArrowUp, ChevronDown, ChevronRight, Snowflake } from 'lucide-react';
 
 const EXPANDED_COLORS = [
   '#FF2A5F', '#FF3B30', '#FF9500', '#FFCC00', 
@@ -141,6 +141,22 @@ export function TrackList() {
                 title="Record Arm"
               >
                 ●
+              </button>
+              <button 
+                onClick={async () => {
+                  if (track.isFrozen) {
+                    dispatch({ type: 'UNFREEZE_TRACK', payload: track.id });
+                  } else {
+                    const frozenBuffer = await audioEngine.freezeTrack(track, audioEngine.buffers);
+                    const bufferId = `frozen_${track.id}_${Date.now()}`;
+                    audioEngine.buffers.set(bufferId, frozenBuffer);
+                    dispatch({ type: 'FREEZE_TRACK', payload: { trackId: track.id, bufferId } });
+                  }
+                }}
+                className={`w-6 h-6 rounded flex items-center justify-center transition-all ${track.isFrozen ? "bg-blue-500 text-white shadow-lg" : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700 hover:text-blue-400"}`}
+                title={track.isFrozen ? "Unfreeze Track" : "Freeze Track (Save CPU)"}
+              >
+                <Snowflake size={12} fill={track.isFrozen ? "currentColor" : "none"} />
               </button>
               <div className="relative">
                 <button

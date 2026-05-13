@@ -66,6 +66,29 @@ export function Transport() {
       state.tracks.forEach(track => {
         if (track.muted) return;
         
+        // SUPPORT FOR TRACK FREEZING: If frozen, play the pre-rendered buffer instead of individual clips
+        if (track.isFrozen && track.frozenBufferId) {
+          const buffer = audioEngine.buffers.get(track.frozenBufferId);
+          if (buffer) {
+             const trackDuration = buffer.duration;
+             if (trackDuration > state.currentTime) {
+               let startContextTime = scheduleTime;
+               let offset = state.currentTime;
+               let remaining = trackDuration - state.currentTime;
+               
+               audioEngine.playClip(
+                 `frozen_${track.id}`,
+                 track.id,
+                 startContextTime,
+                 offset,
+                 remaining,
+                 track.frozenBufferId
+               );
+               return; // Skip individual clips
+             }
+          }
+        }
+
         const allClips = [...track.clips, ...(track.lanes?.flatMap(l => l.clips) || [])];
         allClips.forEach(clip => {
           if (clip.start + clip.duration > state.currentTime) {

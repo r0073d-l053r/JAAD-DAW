@@ -1,0 +1,9 @@
+{
+  "name": "jaad-docker-dsp",
+  "version": "1.0.0",
+  "description": "Headless DSP Sidecar for JAAD",
+  "main": "server.js",
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}

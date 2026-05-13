@@ -19,6 +19,8 @@ export interface Track {
   clips: Clip[];
   lanes: Lane[];
   showLanes: boolean;
+  isFrozen?: boolean;
+  frozenBufferId?: string;
 }
 
 export interface Clip {
@@ -81,6 +83,8 @@ type Action =
   | { type: "SET_TEMPO_AUTOMATION"; payload: { time: number; bpm: number }[] }
   | { type: "ADD_TRACK"; payload: Track }
   | { type: "UPDATE_TRACK"; payload: { id: string; changes: Partial<Track> } }
+  | { type: "FREEZE_TRACK"; payload: { trackId: string; bufferId: string } }
+  | { type: "UNFREEZE_TRACK"; payload: string }
   | { type: "TOGGLE_AI_PANEL" }
   | { type: "TOGGLE_BACKGROUND_ANIMATION" }
   | { type: "SET_OFFLINE"; payload: boolean }
@@ -252,12 +256,27 @@ function appReducer(
         showLanes: action.payload.showLanes ?? false,
       };
       return saveHistory(state, [...state.tracks, trackWithLanes]);
-    case "UPDATE_TRACK": {
-      const newTracks = state.tracks.map((t) =>
-        t.id === action.payload.id ? { ...t, ...action.payload.changes } : t,
-      );
-      return saveHistory(state, newTracks);
-    }
+    case "UPDATE_TRACK":
+      return {
+        ...state,
+        tracks: state.tracks.map((t) =>
+          t.id === action.payload.id ? { ...t, ...action.payload.changes } : t,
+        ),
+      };
+    case "FREEZE_TRACK":
+      return {
+        ...state,
+        tracks: state.tracks.map((t) =>
+          t.id === action.payload.trackId ? { ...t, isFrozen: true, frozenBufferId: action.payload.bufferId } : t,
+        ),
+      };
+    case "UNFREEZE_TRACK":
+      return {
+        ...state,
+        tracks: state.tracks.map((t) =>
+          t.id === action.payload ? { ...t, isFrozen: false, frozenBufferId: undefined } : t,
+        ),
+      };
     case "REORDER_TRACKS": {
       const { sourceId, targetId } = action.payload;
       if (sourceId === targetId) return state;

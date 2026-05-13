@@ -420,6 +420,38 @@ class AudioEngine {
 
     return await offlineCtx.startRendering();
   }
+  async freezeTrack(track: any, allBuffers: Map<string, AudioBuffer>, sampleRate: number = 44100): Promise<AudioBuffer> {
+    const totalDuration = Math.max(0, ...track.clips.map((c: any) => c.start + c.duration)) + 5; // padding
+    
+    // Extract raw data for worker transfer
+    const clipBuffers: Record<string, Float32Array[]> = {};
+    for (const clip of track.clips) {
+      const bId = clip.bufferId || clip.id;
+      if (allBuffers.has(bId) && !clipBuffers[bId]) {
+        const buf = allBuffers.get(bId)!;
+        const channels = [];
+        for (let c = 0; c < buf.numberOfChannels; c++) {
+          channels.push(buf.getChannelData(c));
+        }
+        clipBuffers[bId] = channels;
+      }
+    }
+
+    return new Promise((resolve, reject) => {
+      const worker = new Worker(new URL('./renderer.worker.ts', import.meta.url), { type: 'module' });
+      worker.onmessage = (e) => {
+        const { channels } = e.data;
+        const audioBuffer = this.context!.createBuffer(channels.length, channels[0].byteLength / 4, sampleRate);
+        for (let c = 0; c < channels.length; c++) {
+          audioBuffer.copyToChannel(new Float32Array(channels[c]), c);
+        }
+        worker.terminate();
+        resolve(audioBuffer);
+      };
+      worker.onerror = reject;
+      worker.postMessage({ track, clipBuffers, sampleRate, totalDuration });
+    });
+  }
 }
 
 export const audioEngine = new AudioEngine();

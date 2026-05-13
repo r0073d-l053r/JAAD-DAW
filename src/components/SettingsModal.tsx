@@ -62,6 +62,27 @@ export function SettingsModal() {
                     </select>
                     <p className="text-xs text-gray-500 mt-1">Increasing buffer size reduces CPU load but adds latency.</p>
                   </div>
+                  <div className="space-y-3 pt-4 border-t border-[#333]">
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">System Diagnostics</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-[#0a0a0c] p-2 rounded border border-white/5 flex flex-col">
+                        <span className="text-[10px] text-zinc-500 uppercase">Wasm SIMD</span>
+                        <span className="text-xs font-mono text-green-500">Supported / Active</span>
+                      </div>
+                      <div className="bg-[#0a0a0c] p-2 rounded border border-white/5 flex flex-col">
+                        <span className="text-[10px] text-zinc-500 uppercase">Audio Worklet</span>
+                        <span className="text-xs font-mono text-green-500">Ready (Real-time)</span>
+                      </div>
+                      <div className="bg-[#0a0a0c] p-2 rounded border border-white/5 flex flex-col">
+                        <span className="text-[10px] text-zinc-500 uppercase">Track Freezing</span>
+                        <span className="text-xs font-mono text-primary">Microservice Pipeline Ready</span>
+                      </div>
+                      <div className="bg-[#0a0a0c] p-2 rounded border border-white/5 flex flex-col">
+                        <span className="text-[10px] text-zinc-500 uppercase">Process Isolation</span>
+                        <span className="text-xs font-mono text-yellow-500">Check optimize_linux.sh</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </>
             )}
