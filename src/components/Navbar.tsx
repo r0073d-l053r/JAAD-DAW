@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Wand2, Users, FileAudio, Settings, Cloud, WifiOff, LayoutDashboard, Sliders } from './Icons';
-import { Magnet } from 'lucide-react';
+import { Magnet, Github, Linkedin, Globe } from 'lucide-react';
 import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { audioBufferToWav, createStemZip, downloadBlob, estimateWavSize, formatFileSize } from '../lib/exportUtils';
@@ -344,7 +344,18 @@ export function Navbar() {
             </div>
           )}
         </div>
-        <div className="w-px h-6 bg-gray-700 mx-1" />
+        <div className="flex items-center space-x-1">
+          <a href="https://github.com/r0073d-l053r" target="_blank" rel="noopener noreferrer" className="p-2 text-text-muted hover:text-white hover:bg-white/5 rounded transition" title="GitHub">
+            <Github size={18} />
+          </a>
+          <a href="https://www.linkedin.com/in/r0073d-l053r/" target="_blank" rel="noopener noreferrer" className="p-2 text-text-muted hover:text-white hover:bg-white/5 rounded transition" title="LinkedIn">
+            <Linkedin size={18} />
+          </a>
+          <a href="https://www.r0073dl053r.com" target="_blank" rel="noopener noreferrer" className="p-2 text-text-muted hover:text-white hover:bg-white/5 rounded transition" title="Website / Blog">
+            <Globe size={18} />
+          </a>
+        </div>
+        <div className="w-px h-6 bg-gray-700 mx-2" />
         <button 
           onClick={() => dispatch({ type: 'TOGGLE_SETTINGS' })}
           className={`p-2 rounded transition ${state.settingsOpen ? 'bg-primary text-black' : 'text-text-muted hover:text-white hover:bg-white/5'}`}
