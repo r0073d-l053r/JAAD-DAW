@@ -2,7 +2,14 @@ import { useState } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { audioEngine } from './audioEngine';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let ai: any = null;
+try {
+  if (process.env.GEMINI_API_KEY) {
+    ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+} catch (e) {
+  console.warn("Gemini API not initialized:", e);
+}
 
 function audioBufferToWavBase64(buffer: AudioBuffer, durationSeconds: number = 10): string {
   const numChannels = buffer.numberOfChannels;
@@ -58,6 +65,7 @@ export function useGemini() {
     setIsGenerating(true);
     setError(null);
     try {
+      if (!ai) throw new Error("Gemini API key is not configured in .env file.");
       const base64Audio = audioBufferToWavBase64(buffer, 15); // Up to 15 seconds
       const response = await ai.models.generateContent({
         model: 'gemini-3.1-pro-preview',
@@ -93,6 +101,7 @@ export function useGemini() {
     setIsGenerating(true);
     setError(null);
     try {
+      if (!ai) throw new Error("Gemini API key is not configured in .env file.");
       const response = await ai.models.generateContent({
         model: 'gemini-3.1-pro-preview',
         contents: `You are an expert audio engineer and mastering assistant. 
@@ -112,6 +121,7 @@ Provide professional actionable mixing or mastering advice. Make your advice tec
   const getMasteringSettings = async (genre: string) => {
     setIsGenerating(true);
     try {
+      if (!ai) throw new Error("Gemini API key is not configured in .env file.");
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Provide mastering chain suggestions (EQ, Compression, Limiter thresholds) for a ${genre} track. Format as a short technical list.`,
