@@ -4,6 +4,7 @@ import { Magnet, Github, Linkedin, Globe } from 'lucide-react';
 import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { audioBufferToWav, createStemZip, downloadBlob, estimateWavSize, formatFileSize } from '../lib/exportUtils';
+import { cleanUpStemsAsync } from '../lib/audioUtils';
 
 export function Navbar() {
   const { state, dispatch } = useApp();
@@ -93,7 +94,7 @@ export function Navbar() {
       { label: 'Select All', shortcut: 'Ctrl+A', action: () => { dispatch({ type: 'SELECT_ALL_CLIPS' }); setOpenMenu(null); } },
       { label: 'Split Clip', shortcut: 'S', action: () => { dispatch({ type: 'SPLIT_CLIP' }); setOpenMenu(null); } },
       { label: 'Heal Edits', action: () => { alert("Healing edits..."); setOpenMenu(null); } },
-      { label: 'Clean Up Stems', shortcut: 'Ctrl+Shift+S', action: () => { dispatch({ type: 'CLEAN_UP_STEMS' }); setOpenMenu(null); } },
+      { label: 'Clean Up Stems', shortcut: 'Ctrl+Shift+S', action: () => { cleanUpStemsAsync(state, dispatch); setOpenMenu(null); } },
       { divider: true, label: '' },
       { label: 'Toggle Snap', action: () => { dispatch({ type: 'TOGGLE_SNAP' }); setOpenMenu(null); } },
       { label: 'Toggle Warp Mode', action: () => { alert("Warp mode enabled (adjust timing visually)."); setOpenMenu(null); } },
@@ -159,7 +160,15 @@ export function Navbar() {
       <div className="flex items-center space-x-6">
         <div className="flex items-center gap-2">
           <div className="flex flex-col -space-y-1">
-            <h1 className="font-semibold text-base sm:text-lg tracking-tight text-white">Just Another AI DAW</h1>
+            <h1 className="font-semibold text-base sm:text-lg tracking-tight text-white flex items-center gap-2">
+              Just Another AI DAW
+              {state.isProcessing && (
+                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/20 border border-primary/30 text-[10px] text-primary animate-pulse font-bold tracking-widest uppercase">
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
+                  Processing
+                </span>
+              )}
+            </h1>
           </div>
         </div>
 

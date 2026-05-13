@@ -32,7 +32,8 @@ class AudioEngine {
       this.masterGain = this.context.createGain();
       this.masterGain.connect(this.context.destination);
       
-      this.context.audioWorklet.addModule('/worklets/vst-wrapper.js').catch(err => {
+      const workletUrl = `${import.meta.env.BASE_URL}worklets/vst-wrapper.js`.replace(/\/+/g, '/');
+      this.context.audioWorklet.addModule(workletUrl).catch(err => {
         console.warn("Failed to load vst-wrapper worklet (might be expected during SSR or tests):", err);
       });
     }
