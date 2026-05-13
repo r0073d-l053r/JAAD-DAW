@@ -30,6 +30,7 @@ export interface Clip {
   audioData?: any; // placeholder for real audio
   volumeEnvelope?: { time: number; value: number }[]; // time relative to clip start
   groupId?: string; // ID linking this clip to others in a group
+  notes?: { note: number; start: number; duration: number }[]; // MIDI notes
 }
 
 export interface TimeSelection {
@@ -61,6 +62,14 @@ interface AppState {
   playStartPosition: number;
   masterVolume: number;
   disableBackgroundAnimation: boolean;
+  isProcessing: boolean;
+  projectId: string;
+  projectName: string;
+  isSyncing: boolean;
+  isProjectBrowserOpen: boolean;
+  buffersVersion: number;
+  hasManuallySaved: boolean;
+  isDefaultName: boolean;
 }
 
 type Action =
@@ -136,7 +145,16 @@ type Action =
         targetLaneId: string;
         newStart: number;
       };
-    };
+    }
+  | { type: "SET_IS_PROCESSING"; payload: boolean }
+  | { type: "REPLACE_TRACKS"; payload: Track[] }
+  | { type: "SET_PROJECT_ID"; payload: string }
+  | { type: "SET_PROJECT_NAME"; payload: string }
+  | { type: "SET_SYNCING"; payload: boolean }
+  | { type: "TOGGLE_PROJECT_BROWSER" }
+  | { type: "SYNC_STATE"; payload: Partial<AppState> }
+  | { type: "INCREMENT_BUFFERS_VERSION" }
+  | { type: "SET_HAS_MANUALLY_SAVED"; payload: boolean };
 
 interface AppStateWithHistory extends AppState {
   past: Track[][];
@@ -170,6 +188,14 @@ const initialState: AppStateWithHistory = {
   playStartPosition: 0,
   masterVolume: 0.8,
   disableBackgroundAnimation: false,
+  isProcessing: false,
+  projectId: "",
+  projectName: "Untitled Project",
+  isSyncing: false,
+  isProjectBrowserOpen: false,
+  buffersVersion: 0,
+  hasManuallySaved: false,
+  isDefaultName: true,
 };
 
 function saveHistory(
@@ -789,6 +815,27 @@ function appReducer(
     }
     case "REPLACE_TRACKS": {
       return saveHistory(state, action.payload);
+    }
+    case "SET_PROJECT_ID": {
+      return { ...state, projectId: action.payload };
+    }
+    case "SET_PROJECT_NAME": {
+      return { ...state, projectName: action.payload, isDefaultName: false };
+    }
+    case "SET_SYNCING": {
+      return { ...state, isSyncing: action.payload };
+    }
+    case "TOGGLE_PROJECT_BROWSER": {
+      return { ...state, isProjectBrowserOpen: !state.isProjectBrowserOpen };
+    }
+    case "SYNC_STATE": {
+      return { ...state, ...action.payload };
+    }
+    case "INCREMENT_BUFFERS_VERSION": {
+      return { ...state, buffersVersion: state.buffersVersion + 1 };
+    }
+    case "SET_HAS_MANUALLY_SAVED": {
+      return { ...state, hasManuallySaved: action.payload };
     }
 
     case "UNDO": {

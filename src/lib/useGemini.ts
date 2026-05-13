@@ -4,8 +4,9 @@ import { audioEngine } from './audioEngine';
 
 let ai: GoogleGenAI | null = null;
 try {
-  if (process.env.GEMINI_API_KEY) {
-    ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (apiKey) {
+    ai = new GoogleGenAI(apiKey);
   }
 } catch (e) {
   console.warn("Gemini API not initialized:", e);
@@ -132,5 +133,93 @@ Provide professional actionable mixing or mastering advice. Make your advice tec
     }
   };
 
-  return { requestMixingAdvice, getMasteringSettings, detectBPM, isGenerating, error };
+  const getFixMyMixSuggestions = async (tracks: any[]): Promise<any> => {
+    setIsGenerating(true);
+    setError(null);
+    try {
+      if (!ai) throw new Error("Gemini API key is not configured.");
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-pro-preview',
+        contents: [
+          `You are an expert mixing engineer. I will give you a list of tracks with their current volume and pan settings. 
+          Suggest a balanced mix for a professional sound. 
+          Return ONLY a JSON object where keys are track IDs and values are objects with "volume" (0 to 1) and "pan" (-1 to 1). 
+          Also include a "masterVolume" suggestion (0 to 1).
+          Example: {"track_1": {"volume": 0.8, "pan": -0.2}, "masterVolume": 0.9}
+          
+          Current Tracks: ${JSON.stringify(tracks.map(t => ({ id: t.id, name: t.name, volume: t.volume, pan: t.pan })))}`
+        ],
+      });
+      const text = response.text.trim();
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      return null;
+    } catch (err) {
+      console.error(err);
+      setError("Failed to get mix suggestions");
+      return null;
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const tagClip = async (buffer: AudioBuffer): Promise<string | null> => {
+    setIsGenerating(true);
+    setError(null);
+    try {
+      if (!ai) throw new Error("Gemini API key is not configured.");
+      const base64Audio = audioBufferToWavBase64(buffer, 10);
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-pro-preview',
+        contents: [
+          'Listen to this audio clip and provide a short, 2-3 word descriptive title/tag for it (e.g. "Fat Synth Bass", "Crispy Hi-Hat"). Respond with JUST the title.',
+          {
+            inlineData: {
+              data: base64Audio,
+              mimeType: 'audio/wav'
+            }
+          }
+        ],
+      });
+      return response.text.trim().replace(/"/g, '');
+    } catch (err) {
+      console.error(err);
+      setError("Failed to tag clip");
+      return null;
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const generateMIDI = async (prompt: string): Promise<any[]> => {
+    setIsGenerating(true);
+    setError(null);
+    try {
+      if (!ai) throw new Error("Gemini API key is not configured.");
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-pro-preview',
+        contents: [
+          `Generate a MIDI sequence based on this prompt: "${prompt}". 
+          Return ONLY a JSON array of note objects with "note" (MIDI number 0-127), "start" (beats), and "duration" (beats).
+          Example: [{"note": 60, "start": 0, "duration": 0.5}, {"note": 62, "start": 0.5, "duration": 0.5}]`
+        ],
+      });
+      const text = response.text.trim();
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      return [];
+    } catch (err) {
+      console.error(err);
+      setError("Failed to generate MIDI");
+      return [];
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  return { requestMixingAdvice, getMasteringSettings, detectBPM, getFixMyMixSuggestions, tagClip, generateMIDI, isGenerating, error };
 }

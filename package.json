@@ -19,6 +19,8 @@
     "browser-id3-writer": "^6.3.1",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "firebase": "^12.13.0",
+    "idb-keyval": "^6.2.2",
     "jszip": "^3.10.1",
     "lamejs": "^1.2.1",
     "lucide-react": "^0.546.0",

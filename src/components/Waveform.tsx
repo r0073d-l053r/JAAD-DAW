@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState, memo } from 'react';
 import { audioEngine } from '../lib/audioEngine';
+import { useApp } from '../lib/store';
 
 export const Waveform = memo(function Waveform({ clipId, bufferId, color, duration, width, height = 100, audioOffset = 0 }: { clipId: string, bufferId?: string, color: string, duration: number, width: number, height?: number, audioOffset?: number }) {
+  const { state } = useApp();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loaded, setLoaded] = useState(false);
   const effectiveBufferId = bufferId || clipId;
@@ -75,7 +77,7 @@ export const Waveform = memo(function Waveform({ clipId, bufferId, color, durati
       ctx.fillStyle = color + '40';
       ctx.fillRect(0, displayHeight/2 - 0.5, displayWidth, 1);
     }
-  }, [effectiveBufferId, color, displayWidth, displayHeight, loaded, duration, audioOffset]);
+  }, [effectiveBufferId, color, displayWidth, displayHeight, loaded, duration, audioOffset, state.buffersVersion]);
 
   return (
     <canvas 

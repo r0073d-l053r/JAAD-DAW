@@ -3,12 +3,32 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useApp, Clip, Track } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { Volume2 } from './Icons';
-import { MoreHorizontal, Trash2, Download } from 'lucide-react';
+import { MoreHorizontal, Trash2, Download, Wand2 } from 'lucide-react';
+import { useGemini } from '../lib/useGemini';
 
 export function Mixer() {
   const { state, dispatch } = useApp();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { getFixMyMixSuggestions, isGenerating } = useGemini();
+
+  const handleFixMyMix = async () => {
+    const suggestions = await getFixMyMixSuggestions(state.tracks);
+    if (suggestions) {
+      Object.keys(suggestions).forEach(trackId => {
+        if (trackId === 'masterVolume') {
+           dispatch({ type: 'SET_MASTER_VOLUME', payload: suggestions.masterVolume });
+        } else {
+           const trackChanges = suggestions[trackId];
+           if (typeof trackChanges === 'object') {
+             dispatch({ type: 'UPDATE_TRACK', payload: { id: trackId, changes: trackChanges } });
+           }
+        }
+      });
+      // Add a master limiter
+      audioEngine.addTrackEffect('master', 'limiter');
+    }
+  };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -220,7 +240,18 @@ export function Mixer() {
       
       {/* Master Channel */}
       <div className="w-32 bg-red-900/10 backdrop-blur-2xl rounded-xl flex flex-col items-center py-4 border border-red-500/20 ml-4 flex-shrink-0 shadow-[0_0_30px_rgba(255,45,85,0.15)]">
-        <div className="text-xs font-bold font-mono text-red-400 mb-4">MASTER</div>
+        <div className="text-xs font-bold font-mono text-red-400 mb-2 uppercase tracking-tighter">Master Bus</div>
+        
+        <button 
+          onClick={handleFixMyMix}
+          disabled={isGenerating || state.tracks.length === 0}
+          className={`px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-full border transition-all mb-4 ${isGenerating ? 'bg-zinc-800 text-zinc-500 border-zinc-700 cursor-wait' : 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30 hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(239,68,68,0.2)]'}`}
+        >
+          <div className="flex items-center gap-1">
+            <Wand2 size={10} className={isGenerating ? 'animate-spin' : ''} />
+            <span>{isGenerating ? 'Analyzing...' : 'Fix My Mix'}</span>
+          </div>
+        </button>
         <div className="flex space-x-2 mb-6">
             <div className="w-8 h-8"/> {/* spacer */}
             <div className="w-8 h-8"/>

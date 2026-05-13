@@ -1,4 +1,4 @@
-# Just Another AI DAW - Finished Features
+# JAAD - Finished Features
 
 All of the following features have been successfully implemented:
 
@@ -140,3 +140,23 @@ All of the following features have been successfully implemented:
 - [x] **Shortcuts:** Added global shortcut (`Ctrl+Shift+S`) for rapid "Clean Up Stems" execution.
 - [x] **Documentation:** Generated a comprehensive, GitHub-ready `README.md` for onboarding developers.
 - [x] **Advanced Zoom Controls:** Implemented vertical zooming (expanding track heights to see waveform details) alongside horizontal zooming.
+143: 
+144: ## 10. Major Update - 2026-05-13
+145: - [x] **"Fix My Mix" Automator:** One-click AI analysis for project balance and master bus limiting. (2026-05-13)
+
+## 10. Major Update - 2026-05-13
+- [x] **"Fix My Mix" Automator:** One-click AI analysis for project balance and master bus limiting. (2026-05-13)
+- [x] **AI Clip Tagging:** Automatic context-aware naming for imported audio clips. (2026-05-13)
+- [x] **Generative MIDI Patterns:** Natural language MIDI generation via AI Copilot directly onto the timeline. (2026-05-13)
+- [x] **Firebase Real-time Sync:** True live cloud synchronization for tracks, BPM, and project state. (2026-05-13)
+- [x] **Project Asset Bundling:** Robust local caching of large audio files (GBs of WAVs) using IndexedDB to prevent loss on refresh. (2026-05-13)
+- [x] **Cloud Project Browser:** Premium UI for browsing, sorting, and loading projects from your Firebase storage. (2026-05-13)
+- [x] **Advanced Save Options:** New options to fork projects to the cloud or download as portable `.jaad` desktop files. (2026-05-13)
+- [x] **Project Asset Bundling (.JAAD Zip):** Implemented JSZip-based project bundling that includes all binary audio assets in the desktop save file for true portability. (2026-05-13)
+- [x] **Zipped Project Import:** Native support for extracting and loading audio assets from `.jaad` bundles directly into the local IndexedDB database. (2026-05-13)
+- [x] **Gated Cloud Synchronization:** Updated auto-save logic to wait for an initial manual save, preventing blank projects from overwriting cloud data. (2026-05-13)
+- [x] **Smart Naming Prompt:** First-time save now triggers a project naming dialog if the user hasn't already renamed the project. (2026-05-13)
+- [x] **Robust Offline Recovery:** 5-second interval auto-save and session restoration logic for crash protection, now including project name persistence. (2026-05-13)
+- [x] **Stem Cleanup Optimization:** Refactored heavy audio processing to be asynchronous, ensuring a 60fps UI even during cleanup. (2026-05-13)
+- [x] **Build & Performance Polish:** Optimized Vite chunking and vendor splitting for ultra-fast initial load times. (2026-05-13)
+- [x] **Waveform Persistence:** Fixed re-render logic to ensure waveforms "pop in" automatically after asset recovery. (2026-05-13)

@@ -12,10 +12,13 @@ import { Mixer } from './components/Mixer';
 import { AICopilot } from './components/AICopilot';
 import { SettingsModal } from './components/SettingsModal';
 import { CreateForm } from './components/CreateForm';
+import { ProjectBrowser } from './components/ProjectBrowser';
 import { useApp } from './lib/store';
 import React, { useState, useEffect } from 'react';
 import { audioEngine } from './lib/audioEngine';
 import { useGemini } from './lib/useGemini';
+import { subscribeToProject, updateProjectCloud, uploadAssetCloud, downloadAssetCloud } from './lib/syncUtils';
+import { saveAsset, getAsset } from './lib/assetManager';
 
 import { StudioBackground } from './components/StudioBackground';
 
@@ -39,6 +42,55 @@ function AppContent() {
       
       audioEngine.updateTrackSettings(track.id, track.volume, track.pan, isActuallyMuted);
     });
+  }, [state.tracks]);
+
+
+
+  useEffect(() => {
+    if (!state.projectId) return;
+
+    const unsubscribe = subscribeToProject(state.projectId, (cloudState) => {
+      dispatch({ type: 'SYNC_STATE', payload: cloudState });
+    });
+
+    return () => unsubscribe();
+  }, [state.projectId, dispatch]);
+
+  useEffect(() => {
+    if (!state.projectId || state.isOffline || !state.hasManuallySaved) return;
+
+    const timer = setTimeout(() => {
+      dispatch({ type: 'SET_SYNCING', payload: true });
+      updateProjectCloud(state.projectId, state.projectName, state.tracks, state.bpm, state.masterVolume)
+        .finally(() => dispatch({ type: 'SET_SYNCING', payload: false }));
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [state.tracks, state.bpm, state.masterVolume, state.projectId, state.isOffline, state.hasManuallySaved, state.projectName, dispatch]);
+
+  useEffect(() => {
+    const recoverAssets = async () => {
+      for (const track of state.tracks) {
+        for (const clip of track.clips) {
+          const id = clip.bufferId || clip.id;
+          if (!audioEngine.buffers.has(id)) {
+            let asset = await getAsset(id);
+            if (!asset) {
+              // Try cloud recovery if local is missing
+              asset = await downloadAssetCloud(id);
+              if (asset) {
+                await saveAsset(id, asset); // Cache locally for next time
+              }
+            }
+            if (asset) {
+              await audioEngine.loadAudio(id, asset as File);
+              dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
+            }
+          }
+        }
+      }
+    };
+    recoverAssets();
   }, [state.tracks]);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -66,6 +118,11 @@ function AppContent() {
         const randomColor = colors[(state.tracks.length + i) % colors.length];
         
         const duration = await audioEngine.loadAudio(clipId, file);
+        await saveAsset(clipId, file);
+        // Also sync to cloud storage for cross-device persistence
+        uploadAssetCloud(clipId, file).catch(err => console.error("Cloud upload failed", err));
+        
+        dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
         
         dispatch({
           type: 'ADD_TRACK',
@@ -82,7 +139,9 @@ function AppContent() {
               start: 0,
               duration,
               audioData: file.name
-            }]
+            }],
+            lanes: [],
+            showLanes: false
           }
         });
 
@@ -144,6 +203,7 @@ function AppContent() {
         <Transport />
         <CreateForm />
         <SettingsModal />
+        <ProjectBrowser />
       </div>
     </div>
   );

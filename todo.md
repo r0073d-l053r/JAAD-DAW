@@ -1,21 +1,23 @@
-# Next Steps & To-Do List
+# JAAD - Future Roadmap & Ideas
 
-## Core Engine & Playback
-- [x] **Metronome Integration:** Implement a toggle-able metronome strictly synced to the global BPM for recording accuracy.
-- [x] **Dynamic Tempo Mapping:** Allow users to automate or change the BPM mid-track rather than relying on a static global tempo.
-- [x] **Clip Envelopes:** Direct volume/pan curve drawing overlaid directly on audio clips (for precise fade-ins/outs per clip).
-- [x] **Real VST/AudioUnit Support via WebAssembly:** Begin scaffolding out integration with WebAssembly packages of common synths and effects to replace mocked plugin behavior.
+## Advanced AI Composition
+- [ ] **AI Vocal Harmony Generator:** Automatically generate 3-part backing harmonies for any vocal track using the Gemini API.
+- [ ] **Sonic Style Transfer:** Upload a reference track (e.g., a specific 70s rock song) and have the AI adjust your project's EQ, compression, and reverb to match that "vibe."
+- [ ] **Intelligent Arrangement Engine:** Convert an 8-bar loop into a full song structure (Intro -> Verse -> Chorus -> Bridge) with AI-suggested transitions.
+- [ ] **Lyric-to-Vocal Synthesis:** Type lyrics and select a "voice profile" to generate high-quality vocal guide tracks directly in your project.
 
-## Workflow & UX Polish
-- [x] **Clip Grouping:** Allow users to select multiple clips and "Group" them so they move and edit together.
-- [x] **Color Palette Expansion:** Provide richer color labeling options for entire track lanes to further organize massive projects.
+## Social & Collaboration
+- [ ] **Live Presence Cursors:** See your collaborators' names and cursors moving in real-time across the timeline (Figma-style).
+- [ ] **In-Project Version Comments:** Leave "Sticky Notes" at specific timestamps for feedback (e.g., "Bring the vocals up here").
+- [ ] **Community Project Gallery:** A "Public" tab in the Project Browser where users can share templates and "Open Source" stems.
 
-## Generative & AI
-- [ ] **"Fix My Mix" Automator:** Automatically parse channel volumes and apply soft limiting/compression based on the user clicking a single "Master/Polish" button.
-- [ ] **AI Clip Tagging:** Automatically tag and suggest titles for uploaded audio (e.g., "808 Kick", "Synth Pad") using the Gemini API.
-- [ ] **Generative MIDI Patterns:** A tool where users can type "Give me a syncopated hi-hat pattern at 120BPM" and the app generates a MIDI clip directly onto the timeline.
+## Professional Tools
+- [ ] **Spectrogram Analysis View:** Toggle clips between traditional waveforms and high-resolution spectral heatmaps for surgical EQ work.
+- [ ] **Video-to-Audio Sync:** Import a video file (MP4/WebM) to a dedicated video track for scoring and sound design for film.
+- [ ] **VST/AU Bridge (Cloud-Side):** A microservice that lets you use professional desktop plugins by processing the audio in the cloud.
+- [ ] **Advanced Sidechaining UI:** A visual "patch bay" for routing sidechain signals (e.g., Kick triggering Bass compression) with real-time gain-reduction meters.
 
-## Infrastructure & Cloud
-- [ ] **Firebase Real-time Sync:** Upgrade from local mocked states and `alert()` popups to true Firebase Cloud Database documents where multiplayer cursors and changes broadcast instantly.
-- [ ] **Project Asset Bundling:** Implement a more robust File API integration using IndexedDB so large imported gigabytes of WAV files are aggressively locally cached without browser bloat.
-- [ ] **Robust Offline Recovery:** Write an auto-save local cache mechanism that immediately recovers the user's project if the browser crashes.
+## Performance & Ecosystem
+- [ ] **Cloud Headless Rendering:** Offload the final .WAV render to a cloud server to free up local CPU for massive multi-track projects.
+- [ ] **Mobile Remote App:** A simplified "Remote Control" web view for mobile devices to act as a wireless Transport/Mixer controller.
+- [ ] **Project Bundling (.JAAD):** A single-file archive format that packs the JSON state AND all audio assets into one shareable file using JSZip.

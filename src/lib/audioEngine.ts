@@ -232,17 +232,31 @@ class AudioEngine {
       nodes.panner.connect(low);
       low.connect(high);
       high.connect(this.masterGain!);
-    } else if (type === 'compressor') {
+    } else if (type === 'compressor' || type === 'limiter') {
       const comp = this.context.createDynamicsCompressor();
-      comp.threshold.value = -24;
-      comp.knee.value = 30;
-      comp.ratio.value = 12;
-      comp.attack.value = 0.003;
-      comp.release.value = 0.25;
+      if (type === 'limiter') {
+        comp.threshold.value = -1.0;
+        comp.knee.value = 0;
+        comp.ratio.value = 20;
+        comp.attack.value = 0.001;
+        comp.release.value = 0.1;
+      } else {
+        comp.threshold.value = -24;
+        comp.knee.value = 30;
+        comp.ratio.value = 12;
+        comp.attack.value = 0.003;
+        comp.release.value = 0.25;
+      }
       
-      nodes.panner.disconnect();
-      nodes.panner.connect(comp);
-      comp.connect(this.masterGain!);
+      if (trackId === 'master' && this.masterGain) {
+        this.masterGain.disconnect();
+        this.masterGain.connect(comp);
+        comp.connect(this.context.destination);
+      } else if (nodes) {
+        nodes.panner.disconnect();
+        nodes.panner.connect(comp);
+        comp.connect(this.masterGain!);
+      }
     }
   }
 

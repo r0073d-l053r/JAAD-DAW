@@ -6,7 +6,7 @@ import { audioEngine } from '../lib/audioEngine';
 
 export function AICopilot() {
   const { state, dispatch } = useApp();
-  const { requestMixingAdvice, getMasteringSettings, detectBPM, isGenerating, error } = useGemini();
+  const { requestMixingAdvice, getMasteringSettings, detectBPM, generateMIDI, isGenerating, error } = useGemini();
   const [prompt, setPrompt] = useState('');
   const [history, setHistory] = useState<Array<{role: string, content: string}>>([
     { role: 'assistant', content: 'Hi! I am your AI audio assistant. Ask me for mixing advice, mastering settings, or track separation.' }
@@ -25,11 +25,52 @@ export function AICopilot() {
     let responseStr = '';
     
     // Command parsing for demo
-    if (userMsg.toLowerCase().includes('master')) {
+    if (userMsg.toLowerCase().includes('master') && !userMsg.toLowerCase().includes('advice')) {
       const match = userMsg.match(/master.*?([a-z]+)/i);
       const genre = match && match[1] !== 'this' ? match[1] : 'pop';
       const settings = await getMasteringSettings(genre);
       responseStr = settings || 'Could not generate mastering settings.';
+    } else if (userMsg.toLowerCase().includes('midi') || userMsg.toLowerCase().includes('pattern') || userMsg.toLowerCase().includes('rhythm')) {
+       setIsGeneratingLocal(true);
+       const midiNotes = await generateMIDI(userMsg);
+       setIsGeneratingLocal(false);
+       
+       if (midiNotes && midiNotes.length > 0) {
+         const newTrackId = 'midi_' + Date.now();
+         dispatch({
+           type: 'ADD_TRACK',
+           payload: {
+             id: newTrackId,
+             name: 'Gen MIDI',
+             volume: 0.8,
+             pan: 0,
+             muted: false,
+             solo: false,
+             color: '#10b981',
+             clips: [],
+             lanes: [],
+             showLanes: false
+           }
+         });
+         
+         const clipId = 'mc_' + Date.now();
+         dispatch({ 
+           type: 'ADD_CLIP', 
+           payload: { 
+             trackId: newTrackId, 
+             clip: {
+               id: clipId,
+               start: state.currentTime,
+               duration: 4,
+               audioData: 'MIDI Pattern: ' + userMsg,
+               notes: midiNotes
+             } 
+           } 
+         });
+         responseStr = `I've generated a MIDI pattern based on your prompt: "${userMsg}" and placed it on a new MIDI track.`;
+       } else {
+         responseStr = "I couldn't generate a valid MIDI pattern from that prompt.";
+       }
     } else if (userMsg.toLowerCase().includes('noise') || userMsg.toLowerCase().includes('denoise')) {
        setIsGeneratingLocal(true);
        await new Promise(r => setTimeout(r, 1500));
@@ -40,7 +81,6 @@ export function AICopilot() {
       const advice = await requestMixingAdvice(simplifiedTracks, userMsg);
       responseStr = advice || 'Could not generate advice.';
     }
-
     setHistory(prev => [...prev, { role: 'assistant', content: responseStr }]);
   };
 

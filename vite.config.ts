@@ -29,6 +29,7 @@ export default defineConfig(({mode}) => {
               if (id.includes('motion') || id.includes('framer-motion')) return 'motion';
               if (id.includes('lucide-react')) return 'lucide';
               if (id.includes('@google/genai')) return 'genai';
+              if (id.includes('firebase')) return 'firebase';
               return 'vendor';
             }
           }

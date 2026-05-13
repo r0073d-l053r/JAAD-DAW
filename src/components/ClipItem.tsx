@@ -1,9 +1,11 @@
 import React, { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, useDragControls, useMotionValue } from "motion/react";
-import { Scissors, Trash2 } from "lucide-react";
+import { Scissors, Trash2, Wand2 } from "lucide-react";
 import { useApp, Clip } from "../lib/store";
 import { Waveform } from "./Waveform";
+import { audioEngine } from "../lib/audioEngine";
+import { useGemini } from "../lib/useGemini";
 
 export function ClipItem({
   clip,
@@ -46,6 +48,24 @@ export function ClipItem({
     x: number;
     y: number;
   } | null>(null);
+  const { tagClip } = useGemini();
+  const [isTagging, setIsTagging] = useState(false);
+
+  const handleTagClip = async () => {
+    setIsTagging(true);
+    const buffer = audioEngine.buffers.get(clip.bufferId || clip.id);
+    if (buffer) {
+      const tag = await tagClip(buffer);
+      if (tag) {
+        dispatch({
+          type: "UPDATE_CLIP",
+          payload: { trackId, clipId: clip.id, changes: { audioData: tag } }
+        });
+      }
+    }
+    setIsTagging(false);
+    setClipContextMenu(null);
+  };
   const [selectionContextMenu, setSelectionContextMenu] = useState<{
     x: number;
     y: number;
@@ -604,6 +624,15 @@ export function ClipItem({
               }}
             >
               Extract Stems
+            </button>
+            <div className="h-px bg-white/10 my-1 w-full" />
+            <button
+              className="w-full text-left px-4 py-2 text-sm text-primary hover:bg-white/10 transition-colors flex items-center gap-2"
+              disabled={isTagging}
+              onClick={handleTagClip}
+            >
+              <Wand2 size={14} className={isTagging ? 'animate-spin' : ''} />
+              <span>{isTagging ? 'Tagging...' : 'AI Auto-Tag'}</span>
             </button>
           </div>,
           document.body,

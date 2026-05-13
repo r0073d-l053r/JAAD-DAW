@@ -5,6 +5,9 @@ import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { audioBufferToWav, createStemZip, downloadBlob, estimateWavSize, formatFileSize } from '../lib/exportUtils';
 import { cleanUpStemsAsync } from '../lib/audioUtils';
+import { updateProjectCloud } from '../lib/syncUtils';
+import { saveAsset, getAsset } from '../lib/assetManager';
+import JSZip from 'jszip';
 
 export function Navbar() {
   const { state, dispatch } = useApp();
@@ -35,6 +38,120 @@ export function Navbar() {
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleSaveToCloud = async (isNew: boolean = false) => {
+    let targetId = state.projectId;
+    let targetName = state.projectName;
+
+    // Prompt for name if it's the first save and name is default
+    if ((!state.hasManuallySaved || isNew) && state.isDefaultName) {
+       const newName = prompt('Enter a name for your project:', state.projectName);
+       if (newName === null) return; // User cancelled
+       if (newName) {
+          targetName = newName;
+          dispatch({ type: 'SET_PROJECT_NAME', payload: newName });
+       }
+    }
+
+    if (isNew || targetId === '') {
+      targetId = 'p_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+      dispatch({ type: 'SET_PROJECT_ID', payload: targetId });
+    }
+
+    dispatch({ type: 'SET_HAS_MANUALLY_SAVED', payload: true });
+    dispatch({ type: 'SET_SYNCING', payload: true });
+    try {
+      // Ensure all current project assets are synced to cloud storage
+      for (const track of state.tracks) {
+        for (const clip of track.clips) {
+          const id = clip.bufferId || clip.id;
+          const localAsset = await getAsset(id);
+          if (localAsset) {
+            // We don't await here to keep it snappy, but we track the group
+            uploadAssetCloud(id, localAsset).catch(e => console.error("Asset sync failed", e));
+          }
+        }
+      }
+
+      await updateProjectCloud(targetId, targetName, state.tracks, state.bpm, state.masterVolume);
+      alert(isNew ? 'New project copy saved to cloud!' : 'Project saved to cloud!');
+    } finally {
+      dispatch({ type: 'SET_SYNCING', payload: false });
+    }
+  };
+
+  const handleSaveToDesktop = async () => {
+    const zip = new JSZip();
+    
+    // 1. Project State
+    const projectState = {
+      projectName: state.projectName,
+      tracks: state.tracks,
+      bpm: state.bpm,
+      masterVolume: state.masterVolume,
+      exportVersion: "2.0 (Bundle)"
+    };
+    zip.file("project.json", JSON.stringify(projectState, null, 2));
+    
+    // 2. Audio Assets
+    const assetsFolder = zip.folder("assets");
+    if (assetsFolder) {
+      for (const track of state.tracks) {
+        for (const clip of track.clips) {
+          const id = clip.bufferId || clip.id;
+          const asset = await getAsset(id);
+          if (asset) {
+            assetsFolder.file(`${id}.audio`, asset);
+          }
+        }
+      }
+    }
+    
+    const content = await zip.generateAsync({ type: "blob" });
+    downloadBlob(content, `${state.projectName.replace(/\s+/g, '_')}.jaad`);
+  };
+
+  const handleImportProject = async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.jaad';
+    input.onchange = async (e: any) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const zip = await JSZip.loadAsync(file);
+      const projectJson = await zip.file("project.json")?.async("string");
+      if (!projectJson) {
+        alert("Invalid .jaad file: project.json missing");
+        return;
+      }
+      
+      const parsed = JSON.parse(projectJson);
+      
+      // Extract assets
+      const assetsFolder = zip.folder("assets");
+      if (assetsFolder) {
+        const assetFiles = Object.keys(assetsFolder.files);
+        for (const filePath of assetFiles) {
+          if (filePath.endsWith(".audio")) {
+            const assetData = await assetsFolder.file(filePath)?.async("blob");
+            if (assetData) {
+              const id = filePath.split("/").pop()?.replace(".audio", "");
+              if (id) {
+                 await saveAsset(id, assetData);
+              }
+            }
+          }
+        }
+      }
+      
+      dispatch({ type: 'SYNC_STATE', payload: parsed });
+      dispatch({ type: 'SET_HAS_MANUALLY_SAVED', payload: true });
+      dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
+      alert("Project imported successfully!");
+    };
+    input.click();
   };
 
   const handleExportStems = async () => {
@@ -69,12 +186,17 @@ export function Navbar() {
   const menus: Record<string, { label: string, shortcut?: string, action?: () => void, divider?: boolean, sub?: {label: string, action: () => void}[] }[]> = {
     'File': [
       { label: 'New Project', action: () => { dispatch({ type: 'RESET_PROJECT' }); setOpenMenu(null); } },
-      { label: 'Open Project...', action: () => alert('Open file dialog would appear here') },
-      { label: 'Save Project', shortcut: 'Ctrl+S', action: () => alert('Saved to Cloud') },
-      { label: 'Save As...', action: () => alert('Save As dialog') },
+      { label: 'Manage Projects...', action: () => { dispatch({ type: 'TOGGLE_PROJECT_BROWSER' }); setOpenMenu(null); } },
+      { label: 'Save Project', shortcut: 'Ctrl+S', action: () => { 
+        handleSaveToCloud(false);
+        setOpenMenu(null);
+      }},
+      { label: 'Save As...', sub: [
+        { label: 'Save to Cloud (Copy)', action: () => handleSaveToCloud(true) },
+        { label: 'Save to Desktop (.jaad)', action: () => handleSaveToDesktop() }
+      ]},
       { divider: true, label: '' },
-      { label: 'Import Audio/MIDI...', action: () => alert('Import Audio/MIDI file') },
-      { label: 'Import Project (.gaw)...', action: () => alert('Import Project') },
+      { label: 'Import Project (.jaad)...', action: () => handleImportProject() },
       { divider: true, label: '' },
       { label: 'Export .WAV Mixdown...', action: () => handleExportWav() },
       { label: 'Export Multitrack (ZIP)...', action: () => handleExportStems() },
@@ -159,17 +281,28 @@ export function Navbar() {
     <header className="h-14 flex items-center justify-between px-4 border-b border-zinc-800 flex-shrink-0 z-[100] relative glass">
       <div className="flex items-center space-x-6">
         <div className="flex items-center gap-2">
-          <div className="flex flex-col -space-y-1">
-            <h1 className="font-semibold text-base sm:text-lg tracking-tight text-white flex items-center gap-2">
-              Just Another AI DAW
-              {state.isProcessing && (
-                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/20 border border-primary/30 text-[10px] text-primary animate-pulse font-bold tracking-widest uppercase">
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
-                  Processing
-                </span>
-              )}
-            </h1>
+        <div className="flex flex-col">
+          <div className="flex items-center gap-3">
+            <input 
+              type="text" 
+              value={state.projectName} 
+              onChange={(e) => dispatch({ type: 'SET_PROJECT_NAME', payload: e.target.value })}
+              className="bg-transparent border-none text-white font-bold text-lg focus:ring-0 p-0 hover:bg-white/5 transition-colors rounded px-1 -ml-1 outline-none"
+              placeholder="Untitled Project"
+            />
+            {state.isProcessing && (
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/20 border border-primary/30 text-[10px] text-primary animate-pulse font-bold tracking-widest uppercase">
+                <div className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
+                Processing
+              </span>
+            )}
           </div>
+          <div className="flex items-center space-x-2 text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
+            <span className="text-primary/80">JAAD - JUST ANOTHER AI DAW</span>
+            <span>•</span>
+            <span className="font-mono opacity-60">{state.projectId}</span>
+          </div>
+        </div>
         </div>
 
         <nav className="hidden md:flex space-x-1" ref={menuRef}>
@@ -271,7 +404,8 @@ export function Navbar() {
         )}
         <button 
           onClick={() => {
-            alert('Share link copied! Collaborators can join in real-time via WebSockets.');
+            navigator.clipboard.writeText(state.projectId);
+            alert(`Project ID copied: ${state.projectId}. Share this with collaborators!`);
           }}
           className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-[#222] hover:bg-[#333] border border-gray-700 rounded transition text-text-muted hover:text-white"
         >
@@ -279,12 +413,19 @@ export function Navbar() {
           <span>Share</span>
         </button>
         <button 
-           onClick={() => {
-             alert('Project saved to cloud (Firebase). Version: Mix 1');
+           onClick={async () => {
+             if (!state.projectId) return;
+             dispatch({ type: 'SET_SYNCING', payload: true });
+             try {
+               await updateProjectCloud(state.projectId, state.projectName, state.tracks, state.bpm, state.masterVolume);
+               alert('Force sync complete! Your project is now up to date in the cloud.');
+             } finally {
+               dispatch({ type: 'SET_SYNCING', payload: false });
+             }
            }}
-           className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-[#222] hover:bg-[#333] border border-gray-700 rounded transition text-text-muted hover:text-white">
-          <Cloud size={16} />
-          <span>Save</span>
+           className={`flex items-center space-x-2 px-3 py-1.5 text-sm border rounded transition ${state.isSyncing ? 'bg-primary/20 text-primary border-primary/50' : 'bg-[#222] hover:bg-[#333] border-gray-700 text-text-muted hover:text-white'}`}>
+          <Cloud size={16} className={state.isSyncing ? 'animate-pulse' : ''} />
+          <span>{state.isSyncing ? 'Syncing...' : 'Save'}</span>
         </button>
 
         <div className="relative group/export">
