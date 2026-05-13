@@ -34,8 +34,14 @@ export function CreateForm() {
       setIsGenerating(true);
 
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey || apiKey === "your_gemini_api_key") {
-        throw new Error("Gemini API key is not configured. Please set VITE_GEMINI_API_KEY in your secrets.");
+      const isValidKey = apiKey && 
+                         apiKey.length > 10 && 
+                         apiKey !== "your_gemini_api_key" && 
+                         apiKey !== "undefined" && 
+                         apiKey !== "null";
+
+      if (!isValidKey) {
+        throw new Error("Gemini API key is not configured or invalid. Please set VITE_GEMINI_API_KEY in your GitHub Secrets.");
       }
       const ai = new GoogleGenAI(apiKey);
       const prompt = `Generate a 30-second ${instrument} track. Style: ${styles || "any"}. Lyrics: ${lyrics || "none"}`;

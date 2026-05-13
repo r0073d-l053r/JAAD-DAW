@@ -5,8 +5,16 @@ import { audioEngine } from './audioEngine';
 let ai: GoogleGenAI | null = null;
 try {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (apiKey && apiKey !== "your_gemini_api_key") {
+  const isValidKey = apiKey && 
+                     apiKey.length > 10 && 
+                     apiKey !== "your_gemini_api_key" && 
+                     apiKey !== "undefined" && 
+                     apiKey !== "null";
+                     
+  if (isValidKey) {
     ai = new GoogleGenAI(apiKey);
+  } else {
+    console.log("Gemini AI: No valid API key found. AI features will be disabled.");
   }
 } catch (e) {
   console.warn("Gemini API not initialized:", e);
