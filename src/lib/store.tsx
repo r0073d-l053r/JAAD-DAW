@@ -471,9 +471,14 @@ function appReducer(
       }
 
       if (state.selectedClipIds.length === 0) return state;
+      const selectedClipIdsSet = new Set(state.selectedClipIds);
       const newTracks = state.tracks.map((t) => ({
         ...t,
-        clips: t.clips.filter((c) => !state.selectedClipIds.includes(c.id)),
+        clips: t.clips.filter((c) => !selectedClipIdsSet.has(c.id)),
+        lanes: t.lanes?.map((l) => ({
+          ...l,
+          clips: l.clips.filter((c) => !selectedClipIdsSet.has(c.id)),
+        })),
       }));
       return saveHistory({ ...state, selectedClipIds: [] }, newTracks);
     }
@@ -508,8 +513,9 @@ function appReducer(
           return { ...state, clipboard: clipsToCopy };
         }
       }
+      const selectedClipIdsSet = new Set(state.selectedClipIds);
       const clipsToCopy = state.tracks.flatMap((t) =>
-        t.clips.filter((c) => state.selectedClipIds.includes(c.id)),
+        t.clips.filter((c) => selectedClipIdsSet.has(c.id)),
       );
       return { ...state, clipboard: clipsToCopy };
     }
@@ -563,9 +569,10 @@ function appReducer(
       }
 
       if (state.selectedClipIds.length === 0) return state;
+      const selectedClipIdsSet = new Set(state.selectedClipIds);
       const trackTracks = state.tracks.map((t) => {
         const trackSelectedClips = t.clips.filter((c) =>
-          state.selectedClipIds.includes(c.id),
+          selectedClipIdsSet.has(c.id),
         );
         if (trackSelectedClips.length === 0) return t;
         const minStart = Math.min(...trackSelectedClips.map((c) => c.start));
@@ -664,10 +671,11 @@ function appReducer(
         return state; // Do nothing if no clips are selected
       }
 
+      const selectedClipIdsSet = new Set(state.selectedClipIds);
       const newTracks = state.tracks.map((track) => {
         const newClips = track.clips.flatMap((clip) => {
           if (
-            state.selectedClipIds.includes(clip.id) &&
+            selectedClipIdsSet.has(clip.id) &&
             state.currentTime > clip.start &&
             state.currentTime < clip.start + clip.duration
           ) {
@@ -1064,10 +1072,11 @@ function appReducer(
         });
       } else if (state.selectedClipIds.length > 0) {
         // Fallback: join selected clips
+        const selectedClipIdsSet = new Set(state.selectedClipIds);
         newTracks = state.tracks.map((t) => {
           const allClips = [...t.clips, ...(t.lanes ? t.lanes.flatMap(l => l.clips) : [])];
           
-          const selectedInTrack = allClips.filter((c) => state.selectedClipIds.includes(c.id));
+          const selectedInTrack = allClips.filter((c) => selectedClipIdsSet.has(c.id));
           if (selectedInTrack.length < 2) return t;
 
           const refClip = selectedInTrack[0];
@@ -1089,11 +1098,11 @@ function appReducer(
             audioOffset: actualStart - originalStart,
           };
 
-          const unselectedMain = t.clips.filter((c) => !state.selectedClipIds.includes(c.id));
+          const unselectedMain = t.clips.filter((c) => !selectedClipIdsSet.has(c.id));
           
           let newLanes = t.lanes ? t.lanes.map(l => ({
             ...l,
-            clips: l.clips.filter((c) => !state.selectedClipIds.includes(c.id))
+            clips: l.clips.filter((c) => !selectedClipIdsSet.has(c.id))
           })) : undefined;
 
           if (newLanes) {
@@ -1181,12 +1190,13 @@ function appReducer(
       }
 
       if (state.selectedClipIds.length === 0) return state;
+      const selectedClipIdsSet = new Set(state.selectedClipIds);
       clipboard = state.tracks.flatMap((t) =>
-        t.clips.filter((c) => state.selectedClipIds.includes(c.id)),
+        t.clips.filter((c) => selectedClipIdsSet.has(c.id)),
       );
       newTracks = state.tracks.map((t) => ({
         ...t,
-        clips: t.clips.filter((c) => !state.selectedClipIds.includes(c.id)),
+        clips: t.clips.filter((c) => !selectedClipIdsSet.has(c.id)),
       }));
       return saveHistory(
         { ...state, clipboard, selectedClipIds: [] },
