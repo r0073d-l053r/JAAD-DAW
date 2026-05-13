@@ -113,7 +113,7 @@ export function Transport() {
       );
       
       // Stop clips that were removed from the project
-      const activeIds = Array.from((audioEngine as any).activeSources.keys()) as string[];
+      const activeIds = Array.from(audioEngine.activeSources.keys());
       activeIds.forEach(id => {
         if (!id.startsWith('compiled_') && !allCurrentClipIds.has(id)) {
           audioEngine.stopClip(id);
