@@ -91,6 +91,22 @@ You need Node.js installed on your machine.
 
 6. Open your browser and navigate to `http://localhost:3000`.
 
+### Running with Docker
+
+You can easily self-host JAAD using Docker and Docker Compose. This ensures a consistent environment and serves the production build out of the box.
+
+1. Make sure you have your `.env` file configured with your `GEMINI_API_KEY`.
+2. Build and start the container in detached mode:
+   ```bash
+   docker-compose up -d --build
+   ```
+3. Open your browser and navigate to `http://localhost:3000`.
+
+To stop the container, run:
+```bash
+docker-compose down
+```
+
 ## Keyboard Shortcuts
 
 | Shortcut | Action |
