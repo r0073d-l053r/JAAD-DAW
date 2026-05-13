@@ -5,7 +5,7 @@ import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { audioBufferToWav, createStemZip, downloadBlob, estimateWavSize, formatFileSize } from '../lib/exportUtils';
 import { cleanUpStemsAsync } from '../lib/audioUtils';
-import { updateProjectCloud } from '../lib/syncUtils';
+import { updateProjectCloud, uploadAssetCloud } from '../lib/syncUtils';
 import { saveAsset, getAsset } from '../lib/assetManager';
 import JSZip from 'jszip';
 

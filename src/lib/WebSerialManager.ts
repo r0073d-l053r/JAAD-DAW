@@ -1,4 +1,10 @@
 
+interface SerialPort {
+  open(options: { baudRate: number }): Promise<void>;
+  writable: WritableStream;
+  readable: ReadableStream;
+}
+
 export class WebSerialManager {
   port: SerialPort | null = null;
   reader: ReadableStreamDefaultReader | null = null;

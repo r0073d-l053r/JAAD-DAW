@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useApp, Track, Clip } from '../lib/store';
 import { Volume2, Sliders, Timer } from './Icons';
 import { MoreHorizontal, Trash2, Download, Scissors, Layers, Wand2, ArrowUp, ChevronDown, ChevronRight, Snowflake } from 'lucide-react';
+import { audioEngine } from '../lib/audioEngine';
 
 const EXPANDED_COLORS = [
   '#FF2A5F', '#FF3B30', '#FF9500', '#FFCC00', 

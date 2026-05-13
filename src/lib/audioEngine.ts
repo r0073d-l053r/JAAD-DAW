@@ -188,7 +188,7 @@ class AudioEngine {
     nodes.panner.pan.value = pan;
   }
 
-  addTrackEffect(trackId: string, type: 'reverb' | 'delay' | 'eq' | 'compressor' | 'wasm-vst') {
+  addTrackEffect(trackId: string, type: 'reverb' | 'delay' | 'eq' | 'compressor' | 'wasm-vst' | 'limiter') {
     if (!this.context || !this.trackNodes.has(trackId)) return;
     const nodes = this.trackNodes.get(trackId)!;
     
