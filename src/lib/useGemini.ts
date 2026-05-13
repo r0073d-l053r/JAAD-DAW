@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { audioEngine } from './audioEngine';
 
-let ai: any = null;
+let ai: GoogleGenAI | null = null;
 try {
   if (process.env.GEMINI_API_KEY) {
     ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
