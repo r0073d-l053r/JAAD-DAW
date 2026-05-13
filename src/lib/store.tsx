@@ -109,7 +109,6 @@ type Action =
   | { type: "SELECT_ALL_CLIPS" }
   | { type: "CUT_CLIPS" }
   | { type: "RESTORE_SELECTION" }
-  | { type: "SET_TIME_SELECTION"; payload: TimeSelection | null }
   | { type: "DELETE_TRACK"; payload: string }
   | { type: "DUPLICATE_TRACK"; payload: string }
   | { type: "ADD_LANE"; payload: { trackId: string } }
@@ -424,9 +423,6 @@ function appReducer(
     }
     case "SELECT_MULTIPLE_CLIPS": {
       return { ...state, selectedClipIds: action.payload };
-    }
-    case "SET_TIME_SELECTION": {
-      return { ...state, timeSelection: action.payload };
     }
     case "DELETE_CLIPS": {
       if (state.timeSelection) {

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useApp } from '../lib/store';
+import { audioEngine } from '../lib/audioEngine';
+
 
 export function SettingsModal() {
   const { state, dispatch } = useApp();
@@ -71,10 +73,8 @@ export function SettingsModal() {
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">MIDI Input Devices</label>
                   <button 
                     onClick={() => {
-                       import('../lib/audioEngine').then(({audioEngine}) => {
-                           audioEngine.setupMidi();
-                           alert("Requested MIDI Access! Play your keyboard.");
-                       });
+                       audioEngine.setupMidi();
+                       alert("Requested MIDI Access! Play your keyboard.");
                     }}
                     className="bg-primary/20 text-primary border border-primary/50 py-2 px-4 rounded text-sm hover:bg-primary/30 transition w-full"
                   >

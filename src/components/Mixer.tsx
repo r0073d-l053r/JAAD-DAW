@@ -200,23 +200,17 @@ export function Mixer() {
           <div className="w-full px-2 space-y-1">
              <div className="text-[10px] text-gray-500 font-bold mb-1">FX SLOTS</div>
              <div onClick={() => {
-                import('../lib/audioEngine').then(({audioEngine}) => {
-                   audioEngine.addTrackEffect(track.id, 'eq');
-                });
+                audioEngine.addTrackEffect(track.id, 'eq');
              }} className="w-full bg-[#111] border border-[#333] text-[10px] text-gray-400 p-1 rounded text-center cursor-pointer hover:bg-[#222]">
                + WebEQ
              </div>
              <div onClick={() => {
-                import('../lib/audioEngine').then(({audioEngine}) => {
-                   audioEngine.addTrackEffect(track.id, 'compressor');
-                });
+                audioEngine.addTrackEffect(track.id, 'compressor');
              }} className="w-full bg-[#111] border border-[#333] text-[10px] text-gray-400 p-1 rounded text-center cursor-pointer hover:bg-[#222]">
                + WebCompressor
              </div>
              <div onClick={() => {
-                import('../lib/audioEngine').then(({audioEngine}) => {
-                   audioEngine.addTrackEffect(track.id, 'delay');
-                });
+                audioEngine.addTrackEffect(track.id, 'delay');
              }} className="w-full bg-[#111] border border-[#333] text-[10px] text-gray-400 p-1 rounded text-center cursor-pointer hover:bg-[#222]">
                + WebDelay
              </div>
