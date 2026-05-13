@@ -71,10 +71,25 @@ export function audioBufferToWav(buffer: AudioBuffer): Blob {
 
 export async function createStemZip(trackBuffers: { name: string, buffer: AudioBuffer }[]): Promise<Blob> {
   const zip = new JSZip();
+  const usedNames = new Set<string>();
   
   for (const { name, buffer } of trackBuffers) {
     const wavBlob = audioBufferToWav(buffer);
-    zip.file(`${name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.wav`, wavBlob);
+    let safeName = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+    if (!safeName) {
+      safeName = 'unnamed_track';
+    }
+
+    let finalName = safeName;
+    let counter = 1;
+    while (usedNames.has(finalName)) {
+      finalName = `${safeName}_${counter}`;
+      counter++;
+    }
+    usedNames.add(finalName);
+
+    zip.file(`${finalName}.wav`, wavBlob);
   }
   
   return await zip.generateAsync({ type: 'blob' });
