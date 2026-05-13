@@ -582,6 +582,21 @@ export function Timeline() {
             backgroundSize: `${(60 / state.bpm) * PIXELS_PER_SECOND}px 100%`
           } : {}}
         >
+          {/* Master Tempo Lane */}
+          <div 
+            className="h-16 shrink-0 border-b border-[#2a2b30]/50 relative group transition bg-zinc-900/30"
+            data-track-id="master-tempo"
+          >
+            <div className="absolute inset-0 pointer-events-none">
+               <svg width="100%" height="100%" className="overflow-visible">
+                  <line x1="0" y1="50%" x2="100%" y2="50%" stroke="rgba(175, 82, 222, 0.5)" strokeWidth="2" strokeDasharray="4 4" />
+                  {state.tempoAutomation?.map((pt, i) => (
+                    <circle key={i} cx={pt.time * PIXELS_PER_SECOND} cy="50%" r="4" fill="#af52de" />
+                  ))}
+               </svg>
+            </div>
+          </div>
+
           {state.tracks.map((track, idx) => (
             <React.Fragment key={track.id}>
               <div 

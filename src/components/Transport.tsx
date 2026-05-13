@@ -1,4 +1,4 @@
-import { Play, Pause, StopCircle, Mic, FastForward, Rewind, Volume2 } from './Icons';
+import { Play, Pause, StopCircle, Mic, FastForward, Rewind, Volume2, Timer } from './Icons';
 import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { useEffect, useCallback, useRef, useState } from 'react';
@@ -89,7 +89,8 @@ export function Transport() {
               clipStartContextTime, 
               offset, 
               remainingDuration,
-              clip.bufferId
+              clip.bufferId,
+              clip.volumeEnvelope
             );
           }
         });
@@ -99,7 +100,11 @@ export function Transport() {
       audioEngine.stopAll();
     }
     prevIsPlaying.current = state.isPlaying;
-  }, [state.isPlaying, state.currentTime, state.tracks, state.looping, state.loopStart, state.loopEnd]);
+  }, [state.isPlaying, state.currentTime, state.tracks, state.looping, state.loopStart, state.loopEnd, state.masterVolume]);
+
+  useEffect(() => {
+    audioEngine.setMetronomeState(state.metronomeEnabled, state.tempoAutomation);
+  }, [state.metronomeEnabled, state.tempoAutomation]);
 
   useEffect(() => {
     // Synchronization effect: Ensure audio engine reflects current track state during playback
@@ -169,8 +174,16 @@ export function Transport() {
         <button 
           onClick={() => dispatch({ type: 'TOGGLE_RECORD' })}
           className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 ${state.isRecording ? 'bg-red-600 text-white animate-pulse shadow-[0_0_20px_rgba(220,38,38,0.5)]' : 'bg-zinc-800/50 text-red-500/70 hover:bg-zinc-800 hover:text-red-500 border border-zinc-800'}`}
+          title="Record"
         >
           <Mic size={18} />
+        </button>
+        <button 
+          onClick={() => dispatch({ type: 'TOGGLE_METRONOME' })}
+          className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 ${state.metronomeEnabled ? 'bg-primary/20 text-primary border border-primary/50 shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.3)]' : 'bg-zinc-800/50 text-zinc-500 hover:bg-zinc-800 hover:text-primary border border-zinc-800'}`}
+          title="Metronome"
+        >
+          <Timer size={18} />
         </button>
       </div>
 

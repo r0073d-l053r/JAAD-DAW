@@ -17,11 +17,24 @@ class AudioEngine {
   loopStart: number = 0;
   loopEnd: number = 0;
 
+  // Metronome and Tempo
+  metronomeEnabled: boolean = false;
+  tempoAutomation: { time: number; bpm: number }[] = [{ time: 0, bpm: 120 }];
+  nextNoteTime: number = 0;
+  currentBeat: number = 0;
+  metronomeTimerID: number | null = null;
+  lookahead: number = 25.0; // ms
+  scheduleAheadTime: number = 0.1; // s
+
   init() {
     if (!this.context) {
       this.context = new window.AudioContext();
       this.masterGain = this.context.createGain();
       this.masterGain.connect(this.context.destination);
+      
+      this.context.audioWorklet.addModule('/worklets/vst-wrapper.js').catch(err => {
+        console.warn("Failed to load vst-wrapper worklet (might be expected during SSR or tests):", err);
+      });
     }
   }
 
@@ -57,6 +70,57 @@ class AudioEngine {
     this.isLooping = enabled;
     this.loopStart = start;
     this.loopEnd = end;
+  }
+
+  setMetronomeState(enabled: boolean, tempoAutomation: { time: number; bpm: number }[]) {
+    this.metronomeEnabled = enabled;
+    this.tempoAutomation = tempoAutomation;
+  }
+
+  getBpmAtTime(time: number): number {
+    if (this.tempoAutomation.length === 0) return 120;
+    let bpm = this.tempoAutomation[0].bpm;
+    for (let i = 0; i < this.tempoAutomation.length; i++) {
+      if (this.tempoAutomation[i].time <= time) {
+        bpm = this.tempoAutomation[i].bpm;
+      } else {
+        break;
+      }
+    }
+    return bpm;
+  }
+
+  nextNote() {
+    const secondsPerBeat = 60.0 / this.getBpmAtTime(this.getCurrentTime());
+    this.nextNoteTime += secondsPerBeat;
+    this.currentBeat++;
+  }
+
+  scheduleNote(beatNumber: number, time: number) {
+    if (!this.metronomeEnabled || !this.context || !this.masterGain) return;
+
+    const osc = this.context.createOscillator();
+    const gain = this.context.createGain();
+    
+    osc.frequency.value = (beatNumber % 4 === 0) ? 880 : 440;
+    
+    gain.gain.setValueAtTime(1, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+    
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    
+    osc.start(time);
+    osc.stop(time + 0.05);
+  }
+
+  scheduler() {
+    if (!this.context) return;
+    while (this.nextNoteTime < this.context.currentTime + this.scheduleAheadTime) {
+      this.scheduleNote(this.currentBeat, this.nextNoteTime);
+      this.nextNote();
+    }
+    this.metronomeTimerID = window.setTimeout(this.scheduler.bind(this), this.lookahead);
   }
 
   async setupMidi() {
@@ -123,11 +187,22 @@ class AudioEngine {
     nodes.panner.pan.value = pan;
   }
 
-  addTrackEffect(trackId: string, type: 'reverb' | 'delay' | 'eq' | 'compressor') {
+  addTrackEffect(trackId: string, type: 'reverb' | 'delay' | 'eq' | 'compressor' | 'wasm-vst') {
     if (!this.context || !this.trackNodes.has(trackId)) return;
     const nodes = this.trackNodes.get(trackId)!;
     
-    if (type === 'delay') {
+    if (type === 'wasm-vst') {
+      try {
+        const vstNode = new AudioWorkletNode(this.context, 'vst-wrapper');
+        vstNode.port.postMessage({ type: 'LOAD_WASM' });
+        
+        nodes.panner.disconnect();
+        nodes.panner.connect(vstNode);
+        vstNode.connect(this.masterGain!);
+      } catch (err) {
+        console.error("Could not instantiate vst-wrapper node. Ensure worklet is loaded.", err);
+      }
+    } else if (type === 'delay') {
       const delay = this.context.createDelay();
       delay.delayTime.value = 0.25;
       const fb = this.context.createGain();
@@ -177,12 +252,9 @@ class AudioEngine {
     nodes.panner.pan.value = pan;
   }
 
-  playClip(clipId: string, trackId: string, playAtTime: number, offset: number = 0, duration: number = 0, bufferId?: string) {
+  playClip(clipId: string, trackId: string, playAtTime: number, offset: number = 0, duration: number = 0, bufferId?: string, volumeEnvelope?: { time: number; value: number }[]) {
     const effectiveBufferId = bufferId || clipId;
     if (!this.context || !this.buffers.has(effectiveBufferId)) return;
-    
-    // playAtTime is the context time we want it to START at.
-    // if playAtTime < currentTime, we adjust the offset to start mid-clip.
     
     const buffer = this.buffers.get(effectiveBufferId)!;
     const source = this.context.createBufferSource();
@@ -193,12 +265,30 @@ class AudioEngine {
     }
     const nodes = this.trackNodes.get(trackId)!;
     
-    source.connect(nodes.gain);
-    
     const targetTime = Math.max(this.context.currentTime, playAtTime);
     const timeDelta = targetTime - playAtTime;
     const startOffset = offset + timeDelta;
     const remainingDuration = Math.max(0, duration - timeDelta);
+    
+    let targetNode: AudioNode = nodes.gain;
+
+    if (volumeEnvelope && volumeEnvelope.length > 0) {
+      const envGain = this.context.createGain();
+      const clipStartContextTime = targetTime - startOffset;
+      
+      // Basic approach: set initial value, ramp to subsequent points
+      envGain.gain.setValueAtTime(volumeEnvelope[0].value, targetTime);
+      for (const pt of volumeEnvelope) {
+        const pointTime = clipStartContextTime + pt.time;
+        if (pointTime >= targetTime) {
+          envGain.gain.linearRampToValueAtTime(Math.max(0.0001, pt.value), pointTime);
+        }
+      }
+      envGain.connect(nodes.gain);
+      targetNode = envGain;
+    }
+    
+    source.connect(targetNode);
     
     if (startOffset < buffer.duration && remainingDuration > 0) {
       source.start(targetTime, startOffset, remainingDuration);
@@ -211,6 +301,13 @@ class AudioEngine {
     this.resume();
     this.playStartTime = contextStartTime || this.context!.currentTime;
     this.playPositionAtStart = startTimeInSeconds;
+    
+    this.currentBeat = 0;
+    this.nextNoteTime = this.playStartTime;
+    if (this.metronomeTimerID !== null) {
+      window.clearTimeout(this.metronomeTimerID);
+    }
+    this.scheduler();
   }
 
   stopAll() {
@@ -224,6 +321,11 @@ class AudioEngine {
     });
     this.activeSources.clear();
     this.playStartTime = 0;
+    
+    if (this.metronomeTimerID !== null) {
+      window.clearTimeout(this.metronomeTimerID);
+      this.metronomeTimerID = null;
+    }
   }
 
   stopClip(clipId: string) {

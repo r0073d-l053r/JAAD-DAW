@@ -28,6 +28,8 @@ export interface Clip {
   duration: number; // in seconds
   audioOffset?: number; // seconds into the audio buffer
   audioData?: any; // placeholder for real audio
+  volumeEnvelope?: { time: number; value: number }[]; // time relative to clip start
+  groupId?: string; // ID linking this clip to others in a group
 }
 
 export interface TimeSelection {
@@ -40,7 +42,9 @@ interface AppState {
   tracks: Track[];
   isPlaying: boolean;
   currentTime: number;
-  bpm: number;
+  bpm: number; // static fallback/initial tempo
+  tempoAutomation: { time: number; bpm: number }[];
+  metronomeEnabled: boolean;
   isRecording: boolean;
   isOffline: boolean;
   aiPanelOpen: boolean;
@@ -62,8 +66,10 @@ interface AppState {
 type Action =
   | { type: "TOGGLE_PLAY" }
   | { type: "TOGGLE_RECORD" }
+  | { type: "TOGGLE_METRONOME" }
   | { type: "SET_TIME"; payload: number }
   | { type: "SET_MASTER_VOLUME"; payload: number }
+  | { type: "SET_TEMPO_AUTOMATION"; payload: { time: number; bpm: number }[] }
   | { type: "ADD_TRACK"; payload: Track }
   | { type: "UPDATE_TRACK"; payload: { id: string; changes: Partial<Track> } }
   | { type: "TOGGLE_AI_PANEL" }
@@ -92,6 +98,9 @@ type Action =
   | { type: "SELECT_CLIP"; payload: { clipId: string; multi: boolean } }
   | { type: "SELECT_MULTIPLE_CLIPS"; payload: string[] }
   | { type: "SET_TIME_SELECTION"; payload: TimeSelection | null }
+  | { type: "GROUP_CLIPS" }
+  | { type: "UNGROUP_CLIPS" }
+  | { type: "MOVE_SELECTED_CLIPS"; payload: { timeDelta: number } }
   | { type: "COPY_CLIPS" }
   | { type: "PASTE_CLIPS"; payload: { trackId: string; time: number } }
   | { type: "DUPLICATE_CLIPS" }
@@ -144,6 +153,8 @@ const initialState: AppStateWithHistory = {
   isRecording: false,
   currentTime: 0,
   bpm: 120,
+  tempoAutomation: [{ time: 0, bpm: 120 }],
+  metronomeEnabled: false,
   isOffline: !navigator.onLine,
   aiPanelOpen: false,
   viewMode: "timeline",
@@ -196,6 +207,10 @@ function appReducer(
       }
     case "TOGGLE_RECORD":
       return { ...state, isRecording: !state.isRecording };
+    case "TOGGLE_METRONOME":
+      return { ...state, metronomeEnabled: !state.metronomeEnabled };
+    case "SET_TEMPO_AUTOMATION":
+      return { ...state, tempoAutomation: action.payload };
     case "SET_TIME": {
       // Ensure we don't accidentally update time during transit states
       return { ...state, currentTime: action.payload };
@@ -407,19 +422,89 @@ function appReducer(
       return saveHistory(state, newTracks);
     }
     case "SELECT_CLIP": {
+      const { clipId, multi } = action.payload;
       let newSelection = state.selectedClipIds;
-      if (action.payload.multi) {
-        if (newSelection.includes(action.payload.clipId)) {
-          newSelection = newSelection.filter(
-            (id) => id !== action.payload.clipId,
-          );
+      
+      let targetGroupId: string | undefined;
+      for (const t of state.tracks) {
+        const c = t.clips.find(c => c.id === clipId);
+        if (c) { targetGroupId = c.groupId; break; }
+        const lc = t.lanes?.flatMap(l => l.clips).find(c => c.id === clipId);
+        if (lc) { targetGroupId = lc.groupId; break; }
+      }
+
+      let idsToToggle = [clipId];
+      if (targetGroupId) {
+        idsToToggle = [];
+        state.tracks.forEach(t => {
+          t.clips.forEach(c => { if (c.groupId === targetGroupId) idsToToggle.push(c.id); });
+          t.lanes?.forEach(l => l.clips.forEach(c => { if (c.groupId === targetGroupId) idsToToggle.push(c.id); }));
+        });
+      }
+
+      if (multi) {
+        const isCurrentlySelected = newSelection.includes(clipId);
+        if (isCurrentlySelected) {
+          newSelection = newSelection.filter(id => !idsToToggle.includes(id));
         } else {
-          newSelection = [...newSelection, action.payload.clipId];
+          newSelection = Array.from(new Set([...newSelection, ...idsToToggle]));
         }
       } else {
-        newSelection = [action.payload.clipId];
+        newSelection = idsToToggle;
       }
       return { ...state, selectedClipIds: newSelection };
+    }
+    case "GROUP_CLIPS": {
+      if (state.selectedClipIds.length < 2) return state;
+      const groupId = "group_" + Date.now() + Math.random().toString(36).substr(2, 5);
+      const selectedSet = new Set(state.selectedClipIds);
+      const newTracks = state.tracks.map(t => ({
+        ...t,
+        clips: t.clips.map(c => selectedSet.has(c.id) ? { ...c, groupId } : c),
+        lanes: t.lanes?.map(l => ({
+          ...l,
+          clips: l.clips.map(c => selectedSet.has(c.id) ? { ...c, groupId } : c)
+        }))
+      }));
+      return saveHistory(state, newTracks);
+    }
+    case "UNGROUP_CLIPS": {
+      if (state.selectedClipIds.length === 0) return state;
+      const groupIdsToRemove = new Set<string>();
+      state.tracks.forEach(t => {
+        t.clips.forEach(c => {
+          if (state.selectedClipIds.includes(c.id) && c.groupId) groupIdsToRemove.add(c.groupId);
+        });
+        t.lanes?.forEach(l => l.clips.forEach(c => {
+          if (state.selectedClipIds.includes(c.id) && c.groupId) groupIdsToRemove.add(c.groupId);
+        }));
+      });
+      if (groupIdsToRemove.size === 0) return state;
+
+      const newTracks = state.tracks.map(t => ({
+        ...t,
+        clips: t.clips.map(c => c.groupId && groupIdsToRemove.has(c.groupId) ? { ...c, groupId: undefined } : c),
+        lanes: t.lanes?.map(l => ({
+          ...l,
+          clips: l.clips.map(c => c.groupId && groupIdsToRemove.has(c.groupId) ? { ...c, groupId: undefined } : c)
+        }))
+      }));
+      return saveHistory(state, newTracks);
+    }
+    case "MOVE_SELECTED_CLIPS": {
+      const selectedSet = new Set(state.selectedClipIds);
+      if (selectedSet.size === 0) return state;
+      const { timeDelta } = action.payload as { timeDelta: number };
+
+      const newTracks = state.tracks.map(t => ({
+        ...t,
+        clips: t.clips.map(c => selectedSet.has(c.id) ? { ...c, start: Math.max(0, c.start + timeDelta) } : c),
+        lanes: t.lanes?.map(l => ({
+          ...l,
+          clips: l.clips.map(c => selectedSet.has(c.id) ? { ...c, start: Math.max(0, c.start + timeDelta) } : c)
+        }))
+      }));
+      return saveHistory(state, newTracks);
     }
     case "SELECT_MULTIPLE_CLIPS": {
       return { ...state, selectedClipIds: action.payload };

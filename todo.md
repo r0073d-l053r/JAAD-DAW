@@ -1,15 +1,14 @@
 # Next Steps & To-Do List
 
 ## Core Engine & Playback
-- [ ] **Metronome Integration:** Implement a toggle-able metronome strictly synced to the global BPM for recording accuracy.
-- [ ] **Dynamic Tempo Mapping:** Allow users to automate or change the BPM mid-track rather than relying on a static global tempo.
-- [ ] **Clip Envelopes:** Direct volume/pan curve drawing overlaid directly on audio clips (for precise fade-ins/outs per clip).
-- [ ] **Real VST/AudioUnit Support via WebAssembly:** Begin scaffolding out integration with WebAssembly packages of common synths and effects to replace mocked plugin behavior.
+- [x] **Metronome Integration:** Implement a toggle-able metronome strictly synced to the global BPM for recording accuracy.
+- [x] **Dynamic Tempo Mapping:** Allow users to automate or change the BPM mid-track rather than relying on a static global tempo.
+- [x] **Clip Envelopes:** Direct volume/pan curve drawing overlaid directly on audio clips (for precise fade-ins/outs per clip).
+- [x] **Real VST/AudioUnit Support via WebAssembly:** Begin scaffolding out integration with WebAssembly packages of common synths and effects to replace mocked plugin behavior.
 
 ## Workflow & UX Polish
-- [ ] **Clip Grouping:** Allow users to select multiple clips and "Group" them so they move and edit together.
-- [ ] **True Touch Support / Mobile Optimizations:** Improve drag handles and interactions for tablet/mobile web browsers, converting complex hover states into explicit tap targets if necessary.
-- [ ] **Color Palette Expansion:** Provide richer color labeling options for entire track lanes to further organize massive projects.
+- [x] **Clip Grouping:** Allow users to select multiple clips and "Group" them so they move and edit together.
+- [x] **Color Palette Expansion:** Provide richer color labeling options for entire track lanes to further organize massive projects.
 
 ## Generative & AI
 - [ ] **"Fix My Mix" Automator:** Automatically parse channel volumes and apply soft limiting/compression based on the user clicking a single "Master/Polish" button.

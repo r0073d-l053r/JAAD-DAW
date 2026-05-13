@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp, Track, Clip } from '../lib/store';
-import { Volume2, Sliders } from './Icons';
+import { Volume2, Sliders, Timer } from './Icons';
 import { MoreHorizontal, Trash2, Download, Scissors, Layers, Wand2, ArrowUp, ChevronDown, ChevronRight } from 'lucide-react';
+
+const EXPANDED_COLORS = [
+  '#FF2A5F', '#FF3B30', '#FF9500', '#FFCC00', 
+  '#4CD964', '#00E871', '#5AC8FA', '#007AFF', 
+  '#5856D6', '#6B44FF', '#AF52DE', '#FF2D55',
+  '#A2845E', '#8E8E93', '#1C1C1E', '#FFFFFF'
+];
 
 export function TrackList() {
   const { state, dispatch } = useApp();
@@ -63,7 +70,20 @@ export function TrackList() {
     >
       {/* Hide webkit scrollbar via a standard inline hack, but it requires a class, we'll just ignore since thumb is transparent by default anyway */}
       <style>{`#track-list::-webkit-scrollbar { display: none; }`}</style>
-      <div className="h-8 border-b border-white/5 flex-shrink-0 bg-[#0a0a0c] z-[60] sticky top-0" />
+      <div className="h-8 border-b border-white/5 flex-shrink-0 bg-[#0a0a0c] z-[60] sticky top-0 flex items-center px-4">
+        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.1em]">Tracks</span>
+      </div>
+
+      {/* Master Tempo Track */}
+      <div className="h-16 shrink-0 border-b border-white/5 flex flex-col p-3 bg-zinc-900/50 relative group transition-colors duration-300">
+        <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary/50 shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.2)]" />
+        <div className="flex items-center justify-between pl-2 h-full">
+           <span className="bg-transparent text-sm font-bold text-zinc-400 outline-none uppercase tracking-tight flex items-center gap-2">
+             <Timer size={14} className="text-primary"/> 
+             Master Tempo
+           </span>
+        </div>
+      </div>
       {state.tracks.map((track, idx) => (
         <React.Fragment key={track.id}>
           <div 
@@ -184,6 +204,24 @@ export function TrackList() {
                         <Wand2 size={12} />
                         <span>Remove FX</span>
                       </button>
+                      <div className="h-px bg-white/10 my-1" />
+                      <div className="px-3 py-2">
+                        <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-2">Track Color</div>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {EXPANDED_COLORS.map(color => (
+                            <button
+                              key={color}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                dispatch({ type: 'UPDATE_TRACK', payload: { id: track.id, changes: { color } } });
+                              }}
+                              className={`w-6 h-6 rounded-full border-2 ${track.color === color ? 'border-white scale-110' : 'border-transparent'} hover:scale-110 hover:border-white/50 transition-all shadow-sm`}
+                              style={{ backgroundColor: color }}
+                              title={color}
+                            />
+                          ))}
+                        </div>
+                      </div>
                       <div className="h-px bg-white/10 my-1" />
                       <button 
                         onClick={(e) => {

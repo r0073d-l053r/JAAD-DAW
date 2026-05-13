@@ -27,9 +27,10 @@ export function ClipItem({
 
   // selection state coordinates relative to the clip
   const [dragStartOffset, setDragStartOffset] = useState<number | null>(null);
-  const [currentDragOffset, setCurrentDragOffset] = useState<number | null>(
-    null,
-  );
+  const [currentDragOffset, setCurrentDragOffset] = useState<number | null>(null);
+
+  // Envelope state
+  const [draggingEnvNode, setDraggingEnvNode] = useState<number | null>(null);
 
   // Resize State
   const [resizing, setResizing] = useState<"left" | "right" | null>(null);
@@ -252,6 +253,50 @@ export function ClipItem({
     setCurrentDragOffset(null);
   };
 
+  const handleEnvNodePointerDown = (e: React.PointerEvent, index: number) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDraggingEnvNode(index);
+  };
+
+  const handleEnvNodePointerMove = (e: React.PointerEvent) => {
+    if (draggingEnvNode === null || !clip.volumeEnvelope) return;
+    e.stopPropagation();
+    
+    const rect = e.currentTarget.closest('.clip-item')?.getBoundingClientRect();
+    if (!rect) return;
+
+    let x = e.clientX - rect.left;
+    let y = e.clientY - rect.top;
+    
+    const minX = draggingEnvNode > 0 ? clip.volumeEnvelope[draggingEnvNode - 1].time * PIXELS_PER_SECOND : 0;
+    const maxX = draggingEnvNode < clip.volumeEnvelope.length - 1 ? clip.volumeEnvelope[draggingEnvNode + 1].time * PIXELS_PER_SECOND : clip.duration * PIXELS_PER_SECOND;
+    
+    x = Math.max(minX, Math.min(maxX, x));
+    y = Math.max(0, Math.min(rect.height, y));
+
+    const time = x / PIXELS_PER_SECOND;
+    const value = 1 - (y / rect.height);
+
+    const newEnv = [...clip.volumeEnvelope];
+    newEnv[draggingEnvNode] = { time, value };
+    
+    dispatch({
+      type: "UPDATE_CLIP",
+      payload: { trackId, clipId: clip.id, changes: { volumeEnvelope: newEnv } }
+    });
+  };
+
+  const handleEnvNodePointerUp = (e: React.PointerEvent) => {
+    if (draggingEnvNode !== null) {
+      e.stopPropagation();
+      e.currentTarget.releasePointerCapture(e.pointerId);
+      setDraggingEnvNode(null);
+    }
+  };
+
   const drawSelection = () => {
     let start = 0,
       end = 0;
@@ -423,6 +468,14 @@ export function ClipItem({
         }
         newStart = Math.max(0, newStart);
 
+        if (isSelected && state.selectedClipIds.length > 1) {
+          const timeDelta = newStart - clip.start;
+          dispatch({ type: "MOVE_SELECTED_CLIPS", payload: { timeDelta } });
+          x.set(0);
+          y.set(0);
+          return;
+        }
+
         let targetTrackId = trackId;
         let targetLaneId: string | undefined = undefined;
 
@@ -501,16 +554,48 @@ export function ClipItem({
             >
               Delete Stem
             </button>
+            {state.selectedClipIds.length > 1 && (
+              <button
+                className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
+                onClick={() => {
+                  dispatch({ type: "GROUP_CLIPS" });
+                  setClipContextMenu(null);
+                }}
+              >
+                Group Clips
+              </button>
+            )}
+            {clip.groupId && (
+              <button
+                className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
+                onClick={() => {
+                  dispatch({ type: "UNGROUP_CLIPS" });
+                  setClipContextMenu(null);
+                }}
+              >
+                Ungroup Clips
+              </button>
+            )}
+            <div className="h-px bg-white/10 my-1 w-full" />
             <button
               className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
               onClick={() => {
-                colorInputRef.current?.click();
+                if (clip.volumeEnvelope) {
+                  dispatch({
+                    type: "UPDATE_CLIP",
+                    payload: { trackId, clipId: clip.id, changes: { volumeEnvelope: undefined } }
+                  });
+                } else {
+                  dispatch({
+                    type: "UPDATE_CLIP",
+                    payload: { trackId, clipId: clip.id, changes: { volumeEnvelope: [{ time: 0, value: 1 }, { time: clip.duration, value: 1 }] } }
+                  });
+                }
                 setClipContextMenu(null);
               }}
             >
-              Change color
+              {clip.volumeEnvelope ? "Remove Volume Envelope" : "Add Volume Envelope"}
             </button>
-            <div className="h-px bg-white/10 my-1 w-full" />
             <button
               className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
               onClick={() => {
@@ -524,19 +609,7 @@ export function ClipItem({
           document.body,
         )}
 
-      {/* Hidden Color Picker */}
-      <input
-        type="color"
-        ref={colorInputRef}
-        className="hidden"
-        value={track.color}
-        onChange={(e) => {
-          dispatch({
-            type: "UPDATE_TRACK",
-            payload: { id: trackId, changes: { color: e.target.value } },
-          });
-        }}
-      />
+
 
       {/* Drag Handle Top Bar */}
       <div
@@ -548,6 +621,12 @@ export function ClipItem({
         onContextMenu={handleClipContextMenu}
         title="Drag to move clip"
       />
+
+      {clip.groupId && (
+        <div className="absolute top-1 right-2 text-white/50 pointer-events-none z-10" title="Grouped">
+           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        </div>
+      )}
 
       {/* Real Waveform */}
       <div className="absolute inset-0 pointer-events-none">
@@ -572,7 +651,53 @@ export function ClipItem({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onDoubleClick={(e) => {
+          if (!clip.volumeEnvelope) return;
+          e.stopPropagation();
+          const rect = e.currentTarget.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+          const time = x / PIXELS_PER_SECOND;
+          const value = 1 - (y / rect.height);
+          
+          const newEnv = [...clip.volumeEnvelope];
+          // Insert sorted
+          newEnv.push({ time, value });
+          newEnv.sort((a, b) => a.time - b.time);
+          
+          dispatch({
+            type: "UPDATE_CLIP",
+            payload: { trackId, clipId: clip.id, changes: { volumeEnvelope: newEnv } }
+          });
+        }}
       />
+
+      {/* Envelope Overlay */}
+      {clip.volumeEnvelope && (
+         <svg className="absolute inset-0 z-20 pointer-events-none" width="100%" height="100%">
+            <polyline 
+               points={clip.volumeEnvelope.map(pt => `${pt.time * PIXELS_PER_SECOND},${(1 - pt.value) * 100}%`).join(' ')}
+               fill="none" 
+               stroke="white" 
+               strokeWidth="2" 
+               opacity="0.8"
+            />
+            {clip.volumeEnvelope.map((pt, i) => (
+               <circle 
+                  key={i} 
+                  cx={pt.time * PIXELS_PER_SECOND} 
+                  cy={`${(1 - pt.value) * 100}%`} 
+                  r="5" 
+                  fill="white" 
+                  className="pointer-events-auto cursor-ns-resize"
+                  onPointerDown={(e) => handleEnvNodePointerDown(e, i)}
+                  onPointerMove={draggingEnvNode === i ? handleEnvNodePointerMove : undefined}
+                  onPointerUp={handleEnvNodePointerUp}
+                  onPointerCancel={handleEnvNodePointerUp}
+               />
+            ))}
+         </svg>
+      )}
 
       {drawSelection()}
 
