@@ -58,21 +58,28 @@ You need Node.js installed on your machine.
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-username/jaad-daw.git
-   cd jaad-daw
+   git clone https://github.com/r0073d-l053r/JAAD.git
+   cd JAAD
+   ```
+   *(Note: Ensure you are in the `JAAD` directory before running the following commands.)*
+
+2. Set up your environment variables:
+   Copy the example environment file and add your configuration (e.g. `GEMINI_API_KEY`).
+   ```bash
+   cp .env.example .env
    ```
 
-2. Install dependencies:
+3. Install dependencies:
    ```bash
    npm install
    ```
 
-3. Start the development server:
+4. Start the development server:
    ```bash
    npm run dev
    ```
 
-4. Open your browser and navigate to `http://localhost:3000`.
+5. Open your browser and navigate to `http://localhost:3000`.
 
 ### Building for Production
 
