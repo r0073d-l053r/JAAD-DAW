@@ -59,7 +59,7 @@ All of the following features have been successfully implemented:
   - [x] MIDI File
   - [x] Project File (.gaw archive)
 - [x] **Export:**
-  - [x] Export Audio Mixdown (WAV, MP3)
+  - [x] Export Audio Mixdown (WAV)
   - [x] Export Stems
   - [x] Export MIDI
 - [x] **Exit/Close:** Leave the application (warn if unsaved).
@@ -131,3 +131,12 @@ All of the following features have been successfully implemented:
 - [x] Removes FX (Generate dry stems, isolate sound)
 - [x] Alternative takes (Create alternate lanes on same track)
 - [x] Export Full Song / Multitrack / Export to Media library
+
+## 9. Recent UI & Workflow Polish
+- [x] **Project Naming:** Dynamic project renaming directly from the header, persisting to export filenames securely.
+- [x] **Performance Toggles:** Added ability to toggle the dynamic background canvas animation for better performance on lower-end devices.
+- [x] **Submenu Reliability:** Fixed CSS hover states (`group-hover/submenu`) so navbar submenus stay open reliably while navigating.
+- [x] **Playhead Precision:** Re-aligned the playhead handle with the exact playback line to prevent visual discrepancies during editing.
+- [x] **Shortcuts:** Added global shortcut (`Ctrl+Shift+S`) for rapid "Clean Up Stems" execution.
+- [x] **Documentation:** Generated a comprehensive, GitHub-ready `README.md` for onboarding developers.
+- [x] **Advanced Zoom Controls:** Implemented vertical zooming (expanding track heights to see waveform details) alongside horizontal zooming.
