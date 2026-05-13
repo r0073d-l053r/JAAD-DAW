@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useApp } from '../lib/store';
+import { useApp, Track, Clip } from '../lib/store';
 import { Volume2, Sliders } from './Icons';
 import { MoreHorizontal, Trash2, Download, Scissors, Layers, Wand2, ArrowUp, ChevronDown, ChevronRight } from 'lucide-react';
 
@@ -38,8 +38,8 @@ export function TrackList() {
     }
   };
 
-  const handleDownload = (track: any) => {
-    const clipNames = track.clips.map((c: any) => c.audioData || 'audio_clip').join('_');
+  const handleDownload = (track: Track) => {
+    const clipNames = track.clips.map((c: Clip) => c.audioData || 'audio_clip').join('_');
     const filename = `${track.name}_${clipNames || 'empty'}.wav`;
     const blob = new Blob(['dummy audio data'], { type: 'audio/wav' });
     const url = URL.createObjectURL(blob);
