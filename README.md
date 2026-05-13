@@ -5,6 +5,8 @@
 ![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)
 ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white)
 
+### [Test JAAD!](https://r0073d-l053r.github.io/JAAD/)
+
 Just Another AI DAW (JAAD) is a modern, web-browser-based Digital Audio Workstation built with React and the Web Audio API. It focuses on providing a fast, intuitive, and AI-enhanced experience for music production and audio editing directly in the browser—no installation required.
 
 > **⚠️ Important Note:** This project is currently in an **early alpha build**. It is under active development and is not yet a stable production release. You may encounter bugs, incomplete features, and unexpected behavior.
