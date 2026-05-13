@@ -1,0 +1,8 @@
+{
+  "name": "Just Another AI DAW",
+  "description": "A high-fidelity AI-powered creative studio for audio generation, vocal isolation, and spectral mastering. Featuring a kinetic studio atmosphere and professional DAW workflows.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": []
+}
