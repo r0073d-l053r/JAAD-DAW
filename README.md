@@ -10,13 +10,13 @@ Just Another AI DAW (JAAD) is a modern, web-browser-based Digital Audio Workstat
 ## Screenshots
 
 <div align="center">
-  <img src="./assets/screenshot-1.png" alt="JAAD Interface - AI Copilot" width="800"/>
+  <img src="./assets/screenshot-2.png" alt="JAAD Interface - Empty State" width="800"/>
 </div>
 
 <br/>
 
 <div align="center">
-  <img src="./assets/screenshot-2.png" alt="JAAD Interface - Empty State" width="800"/>
+  <img src="./assets/screenshot-1.png" alt="JAAD Interface - AI Copilot" width="800"/>
 </div>
 
 <br/>
