@@ -1,3 +1,5 @@
+import type { Track } from "./store";
+
 class AudioEngine {
   context: AudioContext | null = null;
   buffers: Map<string, AudioBuffer> = new Map();
@@ -248,7 +250,7 @@ class AudioEngine {
     this.stopAll();
   }
 
-  async renderMixdown(tracks: any[], duration: number): Promise<AudioBuffer> {
+  async renderMixdown(tracks: Track[], duration: number): Promise<AudioBuffer> {
     const offlineCtx = new OfflineAudioContext(2, Math.ceil(duration * 44100), 44100);
     
     // Set up routing in offline context
@@ -281,7 +283,7 @@ class AudioEngine {
     return await offlineCtx.startRendering();
   }
 
-  async renderTrack(track: any, duration: number): Promise<AudioBuffer> {
+  async renderTrack(track: Track, duration: number): Promise<AudioBuffer> {
     const offlineCtx = new OfflineAudioContext(2, Math.ceil(duration * 44100), 44100);
     const trackGain = offlineCtx.createGain();
     const trackPanner = offlineCtx.createStereoPanner();
