@@ -1,0 +1,11 @@
+services:
+  jaad:
+    build:
+      context: .
+      args:
+        # Passes the GEMINI_API_KEY from the host environment to the build context
+        - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    container_name: jaad-app
