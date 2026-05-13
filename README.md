@@ -74,20 +74,19 @@ You need Node.js installed on your machine.
    npm install
    ```
 
-4. Start the development server:
+4. Build for production:
+   *(Note: A production build is best to run the first time or after updates.)*
+   ```bash
+   npm run build
+   ```
+   The compiled files will be located in the `dist` directory.
+
+5. Start the development server:
    ```bash
    npm run dev
    ```
 
-5. Open your browser and navigate to `http://localhost:3000`.
-
-### Building for Production
-
-To create a production build:
-```bash
-npm run build
-```
-The compiled files will be located in the `dist` directory.
+6. Open your browser and navigate to `http://localhost:3000`.
 
 ## Keyboard Shortcuts
 
