@@ -133,7 +133,7 @@ export function Transport() {
         <TimeDisplay />
       </div>
 
-      <div className="flex items-center space-x-6">
+      <div className="absolute left-1/2 -translate-x-1/2 flex items-center space-x-6">
         <button 
           className={`flex items-center justify-center transition-colors duration-200 ${state.tracks.some(t => t.armed) ? 'text-red-500 hover:text-red-400' : 'text-zinc-600 hover:text-red-500/50'}`}
           title="Record"

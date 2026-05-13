@@ -226,7 +226,7 @@ export function Navbar() {
       </div>
       
       {/* View Mode Toggle and Snap */}
-      <div className="flex items-center space-x-3">
+      <div className="absolute left-1/2 -translate-x-1/2 flex items-center space-x-3">
         <button
           onClick={() => dispatch({ type: 'TOGGLE_SNAP' })}
           className={`flex items-center justify-center p-2 rounded-lg transition-all border ${state.snapToGrid ? 'bg-primary/20 text-primary border-primary/50 shadow-[0_0_15px_rgba(255,45,85,0.3)]' : 'bg-white/5 text-zinc-400 border-white/10 hover:text-white/80 hover:bg-white/10'}`}
