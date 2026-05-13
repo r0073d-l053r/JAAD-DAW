@@ -88,9 +88,9 @@ export function useGemini() {
         }
       }
       return null;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || 'Error detecting BPM');
+      setError(err instanceof Error ? err.message : 'Error detecting BPM');
       return null;
     } finally {
       setIsGenerating(false);
@@ -110,8 +110,8 @@ User Request: ${prompt}
 Provide professional actionable mixing or mastering advice. Make your advice technical but accessible. Suggest specific EQ, compression, or panning changes.`,
       });
       return response.text;
-    } catch (err: any) {
-      setError(err.message || 'Error generating advice');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error generating advice');
       return null;
     } finally {
       setIsGenerating(false);
