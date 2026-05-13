@@ -33,7 +33,11 @@ export function CreateForm() {
 
       setIsGenerating(true);
 
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!apiKey || apiKey === "your_gemini_api_key") {
+        throw new Error("Gemini API key is not configured. Please set VITE_GEMINI_API_KEY in your secrets.");
+      }
+      const ai = new GoogleGenAI(apiKey);
       const prompt = `Generate a 30-second ${instrument} track. Style: ${styles || "any"}. Lyrics: ${lyrics || "none"}`;
 
       const response = await ai.models.generateContentStream({

@@ -5,7 +5,7 @@ import { audioEngine } from './audioEngine';
 let ai: GoogleGenAI | null = null;
 try {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (apiKey) {
+  if (apiKey && apiKey !== "your_gemini_api_key") {
     ai = new GoogleGenAI(apiKey);
   }
 } catch (e) {
