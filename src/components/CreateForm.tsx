@@ -159,7 +159,7 @@ export function CreateForm() {
 
   return (
     <div
-      className={`fixed bottom-24 left-[calc(50%+128px)] -translate-x-1/2 z-[100] flex items-center bg-[#1c1c1e]/90 backdrop-blur-xl border ${isDragOver ? "border-orange-500 shadow-[0_0_20px_#f9731680]" : "border-white/10"} rounded-full shadow-2xl p-1.5 space-x-2 transition-all`}
+      className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] flex items-center bg-[#1c1c1e]/90 backdrop-blur-xl border ${isDragOver ? "border-orange-500 shadow-[0_0_20px_#f9731680]" : "border-white/10"} rounded-full shadow-2xl p-1.5 space-x-2 transition-all`}
       onDragOver={(e) => {
         e.preventDefault();
         setIsDragOver(true);
