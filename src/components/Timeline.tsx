@@ -526,7 +526,7 @@ export function Timeline() {
             e.stopPropagation();
             fileInputRef.current?.click();
           }}
-          className="absolute inset-0 flex flex-col items-center justify-center text-white/60 pointer-events-auto cursor-pointer hover:text-white transition-colors z-40 w-full h-full"
+          className="absolute inset-0 flex flex-col items-center justify-center text-white/60 pointer-events-auto cursor-pointer hover:text-white transition-colors z-40 w-full h-full -translate-x-32"
         >
           <input 
             type="file" 
