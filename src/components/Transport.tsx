@@ -1,22 +1,21 @@
 import { Play, Pause, StopCircle, Mic, FastForward, Rewind, Volume2 } from './Icons';
 import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 
 function TimeDisplay() {
   const { state } = useApp();
-  const timeRef = useRef<HTMLDivElement>(null);
+  const [displayTime, setDisplayTime] = useState({ mins: '00', secs: '00', ms: '00' });
   const rafId = useRef<number>(0);
 
   useEffect(() => {
     const update = () => {
       const time = audioEngine.getCurrentTime();
-      if (timeRef.current) {
-        const mins = Math.floor(time / 60).toString().padStart(2, '0');
-        const secs = Math.floor(time % 60).toString().padStart(2, '0');
-        const ms = Math.floor((time % 1) * 100).toString().padStart(2, '0');
-        timeRef.current.innerHTML = `${mins}:${secs}.<span class="text-primary/60">${ms}</span>`;
-      }
+      const mins = Math.floor(time / 60).toString().padStart(2, '0');
+      const secs = Math.floor(time % 60).toString().padStart(2, '0');
+      const ms = Math.floor((time % 1) * 100).toString().padStart(2, '0');
+      setDisplayTime({ mins, secs, ms });
+
       rafId.current = requestAnimationFrame(update);
     };
 
@@ -24,13 +23,11 @@ function TimeDisplay() {
       rafId.current = requestAnimationFrame(update);
     } else {
       // Sync to current state time when stopped
-      if (timeRef.current) {
-        const time = state.currentTime;
-        const mins = Math.floor(time / 60).toString().padStart(2, '0');
-        const secs = Math.floor(time % 60).toString().padStart(2, '0');
-        const ms = Math.floor((time % 1) * 100).toString().padStart(2, '0');
-        timeRef.current.innerHTML = `${mins}:${secs}.<span class="text-primary/60">${ms}</span>`;
-      }
+      const time = state.currentTime;
+      const mins = Math.floor(time / 60).toString().padStart(2, '0');
+      const secs = Math.floor(time % 60).toString().padStart(2, '0');
+      const ms = Math.floor((time % 1) * 100).toString().padStart(2, '0');
+      setDisplayTime({ mins, secs, ms });
     }
 
     return () => cancelAnimationFrame(rafId.current);
@@ -38,10 +35,9 @@ function TimeDisplay() {
 
   return (
     <div 
-      ref={timeRef}
       className="font-mono text-xl text-primary font-bold tracking-widest min-w-[120px] text-center bg-black/40 px-3 py-1.5 rounded-lg border border-primary/10 shadow-inner"
     >
-      00:00.<span className="text-primary/60">00</span>
+      {displayTime.mins}:{displayTime.secs}.<span className="text-primary/60">{displayTime.ms}</span>
     </div>
   );
 }
