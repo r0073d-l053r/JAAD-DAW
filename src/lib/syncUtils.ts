@@ -6,15 +6,20 @@ export const deleteProjectCloud = async (projectId: string) => {
   const docRef = doc(db, 'projects', projectId);
   await deleteDoc(docRef);
 };
-import { ref, uploadBytes, getBlob } from 'firebase/storage';
-import { Track } from './store';
+import { ref, uploadBytes, getBlob, getMetadata } from 'firebase/storage';
 
-export const uploadAssetCloud = async (assetId: string, blob: Blob) => {
+export const uploadAssetCloud = async (assetId: string, blob: Blob, onProgress?: (progress: number) => void) => {
   if (!isFirebaseAvailable) return;
   const assetRef = ref(storage, `assets/${assetId}`);
   console.log(`Cloud Sync: Uploading asset ${assetId}...`);
-  await uploadBytes(assetRef, blob);
+  await uploadBytes(assetRef, blob, {
+    customMetadata: {
+      assetId,
+      uploadedAt: new Date().toISOString()
+    }
+  });
   console.log(`Cloud Sync: Successfully uploaded ${assetId}`);
+  if (onProgress) onProgress(100);
 };
 
 export const downloadAssetCloud = async (assetId: string) => {

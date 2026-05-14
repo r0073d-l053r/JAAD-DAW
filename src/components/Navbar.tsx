@@ -15,6 +15,7 @@ export function Navbar() {
   const { state, dispatch } = useApp();
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [menuPos, setMenuPos] = useState<{left: number; top: number} | null>(null);
@@ -87,10 +88,15 @@ export function Navbar() {
         if (track.isFrozen && track.frozenBufferId) assetIdsToSync.add(track.frozenBufferId);
       }
 
+      let uploadedCount = 0;
       for (const id of assetIdsToSync) {
         const localAsset = await getAsset(id);
         if (localAsset) {
-          await uploadAssetCloud(id, localAsset).catch(e => console.error("Asset sync failed", e));
+          await uploadAssetCloud(id, localAsset, () => {
+            uploadedCount++;
+            const progress = Math.round((uploadedCount / assetIdsToSync.size) * 100);
+            setUploadProgress(progress);
+          }).catch(e => console.error("Asset sync failed", e));
         }
       }
 
@@ -98,8 +104,15 @@ export function Navbar() {
       alert(isNew ? 'New project copy saved to cloud!' : 'Project saved to cloud!');
     } finally {
       dispatch({ type: 'SET_SYNCING', payload: false });
+      setUploadProgress(0);
     }
   };
+
+  useEffect(() => {
+    if (!state.isSyncing) {
+      setUploadProgress(0);
+    }
+  }, [state.isSyncing]);
 
   const handleSaveToDesktop = async () => {
     const zip = new JSZip();
@@ -467,21 +480,36 @@ export function Navbar() {
           <Users size={16} />
           <span>Share</span>
         </button>
-        <button 
-           onClick={async () => {
-             if (!state.projectId) return;
-             dispatch({ type: 'SET_SYNCING', payload: true });
-             try {
-               await updateProjectCloud(state.projectId, state.projectName, state.tracks, state.bpm, state.masterVolume);
-               alert('Force sync complete! Your project is now up to date in the cloud.');
-             } finally {
-               dispatch({ type: 'SET_SYNCING', payload: false });
-             }
-           }}
-           className={`flex items-center space-x-2 px-3 py-1.5 text-sm border rounded transition ${state.isSyncing ? 'bg-primary/20 text-primary border-primary/50' : 'bg-[#222] hover:bg-[#333] border-gray-700 text-text-muted hover:text-white'}`}>
-          <Cloud size={16} className={state.isSyncing ? 'animate-pulse' : ''} />
-          <span>{state.isSyncing ? 'Syncing...' : 'Save'}</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button 
+              onClick={async () => {
+                if (!state.projectId) return;
+                dispatch({ type: 'SET_SYNCING', payload: true });
+                try {
+                  await updateProjectCloud(state.projectId, state.projectName, state.tracks, state.bpm, state.masterVolume);
+                  alert('Force sync complete! Your project is now up to date in the cloud.');
+                } finally {
+                  dispatch({ type: 'SET_SYNCING', payload: false });
+                }
+              }}
+              className={`flex items-center space-x-2 px-3 py-1.5 text-sm border rounded transition ${state.isSyncing ? 'bg-primary/20 text-primary border-primary/50' : 'bg-[#222] hover:bg-[#333] border-gray-700 text-text-muted hover:text-white'}`}>
+            <Cloud size={16} className={state.isSyncing ? 'animate-pulse' : ''} />
+            <span>{state.isSyncing ? 'Syncing...' : 'Save'}</span>
+          </button>
+          {uploadProgress > 0 && uploadProgress < 100 && (
+            <div className="relative flex items-center justify-center w-32 h-8">
+              <div className="absolute w-full h-full bg-gray-800 rounded overflow-hidden">
+                <div 
+                  className="h-full bg-primary transition-all duration-200 ease-out"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+              <span className="relative text-[10px] font-bold text-white">
+                {uploadProgress}%
+              </span>
+            </div>
+          )}
+        </div>
 
         <div className="relative">
           <button 
