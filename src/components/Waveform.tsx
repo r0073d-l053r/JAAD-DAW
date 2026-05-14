@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState, memo } from 'react';
 import { audioEngine } from '../lib/audioEngine';
 import { useApp } from '../lib/store';
+import { WebGLWaveformRenderer } from '../lib/WebGLWaveformRenderer';
 
 export const Waveform = memo(function Waveform({ clipId, bufferId, color, duration, width, height = 100, audioOffset = 0 }: { clipId: string, bufferId?: string, color: string, duration: number, width: number, height?: number, audioOffset?: number }) {
   const { state } = useApp();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rendererRef = useRef<WebGLWaveformRenderer | null>(null);
   const [loaded, setLoaded] = useState(false);
   const effectiveBufferId = bufferId || clipId;
 
@@ -24,58 +26,82 @@ export const Waveform = memo(function Waveform({ clipId, bufferId, color, durati
     checkBuffer();
   }, [effectiveBufferId]);
 
+  // Helper to parse hex/css color to [r,g,b,a]
+  const parseColor = (colorStr: string): [number, number, number, number] => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return [1, 1, 1, 1];
+    ctx.fillStyle = colorStr;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+    return [r / 255, g / 255, b / 255, a / 255];
+  };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || displayWidth <= 0 || displayHeight <= 0) return;
     
-    const dpr = Math.round(window.devicePixelRatio || 1);
+    if (!rendererRef.current) {
+      try {
+        rendererRef.current = new WebGLWaveformRenderer(canvas);
+      } catch (e) {
+        console.error('WebGL failed', e);
+        return;
+      }
+    }
+
+    const dpr = window.devicePixelRatio || 1;
     canvas.width = displayWidth * dpr;
     canvas.height = displayHeight * dpr;
     
-    const ctx = canvas.getContext('2d', { alpha: true });
-    if (!ctx) return;
-
-    ctx.scale(dpr, dpr);
-    ctx.imageSmoothingEnabled = true;
-    ctx.clearRect(0, 0, displayWidth, displayHeight);
-
     const buffer = audioEngine.buffers.get(effectiveBufferId);
+    const rgba = parseColor(color);
 
     if (buffer && loaded) {
       const data = buffer.getChannelData(0);
-      const amp = displayHeight / 2;
-
-      ctx.fillStyle = color;
-      
+      const amp = (displayHeight * dpr) / 2;
       const bufferDuration = buffer.duration;
       const totalSamples = data.length;
-      const samplesPerPixel = (duration / displayWidth / bufferDuration) * totalSamples;
+
+      // Each pixel column i needs 2 points (4 floats: x, y1, x, y2)
+      const peaks = new Float32Array(displayWidth * 4);
+      let pIdx = 0;
 
       for (let i = 0; i < displayWidth; i++) {
         let min = 1.0;
         let max = -1.0;
         
-        // precise mapping
         const startIdx = Math.floor(((audioOffset + (i / displayWidth) * duration) / bufferDuration) * totalSamples);
         const endIdx = Math.max(startIdx + 1, Math.floor(((audioOffset + ((i + 1) / displayWidth) * duration) / bufferDuration) * totalSamples));
         
         const effectiveStart = Math.max(0, Math.min(totalSamples - 1, startIdx));
         const effectiveEnd = Math.max(effectiveStart + 1, Math.min(totalSamples, endIdx));
 
-        // check all samples in the range for accurate peak finding
         for (let j = effectiveStart; j < effectiveEnd; j++) {
           const datum = data[j]; 
           if (datum < min) min = datum;
           if (datum > max) max = datum;
         }
 
-        const y = amp * (1 + min);
-        const h = Math.max(1, amp * (max - min));
-        ctx.fillRect(i, y, 1, h);
+        const x = i * dpr;
+        const y1 = amp * (1 + min);
+        const y2 = amp * (1 + max);
+        
+        peaks[pIdx++] = x;
+        peaks[pIdx++] = y1;
+        peaks[pIdx++] = x;
+        peaks[pIdx++] = y2 === y1 ? y1 + 1 : y2; // Ensure at least 1px height
       }
+
+      rendererRef.current.render(peaks, rgba);
     } else {
-      ctx.fillStyle = color + '40';
-      ctx.fillRect(0, displayHeight/2 - 0.5, displayWidth, 1);
+      // Draw a simple center line if not loaded
+      const x = 0;
+      const y = (displayHeight * dpr) / 2;
+      const peaks = new Float32Array([0, y, displayWidth * dpr, y]);
+      rendererRef.current.render(peaks, [rgba[0], rgba[1], rgba[2], 0.25]);
     }
   }, [effectiveBufferId, color, displayWidth, displayHeight, loaded, duration, audioOffset, state.buffersVersion]);
 
@@ -88,7 +114,7 @@ export const Waveform = memo(function Waveform({ clipId, bufferId, color, durati
         filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.9))',
         display: 'block'
       }}
-      className="mix-blend-screen pointer-events-none"
+      className="mix-blend-screen pointer-events-none gpu-layer"
     />
   );
 });

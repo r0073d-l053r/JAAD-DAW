@@ -11,6 +11,7 @@ class AudioEngine {
   // New precise timing tracking
   playStartTime: number = 0;
   playPositionAtStart: number = 0;
+  isPlaying: boolean = false;
   
   // Loop settings
   isLooping: boolean = false;
@@ -316,6 +317,7 @@ class AudioEngine {
     this.resume();
     this.playStartTime = contextStartTime || this.context!.currentTime;
     this.playPositionAtStart = startTimeInSeconds;
+    this.isPlaying = true;
     
     this.currentBeat = 0;
     this.nextNoteTime = this.playStartTime;
@@ -341,6 +343,7 @@ class AudioEngine {
       window.clearTimeout(this.metronomeTimerID);
       this.metronomeTimerID = null;
     }
+    this.isPlaying = false;
   }
 
   stopClip(clipId: string) {
@@ -451,6 +454,16 @@ class AudioEngine {
       worker.onerror = reject;
       worker.postMessage({ track, clipBuffers, sampleRate, totalDuration });
     });
+  }
+
+  getTransportState() {
+    const time = this.getCurrentTime();
+    return {
+      time: time,
+      isPlaying: this.isPlaying,
+      bpm: this.getBpmAtTime(time),
+      beat: time * (this.getBpmAtTime(time) / 60.0)
+    };
   }
 }
 

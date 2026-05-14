@@ -1,19 +1,12 @@
 import { type CSSProperties, forwardRef, useCallback, useEffect, useId, useRef, useState } from "react"
-import { ShaderDisplacementGenerator, fragmentShaders } from "./shader-utils"
+import { WebGLDisplacementGenerator, glslShaders } from "./shader-utils"
 import { displacementMap, polarDisplacementMap, prominentDisplacementMap } from "./utils"
 
-// Generate shader-based displacement map using shaderUtils
+import { webGLContextManager } from "./WebGLContextManager"
+
+// Generate shader-based displacement map using shared WebGLContextManager
 const generateShaderDisplacementMap = (width: number, height: number): string => {
-  const generator = new ShaderDisplacementGenerator({
-    width,
-    height,
-    fragment: fragmentShaders.liquidGlass,
-  })
-
-  const dataUrl = generator.updateShader()
-  generator.destroy()
-
-  return dataUrl
+  return webGLContextManager.renderDisplacement(width, height, glslShaders.liquidGlass)
 }
 
 const getMap = (mode: "standard" | "polar" | "prominent" | "shader", shaderMapUrl?: string) => {

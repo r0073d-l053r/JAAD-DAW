@@ -43,92 +43,124 @@ export const fragmentShaders = {
   },
 }
 
+export const glslShaders = {
+  liquidGlass: `
+    precision highp float;
+    varying vec2 vUv;
+
+    float smoothStepFunc(float a, float b, float t) {
+      t = clamp((t - a) / (b - a), 0.0, 1.0);
+      return t * t * (3.0 - 2.0 * t);
+    }
+
+    float roundedRectSDF(vec2 p, vec2 b, float r) {
+      vec2 q = abs(p) - b + r;
+      return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
+    }
+
+    void main() {
+      vec2 uv = vUv;
+      vec2 i = uv - 0.5;
+      float distanceToEdge = roundedRectSDF(i, vec2(0.3, 0.2), 0.6);
+      float displacement = smoothStepFunc(0.8, 0.0, distanceToEdge - 0.15);
+      float scaled = smoothStepFunc(0.0, 1.0, displacement);
+      vec2 pos = i * scaled + 0.5;
+      
+      // Calculate displacement vector
+      vec2 d = pos - uv;
+      
+      // We need to match the normalization of the CPU version.
+      // The CPU version uses maxScale. In GLSL, we'll use a fixed large scale (e.g. 0.5) 
+      // or we can try to normalize within the shader if we know the bounds.
+      // For liquid glass, the displacement is usually small.
+      
+      float r = d.x / 0.5 + 0.5;
+      float g = d.y / 0.5 + 0.5;
+      
+      gl_FragColor = vec4(r, g, g, 1.0);
+    }
+  `,
+}
+
 export type FragmentShaderType = keyof typeof fragmentShaders
 
-export class ShaderDisplacementGenerator {
+export class WebGLDisplacementGenerator {
   private canvas: HTMLCanvasElement
-  private context: CanvasRenderingContext2D
-  private canvasDPI = 1
+  private gl: WebGLRenderingContext
+  private program: WebGLProgram | null = null
 
-  constructor(private options: ShaderOptions) {
+  constructor(private options: { width: number; height: number; fragment: string }) {
     this.canvas = document.createElement("canvas")
-    this.canvas.width = options.width * this.canvasDPI
-    this.canvas.height = options.height * this.canvasDPI
-    this.canvas.style.display = "none"
+    this.canvas.width = options.width
+    this.canvas.height = options.height
+    
+    const gl = this.canvas.getContext("webgl", { preserveDrawingBuffer: true, antialias: false })
+    if (!gl) throw new Error("WebGL not supported")
+    this.gl = gl
 
-    const context = this.canvas.getContext("2d")
-    if (!context) {
-      throw new Error("Could not get 2D context")
-    }
-    this.context = context
+    this.program = this.initProgram()
   }
 
-  updateShader(mousePosition?: Vec2): string {
-    const w = this.options.width * this.canvasDPI
-    const h = this.options.height * this.canvasDPI
+  public resize(width: number, height: number) {
+    if (this.canvas.width !== width || this.canvas.height !== height) {
+      this.canvas.width = width
+      this.canvas.height = height
+      this.gl.viewport(0, 0, width, height)
+    }
+  }
 
-    let maxScale = 0
-    const rawValues: number[] = []
-
-    // Calculate displacement values
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const uv: Vec2 = { x: x / w, y: y / h }
-
-        const pos = this.options.fragment(uv, mousePosition)
-        const dx = pos.x * w - x
-        const dy = pos.y * h - y
-
-        maxScale = Math.max(maxScale, Math.abs(dx), Math.abs(dy))
-        rawValues.push(dx, dy)
+  private initProgram(): WebGLProgram {
+    const gl = this.gl
+    const vsSource = `
+      attribute vec2 position;
+      varying vec2 vUv;
+      void main() {
+        vUv = position * 0.5 + 0.5;
+        gl_Position = vec4(position, 0.0, 1.0);
       }
-    }
+    `
+    const fsSource = this.options.fragment
 
-    // Improved normalization to prevent artifacts while maintaining intensity
-    if (maxScale > 0) {
-      maxScale = Math.max(maxScale, 1) // Ensure minimum scale to prevent over-normalization
-    } else {
-      maxScale = 1
-    }
+    const vs = gl.createShader(gl.VERTEX_SHADER)!
+    gl.shaderSource(vs, vsSource)
+    gl.compileShader(vs)
 
-    // Create ImageData and fill it
-    const imageData = this.context.createImageData(w, h)
-    const data = imageData.data
+    const fs = gl.createShader(gl.FRAGMENT_SHADER)!
+    gl.shaderSource(fs, fsSource)
+    gl.compileShader(fs)
 
-    // Convert to image data with smoother normalization
-    let rawIndex = 0
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const dx = rawValues[rawIndex++]
-        const dy = rawValues[rawIndex++]
+    const program = gl.createProgram()!
+    gl.attachShader(program, vs)
+    gl.attachShader(program, fs)
+    gl.linkProgram(program)
 
-        // Smooth the displacement values at edges to prevent hard transitions
-        const edgeDistance = Math.min(x, y, w - x - 1, h - y - 1)
-        const edgeFactor = Math.min(1, edgeDistance / 2) // Smooth within 2 pixels of edge
+    return program
+  }
 
-        const smoothedDx = dx * edgeFactor
-        const smoothedDy = dy * edgeFactor
+  updateShader(): string {
+    const gl = this.gl
+    if (!this.program) return ""
 
-        const r = smoothedDx / maxScale + 0.5
-        const g = smoothedDy / maxScale + 0.5
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height)
+    gl.useProgram(this.program)
 
-        const pixelIndex = (y * w + x) * 4
-        data[pixelIndex] = Math.max(0, Math.min(255, r * 255)) // Red channel (X displacement)
-        data[pixelIndex + 1] = Math.max(0, Math.min(255, g * 255)) // Green channel (Y displacement)
-        data[pixelIndex + 2] = Math.max(0, Math.min(255, g * 255)) // Blue channel (Y displacement for SVG filter compatibility)
-        data[pixelIndex + 3] = 255 // Alpha channel
-      }
-    }
+    const buffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW)
 
-    this.context.putImageData(imageData, 0, 0)
+    const posAttrib = gl.getAttribLocation(this.program, "position")
+    gl.enableVertexAttribArray(posAttrib)
+    gl.vertexAttribPointer(posAttrib, 2, gl.FLOAT, false, 0, 0)
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+
     return this.canvas.toDataURL()
   }
 
   destroy(): void {
+    if (this.program) {
+      this.gl.deleteProgram(this.program)
+    }
     this.canvas.remove()
-  }
-
-  getScale(): number {
-    return this.canvasDPI
   }
 }

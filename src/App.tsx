@@ -20,7 +20,7 @@ import { useGemini } from './lib/useGemini';
 import { subscribeToProject, updateProjectCloud, uploadAssetCloud, downloadAssetCloud } from './lib/syncUtils';
 import { saveAsset, getAsset } from './lib/assetManager';
 
-import { StudioBackground } from './components/StudioBackground';
+import { WebGLBackground } from './components/WebGLBackground';
 
 // We extract the inner content to use the useApp hook
 function AppContent() {
@@ -189,7 +189,7 @@ function AppContent() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <StudioBackground isDimmed={state.tracks.length > 0} disableAnimation={state.disableBackgroundAnimation} />
+      <WebGLBackground isDimmed={state.tracks.length > 0} />
       
       <div className="relative z-10 flex flex-col h-full w-full bg-transparent shadow-2xl">
         <Navbar />

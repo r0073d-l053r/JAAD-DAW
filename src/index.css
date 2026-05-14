@@ -21,6 +21,13 @@
   background: linear-gradient(135deg, #af52de 0%, #ff2d55 100%);
 }
 
+@utility gpu-layer {
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
 body {
   background-color: #000000;
   color: #ffffff;

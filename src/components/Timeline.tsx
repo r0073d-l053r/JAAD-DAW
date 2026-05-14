@@ -464,7 +464,7 @@ export function Timeline() {
   return (
     <div 
       id="timeline"
-      className="flex-1 timeline-grid bg-transparent relative custom-scrollbar select-none overflow-x-auto overflow-y-hidden" 
+      className="flex-1 timeline-grid bg-transparent relative custom-scrollbar select-none overflow-x-auto overflow-y-hidden gpu-layer" 
       ref={timelineRef}
       onDragOver={(e) => { 
         e.preventDefault(); 
