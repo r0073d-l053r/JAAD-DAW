@@ -5,7 +5,7 @@
 ![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)
 ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white)
 
-### [Test JAAD!](https://r0073d-l053r.github.io/JAAD/)
+### [Test JAAD!](https://r0073d-l053r.github.io/JAAD-DAW/)
 
 Just Another AI DAW (JAAD) is a modern, web-browser-based Digital Audio Workstation built with React and the Web Audio API. It focuses on providing a fast, intuitive, and AI-enhanced experience for music production and audio editing directly in the browser—no installation required.
 
@@ -65,8 +65,8 @@ You need Node.js installed on your machine.
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/r0073d-l053r/JAAD.git
-   cd JAAD
+   git clone https://github.com/r0073d-l053r/JAAD-DAW.git
+   cd JAAD-DAW
    ```
    *(Note: Ensure you are in the `JAAD` directory before running the following commands.)*
 
