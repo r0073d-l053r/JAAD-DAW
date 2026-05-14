@@ -848,7 +848,13 @@ function appReducer(
       return { ...state, isProjectBrowserOpen: !state.isProjectBrowserOpen };
     }
     case "SYNC_STATE": {
-      return { ...state, ...action.payload };
+      if (!action.payload) return state;
+      return { 
+        ...state, 
+        ...action.payload,
+        // Ensure tracks is always an array to prevent .length crashes
+        tracks: action.payload.tracks || state.tracks || []
+      };
     }
     case "INCREMENT_BUFFERS_VERSION": {
       return { ...state, buffersVersion: state.buffersVersion + 1 };

@@ -2,24 +2,30 @@ import { useState } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { audioEngine } from './audioEngine';
 
-let ai: GoogleGenAI | null = null;
-try {
-  const apiKey = (import.meta.env.VITE_GEMINI_API_KEY || "").trim();
+let aiInstance: GoogleGenAI | null = null;
+
+function getAI() {
+  if (aiInstance) return aiInstance;
   
-  const isInvalid = !apiKey || 
-                    apiKey.length < 10 || 
-                    apiKey === "your_gemini_api_key" || 
-                    apiKey === "undefined" || 
-                    apiKey === "null";
-                     
-  if (!isInvalid) {
-    console.log(`Gemini AI: Initializing with key (length: ${apiKey.length})`);
-    ai = new GoogleGenAI(apiKey);
-  } else {
-    console.log("Gemini AI: No valid API key found (Key is empty, too short, or a placeholder). AI features disabled.");
+  try {
+    const apiKey = (import.meta.env.VITE_GEMINI_API_KEY || "").trim();
+    const isInvalid = !apiKey || 
+                      apiKey.length < 10 || 
+                      apiKey === "your_gemini_api_key" || 
+                      apiKey === "undefined" || 
+                      apiKey === "null";
+                       
+    if (!isInvalid) {
+      console.log(`Gemini AI: Initializing with key (length: ${apiKey.length})`);
+      aiInstance = new GoogleGenAI(apiKey);
+      return aiInstance;
+    } else {
+      console.log("Gemini AI: No valid API key found. AI features disabled.");
+    }
+  } catch (e) {
+    console.error("Gemini AI: Failed to initialize:", e);
   }
-} catch (e) {
-  console.error("Gemini AI: Failed to initialize even after checks:", e);
+  return null;
 }
 
 function audioBufferToWavBase64(buffer: AudioBuffer, durationSeconds: number = 10): string {
@@ -76,6 +82,7 @@ export function useGemini() {
     setIsGenerating(true);
     setError(null);
     try {
+      const ai = getAI();
       if (!ai) throw new Error("Gemini API key is not configured in .env file.");
       const base64Audio = audioBufferToWavBase64(buffer, 15); // Up to 15 seconds
       const response = await ai.models.generateContent({
@@ -112,6 +119,7 @@ export function useGemini() {
     setIsGenerating(true);
     setError(null);
     try {
+      const ai = getAI();
       if (!ai) throw new Error("Gemini API key is not configured in .env file.");
       const response = await ai.models.generateContent({
         model: 'gemini-3.1-pro-preview',
@@ -132,6 +140,7 @@ Provide professional actionable mixing or mastering advice. Make your advice tec
   const getMasteringSettings = async (genre: string) => {
     setIsGenerating(true);
     try {
+      const ai = getAI();
       if (!ai) throw new Error("Gemini API key is not configured in .env file.");
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -147,6 +156,7 @@ Provide professional actionable mixing or mastering advice. Make your advice tec
     setIsGenerating(true);
     setError(null);
     try {
+      const ai = getAI();
       if (!ai) throw new Error("Gemini API key is not configured.");
       const response = await ai.models.generateContent({
         model: 'gemini-3.1-pro-preview',
@@ -179,6 +189,7 @@ Provide professional actionable mixing or mastering advice. Make your advice tec
     setIsGenerating(true);
     setError(null);
     try {
+      const ai = getAI();
       if (!ai) throw new Error("Gemini API key is not configured.");
       const base64Audio = audioBufferToWavBase64(buffer, 10);
       const response = await ai.models.generateContent({
@@ -207,6 +218,7 @@ Provide professional actionable mixing or mastering advice. Make your advice tec
     setIsGenerating(true);
     setError(null);
     try {
+      const ai = getAI();
       if (!ai) throw new Error("Gemini API key is not configured.");
       const response = await ai.models.generateContent({
         model: 'gemini-3.1-pro-preview',
