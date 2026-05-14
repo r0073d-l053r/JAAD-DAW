@@ -102,9 +102,11 @@ export function WebGLBackground({ isDimmed = false }: WebGLBackgroundProps) {
       return shader;
     };
 
+    const vertexShader = createShader(gl.VERTEX_SHADER, vsSource);
+    const fragmentShader = createShader(gl.FRAGMENT_SHADER, fsSource);
     const program = gl.createProgram()!;
-    gl.attachShader(program, createShader(gl.VERTEX_SHADER, vsSource));
-    gl.attachShader(program, createShader(gl.FRAGMENT_SHADER, fsSource));
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
     gl.linkProgram(program);
 
     const buffer = gl.createBuffer();
@@ -147,6 +149,16 @@ export function WebGLBackground({ isDimmed = false }: WebGLBackgroundProps) {
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', handleResize);
+      
+      // Cleanup WebGL resources
+      gl.deleteProgram(program);
+      gl.deleteBuffer(buffer);
+      gl.deleteShader(vertexShader);
+      gl.deleteShader(fragmentShader);
+      
+      // Explicitly lose context if possible (extension)
+      const extension = gl.getExtension('WEBGL_lose_context');
+      if (extension) extension.loseContext();
     };
   }, [isDimmed]);
 
