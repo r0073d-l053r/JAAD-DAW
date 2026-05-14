@@ -90,7 +90,7 @@ export function Navbar() {
       for (const id of assetIdsToSync) {
         const localAsset = await getAsset(id);
         if (localAsset) {
-          uploadAssetCloud(id, localAsset).catch(e => console.error("Asset sync failed", e));
+          await uploadAssetCloud(id, localAsset).catch(e => console.error("Asset sync failed", e));
         }
       }
 

@@ -135,7 +135,7 @@ function AppContent() {
         const duration = await audioEngine.loadAudio(clipId, file);
         await saveAsset(clipId, file);
         // Also sync to cloud storage for cross-device persistence
-        uploadAssetCloud(clipId, file).catch(err => console.error("Cloud upload failed", err));
+        await uploadAssetCloud(clipId, file).catch(err => console.error("Cloud upload failed", err));
         
         dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
         
