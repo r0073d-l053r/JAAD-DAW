@@ -11,6 +11,12 @@ export function WebGLBackground({ isDimmed = false }: WebGLBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const workerRef = useRef<Worker | null>(null);
 
+  const isDimmedRef = useRef(isDimmed);
+  
+  useEffect(() => {
+    isDimmedRef.current = isDimmed;
+  }, [isDimmed]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -19,7 +25,7 @@ export function WebGLBackground({ isDimmed = false }: WebGLBackgroundProps) {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    const gl = canvas.getContext('webgl', { antialias: true });
+    const gl = canvas.getContext('webgl', { antialias: true, alpha: false });
     if (!gl) return;
 
     const vsSource = `
@@ -122,6 +128,7 @@ export function WebGLBackground({ isDimmed = false }: WebGLBackgroundProps) {
 
     let animId: number;
     const render = (time: number) => {
+      if (!canvasRef.current) return;
       const state = audioEngine.getTransportState();
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.useProgram(program);
@@ -131,7 +138,7 @@ export function WebGLBackground({ isDimmed = false }: WebGLBackgroundProps) {
       
       gl.uniform2f(uRes, canvas.width, canvas.height);
       gl.uniform1f(uTime, time * 0.001);
-      gl.uniform1f(uDim, isDimmed ? 1.0 : 0.0);
+      gl.uniform1f(uDim, isDimmedRef.current ? 1.0 : 0.0);
       gl.uniform1f(uBeat, state.beat);
       gl.uniform1f(uPlaying, state.isPlaying ? 1.0 : 0.0);
       
@@ -155,12 +162,8 @@ export function WebGLBackground({ isDimmed = false }: WebGLBackgroundProps) {
       gl.deleteBuffer(buffer);
       gl.deleteShader(vertexShader);
       gl.deleteShader(fragmentShader);
-      
-      // Explicitly lose context if possible (extension)
-      const extension = gl.getExtension('WEBGL_lose_context');
-      if (extension) extension.loseContext();
     };
-  }, [isDimmed]);
+  }, []);
 
   return (
     <div className="fixed inset-0 z-[-1] bg-black overflow-hidden pointer-events-none">
