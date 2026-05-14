@@ -97,7 +97,10 @@ You need Node.js installed on your machine.
 
 You can easily self-host JAAD using Docker and Docker Compose. This ensures a consistent environment and serves the production build out of the box.
 
-1. Make sure you have your `.env` file configured with your `GEMINI_API_KEY`.
+1. Make sure you have your `.env` file configured with your `VITE_GEMINI_API_KEY`.
+
+> [!CAUTION]
+> **Security Warning:** Any environment variable prefixed with `VITE_` will be baked into the client-side JavaScript bundle during build. This means your `VITE_GEMINI_API_KEY` will be visible to anyone visiting the site. For production use, it is highly recommended to use a backend proxy.
 2. Build and start the container in detached mode:
    ```bash
    docker-compose up -d --build

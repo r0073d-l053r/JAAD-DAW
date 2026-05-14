@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useApp } from '../lib/store';
 import { listProjects, deleteProjectCloud } from '../lib/syncUtils';
 import { X, FolderOpen, Clock, Music, Trash2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 
 export function ProjectBrowser() {
   const { state, dispatch } = useApp();
