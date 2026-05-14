@@ -151,7 +151,7 @@ export function Transport() {
   // Remove the redundant handleKeyDown as it's now in store.tsx
 
   return (
-    <div className="h-16 flex items-center justify-between px-6 border-t border-zinc-800 flex-shrink-0 z-[100] absolute bottom-0 left-0 right-0 glass">
+    <div className="h-16 flex items-center justify-between px-6 border-t border-zinc-800 flex-shrink-0 z-[100] relative glass">
       
       <div className="flex items-center space-x-4">
         <TimeDisplay />
