@@ -54,14 +54,39 @@ export const updateProjectCloud = async (projectId: string, projectName: string,
   const docRef = doc(db, 'projects', projectId);
   // We sanitize the state to ensure it's serializable for Firestore
   const sanitizedTracks = tracks.map(track => ({
-    ...track,
+    id: track.id,
+    name: track.name,
+    volume: track.volume,
+    pan: track.pan,
+    muted: track.muted,
+    solo: track.solo,
+    color: track.color,
+    isFrozen: track.isFrozen || false,
+    frozenBufferId: track.frozenBufferId || null,
+    showLanes: track.showLanes || false,
     clips: track.clips.map(clip => ({
       id: clip.id,
+      bufferId: clip.bufferId || clip.id,
       start: clip.start,
       duration: clip.duration,
       audioOffset: clip.audioOffset || 0,
-      audioData: clip.audioData, // This is expected to be a string or serializable metadata
-      notes: clip.notes || []
+      audioData: clip.audioData,
+      notes: clip.notes || [],
+      volumeEnvelope: clip.volumeEnvelope || []
+    })),
+    lanes: (track.lanes || []).map(lane => ({
+      id: lane.id,
+      name: lane.name,
+      clips: lane.clips.map(clip => ({
+        id: clip.id,
+        bufferId: clip.bufferId || clip.id,
+        start: clip.start,
+        duration: clip.duration,
+        audioOffset: clip.audioOffset || 0,
+        audioData: clip.audioData,
+        notes: clip.notes || [],
+        volumeEnvelope: clip.volumeEnvelope || []
+      }))
     }))
   }));
 

@@ -77,14 +77,20 @@ export function Navbar() {
     dispatch({ type: 'SET_SYNCING', payload: true });
     try {
       // Ensure all current project assets are synced to cloud storage
+      const assetIdsToSync = new Set<string>();
       for (const track of state.tracks) {
-        for (const clip of track.clips) {
-          const id = clip.bufferId || clip.id;
-          const localAsset = await getAsset(id);
-          if (localAsset) {
-            // We don't await here to keep it snappy, but we track the group
-            uploadAssetCloud(id, localAsset).catch(e => console.error("Asset sync failed", e));
-          }
+        // 1. Clips
+        track.clips.forEach(c => assetIdsToSync.add(c.bufferId || c.id));
+        // 2. Lanes
+        track.lanes?.forEach(l => l.clips.forEach(c => assetIdsToSync.add(c.bufferId || c.id)));
+        // 3. Frozen
+        if (track.isFrozen && track.frozenBufferId) assetIdsToSync.add(track.frozenBufferId);
+      }
+
+      for (const id of assetIdsToSync) {
+        const localAsset = await getAsset(id);
+        if (localAsset) {
+          uploadAssetCloud(id, localAsset).catch(e => console.error("Asset sync failed", e));
         }
       }
 
@@ -115,32 +121,25 @@ export function Navbar() {
       let missingAssets = 0;
       
       for (const track of state.tracks) {
-        // Collect all clips from main list and lanes
-        const allClips = [...track.clips, ...(track.lanes?.flatMap(l => l.clips) || [])];
+        // Collect all clip IDs (main list + lanes)
+        const assetIds = new Set<string>();
+        track.clips.forEach(c => assetIds.add(c.bufferId || c.id));
+        track.lanes?.forEach(l => l.clips.forEach(c => assetIds.add(c.bufferId || c.id)));
         
         // Add frozen buffer if applicable
         if (track.isFrozen && track.frozenBufferId) {
-          const asset = await getAsset(track.frozenBufferId);
-          if (asset && !savedAssetIds.has(track.frozenBufferId)) {
-            assetsFolder.file(`${track.frozenBufferId}.audio`, asset);
-            savedAssetIds.add(track.frozenBufferId);
-          } else if (!asset) {
-            missingAssets++;
-            console.warn(`Missing frozen asset: ${track.frozenBufferId}`);
-          }
+          assetIds.add(track.frozenBufferId);
         }
 
-        for (const clip of allClips) {
-          const id = clip.bufferId || clip.id;
+        for (const id of assetIds) {
           if (savedAssetIds.has(id)) continue;
-
           const asset = await getAsset(id);
           if (asset) {
             assetsFolder.file(`${id}.audio`, asset);
             savedAssetIds.add(id);
           } else {
             missingAssets++;
-            console.warn(`Missing clip asset: ${id}`);
+            console.warn(`Missing asset: ${id}`);
           }
         }
       }
@@ -176,18 +175,17 @@ export function Navbar() {
       // Extract assets
       const assetsFolder = zip.folder("assets");
       if (assetsFolder) {
-        const assetFiles = Object.keys(assetsFolder.files);
-        for (const filePath of assetFiles) {
-          if (filePath.endsWith(".audio")) {
-            const assetData = await assetsFolder.file(filePath)?.async("blob");
-            if (assetData) {
-              const id = filePath.split("/").pop()?.replace(".audio", "");
-              if (id) {
-                 await saveAsset(id, assetData);
-              }
-            }
+        const promises: Promise<void>[] = [];
+        assetsFolder.forEach((relativePath, file) => {
+          if (relativePath.endsWith(".audio")) {
+            const id = relativePath.replace(".audio", "");
+            promises.push((async () => {
+              const blob = await file.async("blob");
+              await saveAsset(id, blob);
+            })());
           }
-        }
+        });
+        await Promise.all(promises);
       }
       
       dispatch({ type: 'SYNC_STATE', payload: parsed });
