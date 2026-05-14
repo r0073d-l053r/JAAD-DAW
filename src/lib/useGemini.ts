@@ -4,20 +4,22 @@ import { audioEngine } from './audioEngine';
 
 let ai: GoogleGenAI | null = null;
 try {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  const isValidKey = apiKey && 
-                     apiKey.length > 10 && 
-                     apiKey !== "your_gemini_api_key" && 
-                     apiKey !== "undefined" && 
-                     apiKey !== "null";
+  const apiKey = (import.meta.env.VITE_GEMINI_API_KEY || "").trim();
+  
+  const isInvalid = !apiKey || 
+                    apiKey.length < 10 || 
+                    apiKey === "your_gemini_api_key" || 
+                    apiKey === "undefined" || 
+                    apiKey === "null";
                      
-  if (isValidKey) {
+  if (!isInvalid) {
+    console.log(`Gemini AI: Initializing with key (length: ${apiKey.length})`);
     ai = new GoogleGenAI(apiKey);
   } else {
-    console.log("Gemini AI: No valid API key found. AI features will be disabled.");
+    console.log("Gemini AI: No valid API key found (Key is empty, too short, or a placeholder). AI features disabled.");
   }
 } catch (e) {
-  console.warn("Gemini API not initialized:", e);
+  console.error("Gemini AI: Failed to initialize even after checks:", e);
 }
 
 function audioBufferToWavBase64(buffer: AudioBuffer, durationSeconds: number = 10): string {

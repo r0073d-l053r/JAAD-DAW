@@ -10,14 +10,19 @@ import { Track } from './store';
 
 export const uploadAssetCloud = async (assetId: string, blob: Blob) => {
   const assetRef = ref(storage, `assets/${assetId}`);
+  console.log(`Cloud Sync: Uploading asset ${assetId}...`);
   await uploadBytes(assetRef, blob);
+  console.log(`Cloud Sync: Successfully uploaded ${assetId}`);
 };
 
 export const downloadAssetCloud = async (assetId: string) => {
   const assetRef = ref(storage, `assets/${assetId}`);
   try {
-    return await getBlob(assetRef);
+    const blob = await getBlob(assetRef);
+    console.log(`Cloud Sync: Successfully downloaded ${assetId}`);
+    return blob;
   } catch (e) {
+    console.warn(`Cloud Sync: Failed to download ${assetId} (Likely not in cloud yet)`);
     return null;
   }
 };
