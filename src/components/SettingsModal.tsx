@@ -250,18 +250,6 @@ export function SettingsModal() {
                   <h3 className="text-xl font-bold mb-8 text-white/95">Visual Aesthetics</h3>
                   <div className="space-y-8">
                     <div className="space-y-3">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Accent Color</label>
-                      <div className="flex space-x-3">
-                         {['#f97316', '#3b82f6', '#22c55e', '#ec4899', '#a855f7'].map(color => (
-                           <div 
-                            key={color} 
-                            style={{ backgroundColor: color }} 
-                            className={`w-8 h-8 rounded-full cursor-pointer transition-transform hover:scale-110 shadow-lg ${color === '#f97316' ? 'ring-2 ring-white ring-offset-2 ring-offset-black' : ''}`}
-                           />
-                         ))}
-                      </div>
-                    </div>
-                    <div className="space-y-3 pt-6 border-t border-white/5">
                       <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Appearance</label>
                       <GlassSelect 
                         label="Appearance" 
