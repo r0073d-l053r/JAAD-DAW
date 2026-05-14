@@ -10,6 +10,8 @@
 Just Another AI DAW (JAAD) is a modern, web-browser-based Digital Audio Workstation built with React and the Web Audio API. It focuses on providing a fast, intuitive, and AI-enhanced experience for music production and audio editing directly in the browser—no installation required.
 
 > **⚠️ Important Note:** This project is currently in an **early alpha build**. It is under active development and is not yet a stable production release. You may encounter bugs, incomplete features, and unexpected behavior.
+>
+> **🌐 Browser Compatibility:** This project is designed to perform at its best when using a **Google Chrome** browser. While other modern browsers may work, Chrome provides the most stable and performant environment for the Web Audio engine and high-fidelity animations.
 
 
 ## Screenshots
