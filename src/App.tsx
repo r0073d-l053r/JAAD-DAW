@@ -13,6 +13,7 @@ import { AICopilot } from './components/AICopilot';
 import { SettingsModal } from './components/SettingsModal';
 import { CreateForm } from './components/CreateForm';
 import { ProjectBrowser } from './components/ProjectBrowser';
+import { SyncOverlay } from './components/SyncOverlay';
 import { useApp } from './lib/store';
 import React, { useState, useEffect } from 'react';
 import { audioEngine } from './lib/audioEngine';
@@ -27,6 +28,7 @@ function AppContent() {
   const { state, dispatch } = useApp();
   const { detectBPM } = useGemini();
   const [detectingBPM, setDetectingBPM] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
 
   useEffect(() => {
     // Determine if any track is soloed
@@ -57,16 +59,17 @@ function AppContent() {
   }, [state.projectId, dispatch]);
 
   useEffect(() => {
-    if (!state.projectId || state.isOffline || !state.hasManuallySaved) return;
+    // Only autosave if we have a project ID, we're online, we've saved manually once,
+    // AND we're not currently in the middle of a manual blocking sync.
+    if (!state.projectId || state.isOffline || !state.hasManuallySaved || state.isSyncing) return;
 
     const timer = setTimeout(() => {
-      dispatch({ type: 'SET_SYNCING', payload: true });
-      updateProjectCloud(state.projectId, state.projectName, state.tracks, state.bpm, state.masterVolume)
-        .finally(() => dispatch({ type: 'SET_SYNCING', payload: false }));
-    }, 3000);
+      // Background sync (not blocking)
+      updateProjectCloud(state.projectId, state.projectName, state.tracks, state.bpm, state.masterVolume);
+    }, 10000); // Increase to 10s to reduce network congestion
 
     return () => clearTimeout(timer);
-  }, [state.tracks, state.bpm, state.masterVolume, state.projectId, state.isOffline, state.hasManuallySaved, state.projectName, dispatch]);
+  }, [state.tracks, state.bpm, state.masterVolume, state.projectId, state.isOffline, state.hasManuallySaved, state.projectName, state.isSyncing]);
 
   useEffect(() => {
     const recoverAssets = async () => {
@@ -192,7 +195,7 @@ function AppContent() {
       <WebGLBackground isDimmed={state.tracks.length > 0} />
       
       <div className="relative z-10 flex flex-col h-full w-full bg-transparent shadow-2xl">
-        <Navbar />
+        <Navbar setSyncProgress={setSyncProgress} />
         {detectingBPM && (
           <div className="absolute top-16 left-1/2 transform -translate-x-1/2 z-50 bg-primary text-black px-4 py-2 rounded-full text-xs font-bold animate-pulse shadow-xl">
              AI Detecting Tempo...
@@ -219,6 +222,7 @@ function AppContent() {
         <CreateForm />
         <SettingsModal />
         <ProjectBrowser />
+        <SyncOverlay progress={syncProgress} />
       </div>
     </div>
   );
