@@ -2,6 +2,7 @@ import { Play, Pause, StopCircle, Mic, FastForward, Rewind, Volume2, Timer } fro
 import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { useEffect, useCallback, useRef, useState } from 'react';
+import { LiquidGlassPanel } from './LiquidGlass';
 
 function TimeDisplay() {
   const { state } = useApp();
@@ -151,7 +152,15 @@ export function Transport() {
   // Remove the redundant handleKeyDown as it's now in store.tsx
 
   return (
-    <div className="h-16 flex items-center justify-between px-6 border-t border-zinc-800 flex-shrink-0 z-[100] relative glass">
+    <LiquidGlassPanel
+      cornerRadius={0}
+      blurAmount={32}
+      backgroundOpacity={0.15}
+      displacementScale={15}
+      mode="prominent"
+      className="h-16 flex-shrink-0 z-[100] relative border-t border-white/10"
+      contentClassName="h-full flex items-center justify-between px-6"
+    >
       
       <div className="flex items-center space-x-4">
         <TimeDisplay />
@@ -229,6 +238,6 @@ export function Transport() {
         </div>
       </div>
 
-    </div>
+    </LiquidGlassPanel>
   );
 }
