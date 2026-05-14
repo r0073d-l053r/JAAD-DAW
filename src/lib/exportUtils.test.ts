@@ -1,5 +1,4 @@
-import { describe, it } from 'node:test';
-import * as assert from 'node:assert';
+import { describe, it, expect } from "vitest";
 import { estimateWavSize } from './exportUtils';
 
 describe('estimateWavSize', () => {

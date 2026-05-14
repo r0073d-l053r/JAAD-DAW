@@ -11,7 +11,7 @@ import { saveAsset, getAsset } from '../lib/assetManager';
 import JSZip from 'jszip';
 import { LiquidGlassPanel } from './LiquidGlass';
 
-export function Navbar() {
+export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => void }) {
   const { state, dispatch } = useApp();
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -76,6 +76,11 @@ export function Navbar() {
 
     dispatch({ type: 'SET_HAS_MANUALLY_SAVED', payload: true });
     dispatch({ type: 'SET_SYNCING', payload: true });
+
+    // Reset progress for the new blocking UI
+    setUploadProgress(1);
+    setSyncProgress(1);
+
     try {
       // Ensure all current project assets are synced to cloud storage
       const assetIdsToSync = new Set<string>();
@@ -89,19 +94,38 @@ export function Navbar() {
       }
 
       let uploadedCount = 0;
-      for (const id of assetIdsToSync) {
-        const localAsset = await getAsset(id);
-        if (localAsset) {
-          await uploadAssetCloud(id, localAsset, () => {
-            uploadedCount++;
-            const progress = Math.round((uploadedCount / assetIdsToSync.size) * 100);
-            setUploadProgress(progress);
-          }).catch(e => console.error("Asset sync failed", e));
+      if (assetIdsToSync.size > 0) {
+        for (const id of assetIdsToSync) {
+          try {
+            const localAsset = await getAsset(id);
+            if (localAsset) {
+              await uploadAssetCloud(id, localAsset, () => {});
+            } else {
+              console.warn(`Local asset ${id} missing during sync, skipping upload.`);
+            }
+          } catch (e) {
+            console.error(`Failed to upload asset ${id}:`, e);
+          }
+          uploadedCount++;
+          const progress = Math.round((uploadedCount / assetIdsToSync.size) * 100);
+          setUploadProgress(progress);
+          setSyncProgress(progress);
         }
+      } else {
+        setUploadProgress(100);
+        setSyncProgress(100);
       }
 
+      // Final metadata update
+      setSyncProgress(99); // Transitioning to metadata
       await updateProjectCloud(targetId, targetName, state.tracks, state.bpm, state.masterVolume);
-      alert(isNew ? 'New project copy saved to cloud!' : 'Project saved to cloud!');
+
+      // Artificial delay to let the user see the "Complete" state if it was too fast
+      await new Promise(r => setTimeout(r, 500));
+
+    } catch (err) {
+      console.error('Cloud Save Failed:', err);
+      alert('Failed to save project to cloud. Check your connection.');
     } finally {
       dispatch({ type: 'SET_SYNCING', payload: false });
       setUploadProgress(0);
