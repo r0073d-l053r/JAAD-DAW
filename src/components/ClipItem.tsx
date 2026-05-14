@@ -537,7 +537,7 @@ export function ClipItem({
         y.set(0);
       }}
       onContextMenu={handleClipContextMenu}
-      className={`clip-item absolute rounded-lg overflow-hidden group/clip transition-all duration-300 ${laneId ? "top-1 bottom-1 h-auto" : "top-2 bottom-2 max-h-24"} ${isSelected ? "z-10 shadow-xl" : "hover:z-20 shadow-md"}`}
+      className={`clip-item absolute rounded-lg overflow-hidden group/clip transition-[background-color,box-shadow,opacity] duration-300 ${laneId ? "top-1 bottom-1 h-auto" : "top-2 bottom-2 max-h-24"} ${isSelected ? "z-10 shadow-xl" : "hover:z-20 shadow-md"}`}
       style={{
         x,
         y,
