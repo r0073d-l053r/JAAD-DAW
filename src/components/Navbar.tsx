@@ -111,29 +111,12 @@ export function Navbar() {
     // 2. Audio Assets
     const assetsFolder = zip.folder("assets");
     if (assetsFolder) {
-      const savedAssetIds = new Set<string>();
-      
       for (const track of state.tracks) {
-        // Collect all clips from main list and lanes
-        const allClips = [...track.clips, ...(track.lanes?.flatMap(l => l.clips) || [])];
-        
-        // Add frozen buffer if applicable
-        if (track.isFrozen && track.frozenBufferId) {
-          const asset = await getAsset(track.frozenBufferId);
-          if (asset && !savedAssetIds.has(track.frozenBufferId)) {
-            assetsFolder.file(`${track.frozenBufferId}.audio`, asset);
-            savedAssetIds.add(track.frozenBufferId);
-          }
-        }
-
-        for (const clip of allClips) {
+        for (const clip of track.clips) {
           const id = clip.bufferId || clip.id;
-          if (savedAssetIds.has(id)) continue;
-
           const asset = await getAsset(id);
           if (asset) {
             assetsFolder.file(`${id}.audio`, asset);
-            savedAssetIds.add(id);
           }
         }
       }
