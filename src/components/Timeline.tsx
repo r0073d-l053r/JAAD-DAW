@@ -85,19 +85,32 @@ export function Timeline() {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   useEffect(() => {
-    if (timelineRef.current && state.isPlaying) {
+    if (!state.isPlaying || !timelineRef.current) return;
+
+    let rafId: number;
+    const checkScroll = () => {
       const timeline = timelineRef.current;
+      if (!timeline) return;
+
+      const currentTime = audioEngine.getCurrentTime();
       const PIXELS_PER_SECOND = state.zoomLevel;
-      const scrollThreshold = timeline.clientWidth * 0.8;
-      const currentPos = state.currentTime * PIXELS_PER_SECOND;
+      const currentPos = currentTime * PIXELS_PER_SECOND;
       
-      // Auto-scroll when playhead leaves 80% of view
+      // Auto-scroll when playhead leaves 85% of view
+      const scrollThreshold = timeline.clientWidth * 0.85;
+      
       if (currentPos > timeline.scrollLeft + scrollThreshold) {
+        // Jump the timeline forward so the playhead is back at 25% of the view
         const targetScroll = Math.round(currentPos - timeline.clientWidth / 4);
         timeline.scrollTo({ left: targetScroll, behavior: 'auto' });
       }
-    }
-  }, [state.currentTime, state.isPlaying, state.zoomLevel]);
+
+      rafId = requestAnimationFrame(checkScroll);
+    };
+
+    rafId = requestAnimationFrame(checkScroll);
+    return () => cancelAnimationFrame(rafId);
+  }, [state.isPlaying, state.zoomLevel]);
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
