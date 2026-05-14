@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Wand2, Users, FileAudio, Settings, Cloud, WifiOff, LayoutDashboard, Sliders } from './Icons';
 import { Magnet, Github, Linkedin, Globe } from 'lucide-react';
 import { useApp } from '../lib/store';
@@ -8,12 +9,25 @@ import { cleanUpStemsAsync } from '../lib/audioUtils';
 import { updateProjectCloud, uploadAssetCloud } from '../lib/syncUtils';
 import { saveAsset, getAsset } from '../lib/assetManager';
 import JSZip from 'jszip';
+import { LiquidGlassPanel } from './LiquidGlass';
 
 export function Navbar() {
   const { state, dispatch } = useApp();
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [menuPos, setMenuPos] = useState<{left: number; top: number} | null>(null);
+
+  // Recalculate dropdown position when menu opens
+  useEffect(() => {
+    if (openMenu && buttonRefs.current[openMenu]) {
+      const rect = buttonRefs.current[openMenu]!.getBoundingClientRect();
+      setMenuPos({ left: rect.left, top: rect.bottom + 4 });
+    } else {
+      setMenuPos(null);
+    }
+  }, [openMenu]);
 
   const getProjectDuration = () => {
     let maxEnd = 30; // Min 30 seconds
@@ -175,9 +189,15 @@ export function Navbar() {
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setOpenMenu(null);
-      }
+      const target = event.target as Node;
+      // Don't close if clicking inside the navbar menu buttons
+      if (menuRef.current && menuRef.current.contains(target)) return;
+      // Don't close if clicking inside a portaled dropdown (z-[9999])
+      const portalEl = document.querySelector('.fixed.z-\\[9999\\]');
+      if (portalEl && portalEl.contains(target)) return;
+      // Don't close if clicking the export button
+      if (buttonRefs.current['__export__'] && buttonRefs.current['__export__']!.contains(target)) return;
+      setOpenMenu(null);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -191,10 +211,14 @@ export function Navbar() {
         handleSaveToCloud(false);
         setOpenMenu(null);
       }},
-      { label: 'Save As...', sub: [
-        { label: 'Save to Cloud (Copy)', action: () => handleSaveToCloud(true) },
-        { label: 'Save to Desktop (.jaad)', action: () => handleSaveToDesktop() }
-      ]},
+      { label: 'Save to Cloud (Copy)', action: () => { 
+        handleSaveToCloud(true);
+        setOpenMenu(null);
+      }},
+      { label: 'Save to Desktop (.jaad)', action: () => { 
+        handleSaveToDesktop();
+        setOpenMenu(null);
+      }},
       { divider: true, label: '' },
       { label: 'Import Project (.jaad)...', action: () => handleImportProject() },
       { divider: true, label: '' },
@@ -251,13 +275,6 @@ export function Navbar() {
       { label: 'Zoom Out', shortcut: 'Ctrl+-', action: () => { dispatch({ type: 'SET_ZOOM', payload: state.zoomLevel / 1.2 }); setOpenMenu(null); } },
       { label: 'Fit to Screen', action: () => { dispatch({ type: 'SET_ZOOM', payload: 20 }); setOpenMenu(null); } },
       { divider: true, label: '' },
-      { label: 'Performance', sub: [
-          { 
-            label: `${state.disableBackgroundAnimation ? 'Enable' : 'Disable'} background animation`, 
-            action: () => { dispatch({ type: 'TOGGLE_BACKGROUND_ANIMATION' }); setOpenMenu(null); } 
-          }
-      ] },
-      { divider: true, label: '' },
       { label: 'Show/Hide Automation Lanes', action: () => alert('Automation lanes visibility toggled') },
       { label: 'Toggle Fullscreen', shortcut: 'F11', action: () => {
          if (!document.fullscreenElement) {
@@ -309,62 +326,72 @@ export function Navbar() {
           {Object.keys(menus).map(item => (
             <div key={item} className="relative">
               <button 
+                ref={el => { buttonRefs.current[item] = el; }}
                 onClick={() => setOpenMenu(openMenu === item ? null : item)}
                 className={`px-3 py-1 text-sm rounded transition ${openMenu === item ? 'bg-white/10 text-white' : 'text-text-muted hover:text-white hover:bg-white/5'}`}
               >
                 {item}
               </button>
-              
-              {openMenu === item && (
-                <div className="absolute top-full left-0 mt-1 w-56 bg-[#0a0a0c]/80 border border-white/10 rounded-xl shadow-2xl py-1 z-[110] backdrop-blur-3xl">
-                  {menus[item].map((menuItem, idx) => {
-                    if (menuItem.divider) return <div key={idx} className="h-px bg-white/10 my-1" />;
-                    if (menuItem.sub && menuItem.sub.length > 0) {
-                      return (
-                        <div key={idx} className="relative group/submenu w-full">
-                          <button 
-                            className="w-full text-left px-4 py-1.5 text-sm hover:bg-white/10 hover:text-white text-zinc-300 flex justify-between items-center transition-colors cursor-default"
-                          >
-                            <span>{menuItem.label}</span>
-                            <span className="text-xs text-zinc-500">▶</span>
-                          </button>
-                          <div className="absolute top-0 left-full -mt-2 -ml-2 pl-2 pt-2 hidden group-hover/submenu:block z-[120]">
-                            <div className="w-56 bg-[#0a0a0c]/80 border border-white/10 rounded-xl shadow-2xl py-1 backdrop-blur-3xl">
-                              {menuItem.sub.map((subItem, sIdx) => (
-                                <button 
-                                  key={sIdx}
-                                  onClick={() => {
-                                    subItem.action();
-                                    setOpenMenu(null);
-                                  }}
-                                  className="w-full text-left px-4 py-1.5 text-sm hover:bg-white/10 hover:text-white text-zinc-300 flex justify-between items-center transition-colors"
-                                >
-                                  <span>{subItem.label}</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    }
-                    return (
-                      <button 
-                        key={idx}
-                        onClick={menuItem.action}
-                        className="w-full text-left px-4 py-1.5 text-sm hover:bg-white/10 hover:text-white text-zinc-300 flex justify-between items-center group transition-colors"
-                      >
-                        <span>{menuItem.label}</span>
-                        {menuItem.shortcut && (
-                          <span className="text-xs text-zinc-500 group-hover:text-zinc-400">{menuItem.shortcut}</span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           ))}
         </nav>
+
+        {/* Portal-rendered dropdown menus — rendered outside navbar so backdrop-filter sees real page content */}
+        {openMenu && menus[openMenu] && menuPos && createPortal(
+          <div
+            className="fixed z-[9999] w-56"
+            style={{ left: menuPos.left, top: menuPos.top }}
+          >
+            <LiquidGlassPanel cornerRadius={12} blurAmount={32} backgroundOpacity={0.18} contentClassName="py-1">
+              {menus[openMenu].map((menuItem, idx) => {
+                if (menuItem.divider) return <div key={idx} className="h-px bg-white/10 my-1" />;
+                if (menuItem.sub && menuItem.sub.length > 0) {
+                  return (
+                    <div key={idx} className="relative group/submenu w-full">
+                      <button 
+                        className="w-full text-left px-4 py-1.5 text-sm hover:bg-white/10 hover:text-white text-zinc-300 flex justify-between items-center transition-colors cursor-default"
+                      >
+                        <span>{menuItem.label}</span>
+                        <span className="text-xs text-zinc-500">▶</span>
+                      </button>
+                      <div className="absolute top-0 left-full -mt-2 -ml-2 pl-2 pt-2 hidden group-hover/submenu:block z-[10000]">
+                        <div className="w-56 pointer-events-auto">
+                          <LiquidGlassPanel cornerRadius={12} blurAmount={32} backgroundOpacity={0.18} contentClassName="py-1">
+                            {menuItem.sub.map((subItem, sIdx) => (
+                              <button 
+                                key={sIdx}
+                                onClick={() => {
+                                  subItem.action();
+                                  setOpenMenu(null);
+                                }}
+                                className="w-full text-left px-4 py-1.5 text-sm hover:bg-white/10 hover:text-white text-zinc-300 flex justify-between items-center transition-colors"
+                              >
+                                <span>{subItem.label}</span>
+                              </button>
+                            ))}
+                          </LiquidGlassPanel>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <button 
+                    key={idx}
+                    onClick={menuItem.action}
+                    className="w-full text-left px-4 py-1.5 text-sm hover:bg-white/10 hover:text-white text-zinc-300 flex justify-between items-center group transition-colors"
+                  >
+                    <span>{menuItem.label}</span>
+                    {menuItem.shortcut && (
+                      <span className="text-xs text-zinc-500 group-hover:text-zinc-400">{menuItem.shortcut}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </LiquidGlassPanel>
+          </div>,
+          document.body
+        )}
       </div>
       
       {/* View Mode Toggle and Snap */}
@@ -377,22 +404,22 @@ export function Navbar() {
           <Magnet size={16} />
         </button>
 
-        <div className="flex bg-white/5 backdrop-blur-xl p-1 rounded-lg border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
+        <LiquidGlassPanel cornerRadius={8} blurAmount={28} backgroundOpacity={0.25} contentClassName="flex p-1">
           <button 
             onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'timeline' })}
-            className={`flex items-center space-x-1 px-3 py-1.5 text-sm rounded-md transition-all ${state.viewMode === 'timeline' ? 'bg-white/15 text-white shadow-lg backdrop-blur-md' : 'text-zinc-400 hover:text-white/80'}`}
+            className={`flex items-center space-x-1 px-3 py-1.5 text-sm rounded-md transition-all ${state.viewMode === 'timeline' ? 'bg-white/15 text-white shadow-lg' : 'text-zinc-400 hover:text-white/80'}`}
           >
             <LayoutDashboard size={14} />
             <span>Timeline</span>
           </button>
           <button 
             onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'mixer' })}
-            className={`flex items-center space-x-1 px-3 py-1.5 text-sm rounded-md transition-all ${state.viewMode === 'mixer' ? 'bg-white/15 text-white shadow-lg backdrop-blur-md' : 'text-zinc-400 hover:text-white/80'}`}
+            className={`flex items-center space-x-1 px-3 py-1.5 text-sm rounded-md transition-all ${state.viewMode === 'mixer' ? 'bg-white/15 text-white shadow-lg' : 'text-zinc-400 hover:text-white/80'}`}
           >
             <Sliders size={14} />
             <span>Mixer</span>
           </button>
-        </div>
+        </LiquidGlassPanel>
       </div>
 
       <div className="flex items-center space-x-3">
@@ -428,18 +455,27 @@ export function Navbar() {
           <span>{state.isSyncing ? 'Syncing...' : 'Save'}</span>
         </button>
 
-        <div className="relative group/export">
+        <div className="relative">
           <button 
+            ref={el => { buttonRefs.current['__export__'] = el; }}
             disabled={isExporting}
+            onClick={() => setOpenMenu(openMenu === '__export__' ? null : '__export__')}
             className={`flex items-center space-x-2 px-3 py-1.5 text-sm rounded transition ${isExporting ? 'bg-zinc-800 text-zinc-500 cursor-wait' : 'bg-primary/20 text-primary border border-primary/50 hover:bg-primary/30'}`}
           >
             <FileAudio size={16} className={isExporting ? 'animate-pulse' : ''} />
             <span>{isExporting ? 'Exporting...' : 'Export'}</span>
           </button>
           
-          {!isExporting && (
-            <div className="absolute top-full right-0 mt-2 w-64 bg-[#0a0a0c] border border-white/10 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] py-2 opacity-0 invisible group-hover/export:opacity-100 group-hover/export:visible transition-all z-[110] backdrop-blur-2xl">
-              <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 border-b border-white/5 mb-1">
+          {(!isExporting && openMenu === '__export__' && buttonRefs.current['__export__']) && createPortal(
+            <div
+              className="fixed z-[9999] w-64"
+              style={{
+                left: buttonRefs.current['__export__']!.getBoundingClientRect().right - 256,
+                top: buttonRefs.current['__export__']!.getBoundingClientRect().bottom + 8,
+              }}
+            >
+              <LiquidGlassPanel cornerRadius={12} blurAmount={32} backgroundOpacity={0.18} contentClassName="py-2">
+                  <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 border-b border-white/5 mb-1">
                 Export Options
               </div>
               
@@ -491,7 +527,9 @@ export function Navbar() {
                    <span className="text-[8px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded border border-white/5">COMING SOON</span>
                 </div>
               </button>
-            </div>
+              </LiquidGlassPanel>
+            </div>,
+            document.body
           )}
         </div>
         <div className="flex items-center space-x-1">

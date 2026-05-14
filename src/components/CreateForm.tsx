@@ -13,6 +13,8 @@ declare global {
   }
 }
 
+import { LiquidGlassPanel } from "./LiquidGlass";
+
 export function CreateForm() {
   const [instrument, setInstrument] = useState("Song");
   const [styles, setStyles] = useState("");
@@ -169,18 +171,26 @@ export function CreateForm() {
 
   return (
     <div
-      className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] flex items-center bg-[#1c1c1e]/90 backdrop-blur-xl border ${isDragOver ? "border-orange-500 shadow-[0_0_20px_#f9731680]" : "border-white/10"} rounded-full shadow-2xl p-1.5 space-x-2 transition-all`}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setIsDragOver(true);
-      }}
-      onDragLeave={() => setIsDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setIsDragOver(false);
-        // Handle dropping logic if necessary
-      }}
+      className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] transition-all`}
     >
+      <LiquidGlassPanel
+        cornerRadius={9999}
+        blurAmount={40}
+        backgroundOpacity={0.18}
+        mode="prominent"
+        displacementScale={25}
+        className={`border transition-all ${isDragOver ? "border-orange-500 shadow-[0_0_20px_#f9731680]" : "border-white/10 shadow-2xl"}`}
+        contentClassName="px-6 py-2 flex items-center space-x-4"
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragOver(true);
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragOver(false);
+        }}
+      >
       <button className="p-2.5 text-zinc-400 hover:text-white hover:bg-white/5 rounded-full transition-colors">
         <Expand size={16} />
       </button>
@@ -194,29 +204,31 @@ export function CreateForm() {
           <span className="text-sm font-medium">{instrument}</span>
           <ChevronDown size={14} className="text-zinc-400" />
         </button>
-        <div className="absolute bottom-full left-0 mb-2 w-48 bg-[#1c1c1e] border border-white/10 rounded-xl shadow-2xl hidden group-hover/menu:block overflow-hidden pointer-events-auto">
-          {[
-            "Song",
-            "Drums",
-            "Bass",
-            "Guitar",
-            "Keyboard",
-            "Percussion",
-            "Strings",
-            "Synth",
-            "FX",
-            "Vocals",
-            "Backing Vocals",
-            "Custom",
-          ].map((item) => (
-            <button
-              key={item}
-              className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
-              onClick={() => setInstrument(item)}
-            >
-              {item}
-            </button>
-          ))}
+        <div className="absolute bottom-full left-0 mb-2 w-48 hidden group-hover/menu:block pointer-events-auto">
+          <LiquidGlassPanel cornerRadius={12} blurAmount={32} backgroundOpacity={0.35} contentClassName="py-1">
+              {[
+                "Song",
+                "Drums",
+                "Bass",
+                "Guitar",
+                "Keyboard",
+                "Percussion",
+                "Strings",
+                "Synth",
+                "FX",
+                "Vocals",
+                "Backing Vocals",
+                "Custom",
+              ].map((item) => (
+                <button
+                  key={item}
+                  className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
+                  onClick={() => setInstrument(item)}
+                >
+                  {item}
+                </button>
+              ))}
+          </LiquidGlassPanel>
         </div>
       </div>
 
@@ -269,6 +281,7 @@ export function CreateForm() {
           <ChevronDown size={16} />
         </button>
       </div>
+      </LiquidGlassPanel>
     </div>
   );
 }

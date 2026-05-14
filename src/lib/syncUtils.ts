@@ -1,7 +1,8 @@
-import { db, storage } from './firebase';
+import { db, storage, isFirebaseAvailable } from './firebase';
 import { doc, onSnapshot, setDoc, getDocs, collection, deleteDoc } from 'firebase/firestore';
 
 export const deleteProjectCloud = async (projectId: string) => {
+  if (!isFirebaseAvailable) return;
   const docRef = doc(db, 'projects', projectId);
   await deleteDoc(docRef);
 };
@@ -9,6 +10,7 @@ import { ref, uploadBytes, getBlob } from 'firebase/storage';
 import { Track } from './store';
 
 export const uploadAssetCloud = async (assetId: string, blob: Blob) => {
+  if (!isFirebaseAvailable) return;
   const assetRef = ref(storage, `assets/${assetId}`);
   console.log(`Cloud Sync: Uploading asset ${assetId}...`);
   await uploadBytes(assetRef, blob);
@@ -16,6 +18,7 @@ export const uploadAssetCloud = async (assetId: string, blob: Blob) => {
 };
 
 export const downloadAssetCloud = async (assetId: string) => {
+  if (!isFirebaseAvailable) return;
   const assetRef = ref(storage, `assets/${assetId}`);
   try {
     const blob = await getBlob(assetRef);
@@ -28,6 +31,7 @@ export const downloadAssetCloud = async (assetId: string) => {
 };
 
 export const listProjects = async () => {
+  if (!isFirebaseAvailable) return [];
   const querySnapshot = await getDocs(collection(db, 'projects'));
   return querySnapshot.docs.map(doc => ({
     id: doc.id,
@@ -36,6 +40,7 @@ export const listProjects = async () => {
 };
 
 export const subscribeToProject = (projectId: string, onUpdate: (data: any) => void) => {
+  if (!isFirebaseAvailable) return () => {};
   const docRef = doc(db, 'projects', projectId);
   return onSnapshot(docRef, (snapshot) => {
     if (snapshot.exists() && !snapshot.metadata.hasPendingWrites) {
@@ -45,6 +50,7 @@ export const subscribeToProject = (projectId: string, onUpdate: (data: any) => v
 };
 
 export const updateProjectCloud = async (projectId: string, projectName: string, tracks: Track[], bpm: number, masterVolume: number) => {
+  if (!isFirebaseAvailable) return;
   const docRef = doc(db, 'projects', projectId);
   // We sanitize the state to ensure it's serializable for Firestore
   const sanitizedTracks = tracks.map(track => ({
