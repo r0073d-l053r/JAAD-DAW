@@ -111,19 +111,49 @@ export function Navbar() {
     // 2. Audio Assets
     const assetsFolder = zip.folder("assets");
     if (assetsFolder) {
+      const savedAssetIds = new Set<string>();
+      let missingAssets = 0;
+      
       for (const track of state.tracks) {
-        for (const clip of track.clips) {
+        // Collect all clips from main list and lanes
+        const allClips = [...track.clips, ...(track.lanes?.flatMap(l => l.clips) || [])];
+        
+        // Add frozen buffer if applicable
+        if (track.isFrozen && track.frozenBufferId) {
+          const asset = await getAsset(track.frozenBufferId);
+          if (asset && !savedAssetIds.has(track.frozenBufferId)) {
+            assetsFolder.file(`${track.frozenBufferId}.audio`, asset);
+            savedAssetIds.add(track.frozenBufferId);
+          } else if (!asset) {
+            missingAssets++;
+            console.warn(`Missing frozen asset: ${track.frozenBufferId}`);
+          }
+        }
+
+        for (const clip of allClips) {
           const id = clip.bufferId || clip.id;
+          if (savedAssetIds.has(id)) continue;
+
           const asset = await getAsset(id);
           if (asset) {
             assetsFolder.file(`${id}.audio`, asset);
+            savedAssetIds.add(id);
+          } else {
+            missingAssets++;
+            console.warn(`Missing clip asset: ${id}`);
           }
         }
       }
+
+      if (missingAssets > 0) {
+        console.warn(`Saving .jaad bundle with ${missingAssets} missing audio files.`);
+      }
     }
     
+    console.log("Generating .jaad bundle...");
     const content = await zip.generateAsync({ type: "blob" });
     downloadBlob(content, `${state.projectName.replace(/\s+/g, '_')}.jaad`);
+    console.log("Download triggered.");
   };
 
   const handleImportProject = async () => {
