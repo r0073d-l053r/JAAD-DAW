@@ -151,7 +151,6 @@ export function TrackList() {
                     const frozenBuffer = await audioEngine.freezeTrack(track, audioEngine.buffers);
                     const bufferId = `frozen_${track.id}_${Date.now()}`;
                     audioEngine.buffers.set(bufferId, frozenBuffer);
-                    await audioEngine.saveBufferAsAsset(bufferId, frozenBuffer);
                     dispatch({ type: 'FREEZE_TRACK', payload: { trackId: track.id, bufferId } });
                   }
                 }}

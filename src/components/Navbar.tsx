@@ -151,52 +151,36 @@ export function Navbar() {
       const file = e.target.files[0];
       if (!file) return;
 
-      // 1. Load the ZIP
       const zip = await JSZip.loadAsync(file);
-      
-      // 2. Read project JSON
       const projectJson = await zip.file("project.json")?.async("string");
       if (!projectJson) {
-        alert("Invalid .jaad file: project.json is missing or corrupted.");
+        alert("Invalid .jaad file: project.json missing");
         return;
       }
+      
       const parsed = JSON.parse(projectJson);
       
-      // 3. Extract and save all assets found in the bundle
-      dispatch({ type: 'SET_SYNCING', payload: true }); // Use syncing state as a loading indicator
-      try {
-        const assetsFolder = zip.folder("assets");
-        if (assetsFolder) {
-          const promises: Promise<void>[] = [];
-          
-          assetsFolder.forEach((relativePath, fileEntry) => {
-            if (!fileEntry.dir && relativePath.endsWith(".audio")) {
-              const id = relativePath.replace(".audio", "");
-              const p = fileEntry.async("blob").then(async (blob) => {
-                if (blob) {
-                  await saveAsset(id, blob);
-                }
-              });
-              promises.push(p);
+      // Extract assets
+      const assetsFolder = zip.folder("assets");
+      if (assetsFolder) {
+        const assetFiles = Object.keys(assetsFolder.files);
+        for (const filePath of assetFiles) {
+          if (filePath.endsWith(".audio")) {
+            const assetData = await assetsFolder.file(filePath)?.async("blob");
+            if (assetData) {
+              const id = filePath.split("/").pop()?.replace(".audio", "");
+              if (id) {
+                 await saveAsset(id, assetData);
+              }
             }
-          });
-          
-          await Promise.all(promises);
+          }
         }
-        
-        // 4. Apply the project state
-        dispatch({ type: 'SYNC_STATE', payload: parsed });
-        dispatch({ type: 'SET_HAS_MANUALLY_SAVED', payload: true });
-        dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
-        
-        // Final success alert
-        alert(`Project "${parsed.projectName}" imported successfully with all audio assets!`);
-      } catch (err) {
-        console.error("Import failed:", err);
-        alert("Failed to import project. The file might be corrupted.");
-      } finally {
-        dispatch({ type: 'SET_SYNCING', payload: false });
       }
+      
+      dispatch({ type: 'SYNC_STATE', payload: parsed });
+      dispatch({ type: 'SET_HAS_MANUALLY_SAVED', payload: true });
+      dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
+      alert("Project imported successfully!");
     };
     input.click();
   };

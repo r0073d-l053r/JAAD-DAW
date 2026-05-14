@@ -71,19 +71,8 @@ function AppContent() {
   useEffect(() => {
     const recoverAssets = async () => {
       for (const track of state.tracks) {
-        // Collect all potential buffer IDs
-        const bufferIds = new Set<string>();
-        
-        // Add clips from main list and lanes
-        const allClips = [...track.clips, ...(track.lanes?.flatMap(l => l.clips) || [])];
-        allClips.forEach(c => bufferIds.add(c.bufferId || c.id));
-        
-        // Add frozen buffer if applicable
-        if (track.isFrozen && track.frozenBufferId) {
-          bufferIds.add(track.frozenBufferId);
-        }
-
-        for (const id of bufferIds) {
+        for (const clip of track.clips) {
+          const id = clip.bufferId || clip.id;
           if (!audioEngine.buffers.has(id)) {
             let asset = await getAsset(id);
             if (!asset) {
