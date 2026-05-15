@@ -7,12 +7,16 @@ import { MoreHorizontal, Trash2, Download, Wand2 } from 'lucide-react';
 import { useGemini } from '../lib/useGemini';
 
 import { LiquidGlassPanel } from './LiquidGlass';
+import { detectBPMOffline } from '../lib/essentiaBPM';
 
 export function Mixer() {
   const { state, dispatch } = useApp();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const { getFixMyMixSuggestions, isGenerating } = useGemini();
+  const { getFixMyMixSuggestions, isGenerating, detectBPM } = useGemini();
+
+  // Use a ref to access the latest state in async functions
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   const handleFixMyMix = async () => {
     const suggestions = await getFixMyMixSuggestions(state.tracks);
@@ -37,36 +41,72 @@ export function Mixer() {
       const files = Array.from(e.target.files as FileList);
       const audioFiles = files.filter(f => f.type.startsWith('audio/') || f.name.match(/\.(mp3|wav|ogg|flac|aac|m4a|weba|webm)$/i));
       
-      for (let i = 0; i < audioFiles.length; i++) {
-        const file = audioFiles[i];
-        const id = 'clip_' + Date.now() + '_' + i;
-        const duration = await audioEngine.loadAudio(id, file);
+      if (audioFiles.length === 0) return;
+
+      const isMultiple = audioFiles.length > 1;
+      if (isMultiple) {
+        dispatch({ type: 'SET_SHOW_BPM_SYNC_POPUP', payload: true });
+      } else {
+        dispatch({ type: 'SET_IS_DETECTING_BPM', payload: true });
+      }
+
+      try {
+        const loadedClipIds: string[] = [];
         
-        const clip: Clip = {
-          id,
-          start: 0,
-          duration,
-          audioData: file.name
-        };
+        for (let i = 0; i < audioFiles.length; i++) {
+          const file = audioFiles[i];
+          const id = 'clip_' + Date.now() + '_' + i;
+          const duration = await audioEngine.loadAudio(id, file);
+          loadedClipIds.push(id);
 
-        const TRACK_COLORS = ['#FF2A5F', '#00E871', '#6B44FF', '#4B7BFF', '#FFEB3B', '#FF9800', '#00BCD4', '#E91E63', '#9C27B0', '#8BC34A'];
-        const newTrackColor = TRACK_COLORS[(state.tracks.length + i) % TRACK_COLORS.length];
-        const targetTrackId = 'track_' + Date.now() + '_' + i;
-        dispatch({ 
-          type: 'ADD_TRACK', 
-          payload: { 
-            id: targetTrackId, 
-            name: file.name.substring(0, 15) || 'Audio', 
-            volume: 1, 
-            pan: 0, 
-            muted: false, 
-            solo: false, 
-            color: newTrackColor, 
-            clips: [] 
-          } 
-        });
+          const clip: Clip = {
+            id,
+            start: 0,
+            duration,
+            audioData: file.name
+          };
 
-        dispatch({ type: 'ADD_CLIP', payload: { trackId: targetTrackId, clip } });
+          const TRACK_COLORS = ['#FF2A5F', '#00E871', '#6B44FF', '#4B7BFF', '#FFEB3B', '#FF9800', '#00BCD4', '#E91E63', '#9C27B0', '#8BC34A'];
+          const newTrackColor = TRACK_COLORS[(state.tracks.length + i) % TRACK_COLORS.length];
+          const targetTrackId = 'track_' + Date.now() + '_' + i;
+          
+          dispatch({ 
+            type: 'ADD_TRACK', 
+            payload: { 
+              id: targetTrackId, 
+              name: file.name.substring(0, 15) || 'Audio', 
+              volume: 1, 
+              pan: 0, 
+              muted: false, 
+              solo: false, 
+              color: newTrackColor, 
+              clips: [] 
+            } 
+          });
+
+          dispatch({ type: 'ADD_CLIP', payload: { trackId: targetTrackId, clip } });
+        }
+
+        // After all files are loaded, detect BPM
+        // Check if user cancelled (only for multiple files)
+        if (isMultiple && stateRef.current.bpmSyncCancelRequested) {
+          console.log("Mixer: BPM Sync cancelled by user.");
+        } else {
+          const firstBufferId = loadedClipIds[0];
+          const buffer = audioEngine.buffers.get(firstBufferId);
+          if (buffer) {
+            const bpm = await detectBPMOffline(buffer);
+            if (bpm) {
+              dispatch({ type: 'SET_ORIGINAL_BPM', payload: bpm });
+              dispatch({ type: 'SET_BPM', payload: bpm });
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Mixer file handling error:", err);
+      } finally {
+        dispatch({ type: 'SET_IS_DETECTING_BPM', payload: false });
+        dispatch({ type: 'SET_SHOW_BPM_SYNC_POPUP', payload: false });
       }
     }
     if (fileInputRef.current) {
@@ -89,6 +129,11 @@ export function Mixer() {
 
   return (
     <div className="flex-1 bg-transparent flex overflow-x-auto p-4 space-x-2 relative" onClick={() => setOpenMenuId(null)}>
+      {state.isDetectingBPM && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-primary text-black px-4 py-2 rounded-full text-xs font-bold animate-pulse shadow-xl">
+           Analyzing Project Tempo...
+        </div>
+      )}
       {state.tracks.length === 0 && (
         <div 
           onClick={() => fileInputRef.current?.click()}

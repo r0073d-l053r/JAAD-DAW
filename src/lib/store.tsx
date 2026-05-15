@@ -46,6 +46,7 @@ interface AppState {
   isPlaying: boolean;
   currentTime: number;
   bpm: number; // static fallback/initial tempo
+  originalBpm: number; // the detected/native tempo of imported audio
   tempoAutomation: { time: number; bpm: number }[];
   metronomeEnabled: boolean;
   isRecording: boolean;
@@ -65,6 +66,9 @@ interface AppState {
   masterVolume: number;
   disableBackgroundAnimation: boolean;
   isProcessing: boolean;
+  isDetectingBPM: boolean;
+  showBPMSyncPopup: boolean;
+  bpmSyncCancelRequested: boolean;
   projectId: string;
   projectName: string;
   isSyncing: boolean;
@@ -78,6 +82,8 @@ type Action =
   | { type: "TOGGLE_PLAY" }
   | { type: "TOGGLE_RECORD" }
   | { type: "TOGGLE_METRONOME" }
+  | { type: "SET_BPM"; payload: number }
+  | { type: "SET_ORIGINAL_BPM"; payload: number }
   | { type: "SET_TIME"; payload: number }
   | { type: "SET_MASTER_VOLUME"; payload: number }
   | { type: "SET_TEMPO_AUTOMATION"; payload: { time: number; bpm: number }[] }
@@ -151,6 +157,9 @@ type Action =
       };
     }
   | { type: "SET_IS_PROCESSING"; payload: boolean }
+  | { type: "SET_IS_DETECTING_BPM"; payload: boolean }
+  | { type: "SET_SHOW_BPM_SYNC_POPUP"; payload: boolean }
+  | { type: "REQUEST_BPM_SYNC_CANCEL" }
   | { type: "REPLACE_TRACKS"; payload: Track[] }
   | { type: "SET_PROJECT_ID"; payload: string }
   | { type: "SET_PROJECT_NAME"; payload: string }
@@ -175,6 +184,7 @@ const initialState: AppStateWithHistory = {
   isRecording: false,
   currentTime: 0,
   bpm: 120,
+  originalBpm: 120,
   tempoAutomation: [{ time: 0, bpm: 120 }],
   metronomeEnabled: false,
   isOffline: !navigator.onLine,
@@ -193,6 +203,9 @@ const initialState: AppStateWithHistory = {
   masterVolume: 0.8,
   disableBackgroundAnimation: false,
   isProcessing: false,
+  isDetectingBPM: false,
+  showBPMSyncPopup: false,
+  bpmSyncCancelRequested: false,
   projectId: "",
   projectName: "Untitled Project",
   isSyncing: false,
@@ -829,8 +842,29 @@ function appReducer(
       });
       return saveHistory(state, newTracks);
     }
+    case "SET_BPM": {
+      const newBpm = Math.max(1, action.payload);
+      console.log("Reducer: SET_BPM", newBpm);
+      return { 
+        ...state, 
+        bpm: newBpm,
+        tempoAutomation: [{ time: 0, bpm: newBpm }]
+      };
+    }
+    case "SET_ORIGINAL_BPM": {
+      return { ...state, originalBpm: action.payload };
+    }
     case "SET_IS_PROCESSING": {
       return { ...state, isProcessing: action.payload };
+    }
+    case "SET_IS_DETECTING_BPM": {
+      return { ...state, isDetectingBPM: action.payload };
+    }
+    case "SET_SHOW_BPM_SYNC_POPUP": {
+      return { ...state, showBPMSyncPopup: action.payload, bpmSyncCancelRequested: false };
+    }
+    case "REQUEST_BPM_SYNC_CANCEL": {
+      return { ...state, bpmSyncCancelRequested: true };
     }
     case "REPLACE_TRACKS": {
       return saveHistory(state, action.payload);
@@ -1457,12 +1491,20 @@ function appReducer(
   }
 }
 
+import { cleanUpStemsAsync } from "./audioUtils";
+
 const AppContext = createContext<
   { state: AppStateWithHistory; dispatch: React.Dispatch<Action> } | undefined
 >(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  const stateRef = React.useRef(state);
+  
+  // Sync ref with state
+  React.useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   // Update online/offline status
   React.useEffect(() => {
@@ -1480,6 +1522,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const currentState = stateRef.current;
       // Ignore if typing in input
       if (
         e.target instanceof HTMLElement &&
@@ -1508,13 +1551,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "COPY_CLIPS" });
       } else if (e.key.toLowerCase() === "v" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        // Since we don't have track context directly mapped to cursor yet, assume first track or selected track
-        // For now hardcoding pasting to track 1
+        // Use latest state from ref
         dispatch({
           type: "PASTE_CLIPS",
           payload: {
-            trackId: state.tracks[0]?.id || "1",
-            time: state.currentTime,
+            trackId: currentState.tracks[0]?.id || "1",
+            time: currentState.currentTime,
           },
         });
       } else if (e.key.toLowerCase() === "d" && (e.ctrlKey || e.metaKey)) {
@@ -1527,7 +1569,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "TOGGLE_PLAY" });
       } else if (e.key.toLowerCase() === "s" && e.shiftKey && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        dispatch({ type: "CLEAN_UP_STEMS" });
+        cleanUpStemsAsync(currentState, dispatch);
       } else if (e.key.toLowerCase() === "s" && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         dispatch({ type: "SPLIT_CLIP" });

@@ -161,3 +161,7 @@ All of the following features have been successfully implemented:
 - [x] **Track Header Optimization:** Adjusted track controls and name input width to prevent UI clipping in the sidebar. (2026-05-14)
 - [x] **Forced Cloud Sync Overlay:** Implemented a blocking Liquid Glass progress modal that ensures asset uploads complete before further interaction. (2026-05-14)
 - [x] **Robust Upload Retry Logic:** Added automatic exponential backoff retry for failed cloud asset uploads (up to 3 attempts). (2026-05-14)
+- [x] **Hybrid BPM Detection Engine:** Integrated `essentia.js` for fast offline tempo analysis with an automatic Gemini AI fallback. (2026-05-15)
+- [x] **Dynamic UI Synchronization:** Implemented real-time synchronization between the project BPM, the AudioEngine, and the pulsing WebGL background animations. (2026-05-15)
+- [x] **Editable Transport BPM:** Made the BPM field in the transport bar editable, allowing for manual tempo overrides and refined project control. (2026-05-15)
+- [x] **Advanced Build Optimization:** Configured Vite with dynamic imports and custom manual chunks to manage large audio analysis libraries efficiently. (2026-05-15)

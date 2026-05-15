@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useApp, Clip } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { Waveform } from './Waveform';
+import { detectBPMOffline } from '../lib/essentiaBPM';
 
 import { ClipItem } from './ClipItem';
 
@@ -84,6 +85,10 @@ export function Timeline() {
   const PIXELS_PER_SECOND = state.zoomLevel;
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
+  // Ref to access latest state in async callbacks
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
   useEffect(() => {
     if (!state.isPlaying || !timelineRef.current) return;
 
@@ -150,37 +155,70 @@ export function Timeline() {
       const files = Array.from(e.dataTransfer.files as FileList);
       const audioFiles = files.filter(f => f.type.startsWith('audio/') || f.name.match(/\.(mp3|wav|ogg|flac|aac|m4a|weba|webm)$/i));
       
+      if (audioFiles.length === 0) return;
       const timeline = timelineRef.current;
       if (!timeline) return;
-      
-      for (let i = 0; i < audioFiles.length; i++) {
-        const file = audioFiles[i];
-        const clipId = 'clip_' + Date.now() + '_' + i;
-        const targetTrackId = 'track_' + Date.now() + '_' + i;
-        
-        const duration = await audioEngine.loadAudio(clipId, file);
-        
-        const TRACK_COLORS = ['#FF2A5F', '#00E871', '#6B44FF', '#4B7BFF', '#FFEB3B', '#FF9800', '#00BCD4', '#E91E63', '#9C27B0', '#8BC34A'];
-        const newTrackColor = TRACK_COLORS[(state.tracks.length + i) % TRACK_COLORS.length];
-        
-        dispatch({ 
-          type: 'ADD_TRACK', 
-          payload: { 
-            id: targetTrackId, 
-            name: file.name.replace(/\.[^/.]+$/, "") || 'Audio Track', 
-            volume: 0.8, 
-            pan: 0, 
-            muted: false, 
-            solo: false, 
-            color: newTrackColor, 
-            clips: [{
-              id: clipId,
-              start: 0,
-              duration,
-              audioData: file.name
-            }] 
-          } 
-        });
+
+      const isMultiple = audioFiles.length > 1;
+      if (isMultiple) {
+        dispatch({ type: 'SET_SHOW_BPM_SYNC_POPUP', payload: true });
+      }
+      dispatch({ type: 'SET_IS_DETECTING_BPM', payload: true });
+
+      try {
+        const loadedClipIds: string[] = [];
+
+        for (let i = 0; i < audioFiles.length; i++) {
+          const file = audioFiles[i];
+          const clipId = 'clip_' + Date.now() + '_' + i;
+          const targetTrackId = 'track_' + Date.now() + '_' + i;
+          
+          const duration = await audioEngine.loadAudio(clipId, file);
+          loadedClipIds.push(clipId);
+          
+          const TRACK_COLORS = ['#FF2A5F', '#00E871', '#6B44FF', '#4B7BFF', '#FFEB3B', '#FF9800', '#00BCD4', '#E91E63', '#9C27B0', '#8BC34A'];
+          const newTrackColor = TRACK_COLORS[(state.tracks.length + i) % TRACK_COLORS.length];
+          
+          dispatch({ 
+            type: 'ADD_TRACK', 
+            payload: { 
+              id: targetTrackId, 
+              name: file.name.replace(/\.[^/.]+$/, "") || 'Audio Track', 
+              volume: 0.8, 
+              pan: 0, 
+              muted: false, 
+              solo: false, 
+              color: newTrackColor, 
+              clips: [{
+                id: clipId,
+                start: 0,
+                duration,
+                audioData: file.name
+              }] 
+            } 
+          });
+        }
+
+        // After ALL files loaded, detect BPM
+        if (isMultiple && stateRef.current.bpmSyncCancelRequested) {
+          console.log("Timeline: BPM Sync cancelled by user.");
+        } else {
+          console.log("Timeline: All files loaded. Starting BPM detection...");
+          const buffer = audioEngine.buffers.get(loadedClipIds[0]);
+          if (buffer) {
+            const bpm = await detectBPMOffline(buffer);
+            if (bpm) {
+              dispatch({ type: 'SET_ORIGINAL_BPM', payload: bpm });
+              dispatch({ type: 'SET_BPM', payload: bpm });
+              console.log("Timeline: Auto-detected BPM:", bpm);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Timeline drop handler error:", err);
+      } finally {
+        dispatch({ type: 'SET_IS_DETECTING_BPM', payload: false });
+        dispatch({ type: 'SET_SHOW_BPM_SYNC_POPUP', payload: false });
       }
     }
   };
@@ -189,37 +227,71 @@ export function Timeline() {
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files as FileList);
       const audioFiles = files.filter(f => f.type.startsWith('audio/') || f.name.match(/\.(mp3|wav|ogg|flac|aac|m4a|weba|webm)$/i));
-      
-      for (let i = 0; i < audioFiles.length; i++) {
-        const file = audioFiles[i];
-        const id = 'clip_' + Date.now() + '_' + i;
-        const duration = await audioEngine.loadAudio(id, file);
-        
-        const clip: Clip = {
-          id,
-          start: 0,
-          duration,
-          audioData: file.name
-        };
 
-        const TRACK_COLORS = ['#FF2A5F', '#00E871', '#6B44FF', '#4B7BFF', '#FFEB3B', '#FF9800', '#00BCD4', '#E91E63', '#9C27B0', '#8BC34A'];
-        const newTrackColor = TRACK_COLORS[(state.tracks.length + i) % TRACK_COLORS.length];
-        const targetTrackId = 'track_' + Date.now() + '_' + i;
-        dispatch({ 
-          type: 'ADD_TRACK', 
-          payload: { 
-            id: targetTrackId, 
-            name: file.name.substring(0, 15) || 'Audio', 
-            volume: 1, 
-            pan: 0, 
-            muted: false, 
-            solo: false, 
-            color: newTrackColor, 
-            clips: [] 
-          } 
-        });
+      if (audioFiles.length === 0) return;
 
-        dispatch({ type: 'ADD_CLIP', payload: { trackId: targetTrackId, clip } });
+      const isMultiple = audioFiles.length > 1;
+      if (isMultiple) {
+        dispatch({ type: 'SET_SHOW_BPM_SYNC_POPUP', payload: true });
+      }
+      dispatch({ type: 'SET_IS_DETECTING_BPM', payload: true });
+
+      try {
+        const loadedClipIds: string[] = [];
+
+        for (let i = 0; i < audioFiles.length; i++) {
+          const file = audioFiles[i];
+          const id = 'clip_' + Date.now() + '_' + i;
+          const duration = await audioEngine.loadAudio(id, file);
+          loadedClipIds.push(id);
+          
+          const clip: Clip = {
+            id,
+            start: 0,
+            duration,
+            audioData: file.name
+          };
+
+          const TRACK_COLORS = ['#FF2A5F', '#00E871', '#6B44FF', '#4B7BFF', '#FFEB3B', '#FF9800', '#00BCD4', '#E91E63', '#9C27B0', '#8BC34A'];
+          const newTrackColor = TRACK_COLORS[(state.tracks.length + i) % TRACK_COLORS.length];
+          const targetTrackId = 'track_' + Date.now() + '_' + i;
+          dispatch({ 
+            type: 'ADD_TRACK', 
+            payload: { 
+              id: targetTrackId, 
+              name: file.name.substring(0, 15) || 'Audio', 
+              volume: 1, 
+              pan: 0, 
+              muted: false, 
+              solo: false, 
+              color: newTrackColor, 
+              clips: [] 
+            } 
+          });
+
+          dispatch({ type: 'ADD_CLIP', payload: { trackId: targetTrackId, clip } });
+        }
+
+        // After ALL files loaded, detect BPM
+        if (isMultiple && stateRef.current.bpmSyncCancelRequested) {
+          console.log("Timeline file select: BPM Sync cancelled.");
+        } else {
+          console.log("Timeline file select: Starting BPM detection...");
+          const buffer = audioEngine.buffers.get(loadedClipIds[0]);
+          if (buffer) {
+            const bpm = await detectBPMOffline(buffer);
+            if (bpm) {
+              dispatch({ type: 'SET_ORIGINAL_BPM', payload: bpm });
+              dispatch({ type: 'SET_BPM', payload: bpm });
+              console.log("Timeline file select: Auto-detected BPM:", bpm);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Timeline file select error:", err);
+      } finally {
+        dispatch({ type: 'SET_IS_DETECTING_BPM', payload: false });
+        dispatch({ type: 'SET_SHOW_BPM_SYNC_POPUP', payload: false });
       }
     }
     if (fileInputRef.current) {

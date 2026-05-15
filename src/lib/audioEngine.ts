@@ -1,3 +1,5 @@
+import { SoundTouch, SimpleFilter, WebAudioBufferSource } from 'soundtouchjs';
+
 class AudioEngine {
   context: AudioContext | null = null;
   buffers: Map<string, AudioBuffer> = new Map();
@@ -5,13 +7,14 @@ class AudioEngine {
   masterGain: GainNode | null = null;
   
   // Track currently playing sources
-  activeSources: Map<string, AudioBufferSourceNode> = new Map();
+  activeSources: Map<string, { node: AudioNode, filter?: any, soundtouch?: any }> = new Map();
   midiAccess: any = null;
 
   // New precise timing tracking
   playStartTime: number = 0;
   playPositionAtStart: number = 0;
   isPlaying: boolean = false;
+  playbackRate: number = 1.0;
   
   // Loop settings
   isLooping: boolean = false;
@@ -54,7 +57,7 @@ class AudioEngine {
     // By subtracting a typical output latency (~50ms), we compensate for this 
     // hardware delay and perfectly sync the visual playhead with the audible transients.
     const outputLatency = this.context.outputLatency || this.context.baseLatency || 0.05;
-    let elapsed = (this.context.currentTime - this.playStartTime);
+    let elapsed = (this.context.currentTime - this.playStartTime) * this.playbackRate;
     
     // Only subtract latency once playback has actually started (elapsed > 0)
     let time = this.playPositionAtStart + (elapsed > 0 ? elapsed - outputLatency : elapsed);
@@ -268,14 +271,15 @@ class AudioEngine {
     nodes.panner.pan.value = pan;
   }
 
+
   playClip(clipId: string, trackId: string, playAtTime: number, offset: number = 0, duration: number = 0, bufferId?: string, volumeEnvelope?: { time: number; value: number }[]) {
     const effectiveBufferId = bufferId || clipId;
     if (!this.context || !this.buffers.has(effectiveBufferId)) return;
     
-    const buffer = this.buffers.get(effectiveBufferId)!;
-    const source = this.context.createBufferSource();
-    source.buffer = buffer;
+    // Stop existing if any
+    this.stopClip(clipId);
     
+    const buffer = this.buffers.get(effectiveBufferId)!;
     if (!this.trackNodes.has(trackId)) {
       this.setupTrackRouting(trackId);
     }
@@ -284,15 +288,68 @@ class AudioEngine {
     const targetTime = Math.max(this.context.currentTime, playAtTime);
     const timeDelta = targetTime - playAtTime;
     const startOffset = offset + timeDelta;
-    const remainingDuration = Math.max(0, duration - timeDelta);
+
+    // OPTIMIZATION: If playback rate is 1.0 (no stretching), use high-performance native nodes
+    // This avoids ScriptProcessorNode latency and CPU overhead for standard playback.
+    if (Math.abs(this.playbackRate - 1.0) < 0.001) {
+      const source = this.context.createBufferSource();
+      source.buffer = buffer;
+      
+      let targetNode: AudioNode = nodes.gain;
+      if (volumeEnvelope && volumeEnvelope.length > 0) {
+        const envGain = this.context.createGain();
+        const clipStartContextTime = targetTime - startOffset;
+        envGain.gain.setValueAtTime(volumeEnvelope[0].value, targetTime);
+        for (const pt of volumeEnvelope) {
+          const pointTime = clipStartContextTime + pt.time;
+          if (pointTime >= targetTime) {
+            envGain.gain.linearRampToValueAtTime(Math.max(0.0001, pt.value), pointTime);
+          }
+        }
+        envGain.connect(nodes.gain);
+        targetNode = envGain;
+      }
+      
+      source.connect(targetNode);
+      if (startOffset < buffer.duration) {
+        source.start(targetTime, startOffset, duration > 0 ? duration : undefined);
+        this.activeSources.set(clipId, { node: source });
+      }
+      return;
+    }
+    
+    // SOUNDTOUCH PITCH-PRESERVING TIME-STRETCH (Only for non-unity rates)
+    let soundtouch: any;
+    let stSource: any;
+    let filter: any;
+    
+    try {
+      soundtouch = new (SoundTouch as any)();
+      soundtouch.tempo = this.playbackRate;
+      
+      if (soundtouch.stretch) {
+        soundtouch.stretch.setParameters(this.context!.sampleRate);
+      }
+      
+      stSource = new (WebAudioBufferSource as any)(buffer);
+      filter = new (SimpleFilter as any)(stSource, soundtouch);
+      
+      if (startOffset > 0) {
+        stSource.position = Math.floor(startOffset * buffer.sampleRate);
+      }
+    } catch (e) {
+      console.error("SoundTouch Initialization Error:", e);
+      return;
+    }
+
+    const bufferSize = 4096;
+    const scriptNode = this.context.createScriptProcessor(bufferSize, 0, 2);
+    const samples = new Float32Array(bufferSize * 2);
     
     let targetNode: AudioNode = nodes.gain;
-
     if (volumeEnvelope && volumeEnvelope.length > 0) {
       const envGain = this.context.createGain();
       const clipStartContextTime = targetTime - startOffset;
-      
-      // Basic approach: set initial value, ramp to subsequent points
       envGain.gain.setValueAtTime(volumeEnvelope[0].value, targetTime);
       for (const pt of volumeEnvelope) {
         const pointTime = clipStartContextTime + pt.time;
@@ -304,12 +361,38 @@ class AudioEngine {
       targetNode = envGain;
     }
     
-    source.connect(targetNode);
+    scriptNode.connect(targetNode);
     
-    if (startOffset < buffer.duration && remainingDuration > 0) {
-      source.start(targetTime, startOffset, remainingDuration);
-      this.activeSources.set(clipId, source);
-    }
+    const totalFramesToExtract = duration > 0 ? Math.floor(duration * buffer.sampleRate) : Infinity;
+    let framesExtractedSoFar = 0;
+
+    scriptNode.onaudioprocess = (e) => {
+      const l = e.outputBuffer.getChannelData(0);
+      const r = e.outputBuffer.getChannelData(1);
+      
+      const framesExtracted = filter.extract(samples, bufferSize);
+      framesExtractedSoFar += framesExtracted;
+      
+      for (let i = 0; i < framesExtracted; i++) {
+        l[i] = samples[i * 2];
+        r[i] = samples[i * 2 + 1];
+      }
+      
+      if (framesExtracted === 0 || framesExtractedSoFar >= totalFramesToExtract) {
+        this.stopClip(clipId);
+      }
+    };
+
+    this.activeSources.set(clipId, { node: scriptNode, filter, soundtouch });
+  }
+
+  setPlaybackRate(rate: number) {
+    this.playbackRate = rate;
+    this.activeSources.forEach((source) => {
+      if (source.soundtouch) {
+        source.soundtouch.tempo = rate;
+      }
+    });
   }
 
   startPlayback(startTimeInSeconds: number, contextStartTime?: number) {
@@ -319,8 +402,20 @@ class AudioEngine {
     this.playPositionAtStart = startTimeInSeconds;
     this.isPlaying = true;
     
-    this.currentBeat = 0;
-    this.nextNoteTime = this.playStartTime;
+    const bpm = this.getBpmAtTime(startTimeInSeconds);
+    const secondsPerBeat = 60.0 / bpm;
+    
+    // Calculate which beat we are currently on
+    const beatsPassed = startTimeInSeconds / secondsPerBeat;
+    this.currentBeat = Math.floor(beatsPassed);
+    
+    // Determine the exact time for the NEXT beat to be scheduled
+    const nextBeatInProject = (this.currentBeat + 1) * secondsPerBeat;
+    const timeUntilNextBeat = (nextBeatInProject - startTimeInSeconds) / this.playbackRate;
+    
+    this.nextNoteTime = this.playStartTime + timeUntilNextBeat;
+    this.currentBeat++; // Advance beat counter for the next scheduled note
+    
     if (this.metronomeTimerID !== null) {
       window.clearTimeout(this.metronomeTimerID);
     }
@@ -330,10 +425,12 @@ class AudioEngine {
   stopAll() {
     this.activeSources.forEach((source, clipId) => {
       try {
-        source.stop();
-        source.disconnect();
+        source.node.disconnect();
+        if ((source.node as any).onaudioprocess) {
+          (source.node as any).onaudioprocess = null;
+        }
       } catch (e) {
-        // Source might have already stopped
+        // Already stopped
       }
     });
     this.activeSources.clear();
@@ -350,8 +447,10 @@ class AudioEngine {
     const source = this.activeSources.get(clipId);
     if (source) {
       try {
-        source.stop();
-        source.disconnect();
+        source.node.disconnect();
+        if ((source.node as any).onaudioprocess) {
+          (source.node as any).onaudioprocess = null;
+        }
       } catch (e) {
         // Already stopped
       }

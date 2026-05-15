@@ -89,3 +89,12 @@ body {
     filter: blur(0px);
   }
 }
+
+@keyframes studio-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@utility animate-studio-spin {
+  animation: studio-spin 1.2s linear infinite;
+}

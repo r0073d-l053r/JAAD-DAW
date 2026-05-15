@@ -14,6 +14,10 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        // Suppress essentia.js Node-specific module warnings in browser build
+        'path': 'path-browserify',
+        'fs': 'path-browserify',
+        'crypto': 'path-browserify',
       },
     },
     server: {
@@ -27,6 +31,7 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       target: 'esnext',
+      chunkSizeWarningLimit: 3000,
       rollupOptions: {
         output: {
           manualChunks(id) {
@@ -35,11 +40,18 @@ export default defineConfig(({ mode }) => {
               if (id.includes('lucide-react')) return 'lucide';
               if (id.includes('@google/genai')) return 'genai';
               if (id.includes('firebase')) return 'firebase';
+              if (id.includes('essentia.js')) return 'essentia';
               return 'vendor';
             }
           }
         }
+      },
+      commonjsOptions: {
+        transformMixedEsModules: true
       }
     },
+    optimizeDeps: {
+      exclude: ['essentia.js']
+    }
   };
 });

@@ -3,6 +3,10 @@ import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { LiquidGlassPanel } from './LiquidGlass';
+import { detectBPMOffline } from '../lib/essentiaBPM';
+import { useGemini } from '../lib/useGemini';
+import { Wand2 } from 'lucide-react';
+import { motion } from 'motion/react';
 
 function TimeDisplay() {
   const { state } = useApp();
@@ -45,6 +49,44 @@ function TimeDisplay() {
 
 export function Transport() {
   const { state, dispatch } = useApp();
+  const { detectBPM } = useGemini();
+  const [localBpm, setLocalBpm] = useState(state.bpm.toString());
+
+  useEffect(() => {
+    setLocalBpm(state.bpm.toString());
+  }, [state.bpm]);
+
+  const triggerManualBPMDetection = async () => {
+    if (state.tracks.length === 0) return;
+    
+    // Find the first track with clips
+    const trackWithClips = state.tracks.find(t => t.clips.length > 0);
+    if (!trackWithClips) return;
+    
+    const firstClip = trackWithClips.clips[0];
+    const bufferId = firstClip.bufferId || firstClip.id;
+    const buffer = audioEngine.buffers.get(bufferId);
+    
+    if (buffer) {
+      dispatch({ type: 'SET_IS_DETECTING_BPM', payload: true });
+      try {
+        console.log("Manual BPM Detection started...");
+        const bpm = await detectBPMOffline(buffer);
+        
+        if (bpm) {
+          dispatch({ type: 'SET_ORIGINAL_BPM', payload: bpm });
+          dispatch({ type: 'SET_BPM', payload: bpm });
+          console.log("Manual BPM Detection success:", bpm);
+        } else {
+          console.warn("Manual BPM Detection inconclusive.");
+        }
+      } catch (err) {
+        console.error("Manual BPM detection failed:", err);
+      } finally {
+        dispatch({ type: 'SET_IS_DETECTING_BPM', payload: false });
+      }
+    }
+  };
 
   const togglePlay = useCallback(() => {
     dispatch({ type: 'TOGGLE_PLAY' });
@@ -220,9 +262,51 @@ export function Transport() {
       </div>
 
       <div className="flex items-center space-x-4">
-        <div className="flex items-center space-x-2 bg-black/40 px-3 py-1.5 rounded-lg border border-zinc-800">
-          <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider font-bold">BPM</span>
-          <span className="text-sm font-mono text-white font-medium">{state.bpm}</span>
+        <div className="flex items-center space-x-2 bg-black/40 px-3 py-1.5 rounded-lg border border-zinc-800 focus-within:border-primary/50 transition-colors">
+          <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider font-bold select-none">BPM</span>
+          <input 
+            type="text" 
+            value={localBpm} 
+            onChange={(e) => {
+              // Allow only numbers
+              const val = e.target.value.replace(/\D/g, '');
+              setLocalBpm(val);
+            }}
+            onBlur={() => {
+              const val = parseInt(localBpm);
+              if (!isNaN(val) && val > 0) {
+                dispatch({ type: 'SET_BPM', payload: val });
+              } else {
+                setLocalBpm(state.bpm.toString());
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            className="w-14 bg-transparent text-sm font-mono text-white font-medium outline-none relative z-10"
+          />
+          {state.isDetectingBPM && (
+            <div className="absolute inset-0 flex items-end px-1 pb-1 pointer-events-none">
+              <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ x: "-100%" }}
+                  animate={{ x: "100%" }}
+                  transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                  className="w-1/2 h-full bg-primary/60 shadow-[0_0_10px_rgba(255,42,95,0.5)]"
+                />
+              </div>
+            </div>
+          )}
+          <button 
+            onClick={triggerManualBPMDetection}
+            disabled={state.isDetectingBPM || state.tracks.length === 0}
+            className={`transition-all duration-300 ${state.isDetectingBPM ? 'text-primary animate-spin' : 'text-zinc-500 hover:text-primary'} ${state.tracks.length === 0 ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+            title="Detect BPM from audio"
+          >
+            <Wand2 size={12} />
+          </button>
         </div>
         <div className="flex items-center space-x-2">
           <Volume2 size={16} className="text-zinc-500" />

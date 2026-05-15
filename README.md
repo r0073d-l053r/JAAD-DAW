@@ -126,7 +126,7 @@ docker-compose down
 | `Ctrl/Cmd + Z` | Undo |
 | `Ctrl/Cmd + Y` | Redo |
 | `Ctrl/Cmd + A` | Select All Clips |
-| `Ctrl + Shift + S` | Clean Up Stems |
+| `Ctrl + Shift + S` | Cleanup Stems |
 | `F9` | Toggle Mixer View |
 
 ## Roadmap
