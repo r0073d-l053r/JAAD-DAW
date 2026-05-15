@@ -14,21 +14,26 @@ import { SettingsModal } from './components/SettingsModal';
 import { CreateForm } from './components/CreateForm';
 import { ProjectBrowser } from './components/ProjectBrowser';
 import { SyncOverlay } from './components/SyncOverlay';
+import { BPMSyncPopup } from './components/BPMSyncPopup';
 import { useApp } from './lib/store';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { audioEngine } from './lib/audioEngine';
 import { useGemini } from './lib/useGemini';
 import { subscribeToProject, updateProjectCloud, uploadAssetCloud, downloadAssetCloud } from './lib/syncUtils';
 import { saveAsset, getAsset } from './lib/assetManager';
 
 import { WebGLBackground } from './components/WebGLBackground';
+import { detectBPMOffline } from './lib/essentiaBPM';
 
 // We extract the inner content to use the useApp hook
 function AppContent() {
   const { state, dispatch } = useApp();
   const { detectBPM } = useGemini();
-  const [detectingBPM, setDetectingBPM] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
+
+  // Ref to access latest state in async callbacks
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   useEffect(() => {
     // Determine if any track is soloed
@@ -126,64 +131,95 @@ function AppContent() {
       const files = Array.from(e.dataTransfer.files as FileList);
       const audioFiles = files.filter(f => f.type.startsWith('audio/') || f.name.match(/\.(mp3|wav|ogg|flac|aac|m4a|weba|webm)$/i));
       
-      for (let i = 0; i < audioFiles.length; i++) {
-        const file = audioFiles[i];
-        const clipId = `clip_${Date.now()}_${i}`;
-        const trackId = `track_${Date.now()}_${i}`;
-        const trackName = file.name.replace(/\.[^/.]+$/, "") || 'Audio Track';
-        
-        const colors = ['#FF2A5F', '#00E871', '#6B44FF', '#FFBB00', '#00E5FF', '#FF00EA'];
-        const randomColor = colors[(state.tracks.length + i) % colors.length];
-        
-        const duration = await audioEngine.loadAudio(clipId, file);
-        await saveAsset(clipId, file);
-        // Also sync to cloud storage for cross-device persistence
-        await uploadAssetCloud(clipId, file).catch(err => console.error("Cloud upload failed", err));
-        
-        dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
-        
-        dispatch({
-          type: 'ADD_TRACK',
-          payload: {
-            id: trackId,
-            name: trackName,
-            volume: 0.8,
-            pan: 0,
-            muted: false,
-            solo: false,
-            color: randomColor,
-            clips: [{
-              id: clipId,
-              start: 0,
-              duration,
-              audioData: file.name
-            }],
-            lanes: [],
-            showLanes: false
-          }
-        });
+      if (audioFiles.length === 0) return;
 
-        // Automatically detect BPM on the very first imported audio track
-        if (state.tracks.length === 0 && i === 0) {
-          const buffer = audioEngine.buffers.get(clipId);
+      const isMultiple = audioFiles.length > 1;
+      if (isMultiple) {
+        dispatch({ type: 'SET_SHOW_BPM_SYNC_POPUP', payload: true });
+      }
+      dispatch({ type: 'SET_IS_DETECTING_BPM', payload: true });
+
+      try {
+        const loadedClipIds: string[] = [];
+
+        // Step 1: Load ALL files first
+        for (let i = 0; i < audioFiles.length; i++) {
+          const file = audioFiles[i];
+          const clipId = `clip_${Date.now()}_${i}`;
+          const trackId = `track_${Date.now()}_${i}`;
+          const trackName = file.name.replace(/\.[^/.]+$/, "") || 'Audio Track';
+          
+          const colors = ['#FF2A5F', '#00E871', '#6B44FF', '#FFBB00', '#00E5FF', '#FF00EA'];
+          const randomColor = colors[(state.tracks.length + i) % colors.length];
+          
+          const duration = await audioEngine.loadAudio(clipId, file);
+          loadedClipIds.push(clipId);
+
+          await saveAsset(clipId, file);
+          // Also sync to cloud storage for cross-device persistence
+          await uploadAssetCloud(clipId, file).catch(err => console.error("Cloud upload failed", err));
+          
+          dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
+          
+          dispatch({
+            type: 'ADD_TRACK',
+            payload: {
+              id: trackId,
+              name: trackName,
+              volume: 0.8,
+              pan: 0,
+              muted: false,
+              solo: false,
+              color: randomColor,
+              clips: [{
+                id: clipId,
+                start: 0,
+                duration,
+                audioData: file.name
+              }],
+              lanes: [],
+              showLanes: false
+            }
+          });
+        }
+
+        // Step 2: After ALL files loaded, detect BPM from the first track
+        // Check if user cancelled (for multi-file popup)
+        if (isMultiple && stateRef.current.bpmSyncCancelRequested) {
+          console.log("App: BPM Sync cancelled by user.");
+        } else {
+          console.log("App: All files loaded. Starting BPM detection...");
+          const firstBufferId = loadedClipIds[0];
+          const buffer = audioEngine.buffers.get(firstBufferId);
           if (buffer) {
-            setDetectingBPM(true);
-            try {
-               const bpm = await detectBPM(buffer);
-               if (bpm) {
-                 dispatch({ type: 'SET_BPM', payload: bpm });
-                 console.log(`Detected BPM: ${bpm}`);
-               }
-            } catch (err) {
-               console.error("AI BPM Detection failed", err);
-            } finally {
-               setDetectingBPM(false);
+            const bpm = await detectBPMOffline(buffer);
+            if (bpm) {
+              dispatch({ type: 'SET_ORIGINAL_BPM', payload: bpm });
+              dispatch({ type: 'SET_BPM', payload: bpm });
+              console.log("App: Auto-detected BPM:", bpm);
             }
           }
         }
+      } catch (err) {
+        console.error("App drop handler error:", err);
+      } finally {
+        dispatch({ type: 'SET_IS_DETECTING_BPM', payload: false });
+        dispatch({ type: 'SET_SHOW_BPM_SYNC_POPUP', payload: false });
       }
     }
   };
+
+  useEffect(() => {
+    // Sync project BPM to AudioEngine's tempo automation
+    audioEngine.tempoAutomation = [{ time: 0, bpm: state.bpm }];
+    
+    // Adjust playback rate so audio matches the new tempo
+    if (state.originalBpm > 0) {
+      const rate = state.bpm / state.originalBpm;
+      audioEngine.setPlaybackRate(rate);
+      console.log(`BPM sync: ${state.bpm}/${state.originalBpm} = ${rate.toFixed(3)}x playback rate`);
+    }
+  }, [state.bpm, state.originalBpm]);
 
   return (
     <div 
@@ -196,9 +232,9 @@ function AppContent() {
       
       <div className="relative z-10 flex flex-col h-full w-full bg-transparent shadow-2xl">
         <Navbar setSyncProgress={setSyncProgress} />
-        {detectingBPM && (
+        {state.isDetectingBPM && (
           <div className="absolute top-16 left-1/2 transform -translate-x-1/2 z-50 bg-primary text-black px-4 py-2 rounded-full text-xs font-bold animate-pulse shadow-xl">
-             AI Detecting Tempo...
+             Analyzing Project Tempo...
           </div>
         )}
         
@@ -222,6 +258,7 @@ function AppContent() {
         <CreateForm />
         <SettingsModal />
         <ProjectBrowser />
+        <BPMSyncPopup />
         <SyncOverlay progress={syncProgress} />
       </div>
     </div>

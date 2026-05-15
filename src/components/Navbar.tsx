@@ -327,7 +327,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
       { label: 'Select All', shortcut: 'Ctrl+A', action: () => { dispatch({ type: 'SELECT_ALL_CLIPS' }); setOpenMenu(null); } },
       { label: 'Split Clip', shortcut: 'S', action: () => { dispatch({ type: 'SPLIT_CLIP' }); setOpenMenu(null); } },
       { label: 'Heal Edits', action: () => { alert("Healing edits..."); setOpenMenu(null); } },
-      { label: 'Clean Up Stems', shortcut: 'Ctrl+Shift+S', action: () => { cleanUpStemsAsync(state, dispatch); setOpenMenu(null); } },
+      { label: 'Cleanup Stems', shortcut: 'Ctrl+Shift+S', action: () => { cleanUpStemsAsync(state, dispatch); setOpenMenu(null); } },
       { divider: true, label: '' },
       { label: 'Toggle Snap', action: () => { dispatch({ type: 'TOGGLE_SNAP' }); setOpenMenu(null); } },
       { label: 'Toggle Warp Mode', action: () => { alert("Warp mode enabled (adjust timing visually)."); setOpenMenu(null); } },
