@@ -1,0 +1,107 @@
+# JAAD-DAW Documentation
+
+Welcome to **JAAD-DAW** (Just Another Awesome DAW), a high-fidelity, local-first Digital Audio Workstation built for the modern web. This project combines professional-grade audio processing with a stunning "Liquid Glass" aesthetic.
+
+## 🚀 Quick Start & Installation
+
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v18 or higher recommended)
+- [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
+
+### Installation Steps
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/your-repo/JAAD-DAW.git
+   cd JAAD-DAW
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Run the development server**:
+   ```bash
+   npm run dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## 🛠 Setup & Environment Variables
+
+JAAD-DAW uses environment variables for its AI and Cloud features. Create a `.env` file in the root directory:
+
+```env
+# Gemini AI (For Auto-Tagging and Intelligent Features)
+VITE_GEMINI_API_KEY=your_gemini_api_key_here
+
+# Firebase Configuration (For Cloud Sync/Projects)
+VITE_FIREBASE_API_KEY=your_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+```
+
+### Firebase Setup
+If you want to use cloud saving, you'll need to create a Firebase project at the [Firebase Console](https://console.firebase.google.com/).
+1. Enable **Authentication** (Google or Email).
+2. Create a **Firestore Database**.
+3. Create a **Storage Bucket**.
+4. Copy your Web App configuration into your `.env` file.
+
+---
+
+## ✨ Core Features
+
+### 🎧 High-Fidelity Audio Engine
+- **Pitch-Preserving Time-Stretch**: Uses `SoundTouch.js` for professional-grade tempo changes without changing the pitch.
+- **Native Fallback**: Automatically switches to high-performance native `AudioBufferSourceNodes` when at 1.0x speed to eliminate latency and phasing.
+- **Sample-Accurate Sync**: Perfectly aligned playback across dozens of tracks.
+
+### ⏱️ Intelligent BPM Engine
+- **Auto-Detect BPM**: Powered by `Essentia.js`, the DAW analyzes uploaded files to find their original tempo automatically.
+- **Resampling Pipeline**: High-quality offline resampling ensures accurate analysis regardless of source sample rate (44.1k, 48k, etc.).
+
+### 🎹 Workflow & Editing
+- **Alternate Lanes**: Stash alternate takes or ideas in hidden lanes. Use "Add to Alternate Lane" to version your stems.
+- **Magnetic Snapping**: Clips "stick" to each other and the playhead for perfect alignment.
+- **Vertical Lock**: Hold `Shift` while dragging a stem up/down to lock its horizontal timing.
+- **Volume Envelopes**: Double-click on any clip to add automation points for smooth fades and volume control.
+- **Multi-Selection**: Lasso or `Ctrl+Click` multiple stems to move, delete, or duplicate them as a group.
+
+### 🤖 AI Integration
+- **Auto-Tagging**: Use the "AI Auto-Tag" feature to have the DAW analyze and name your stems based on their content (Drums, Bass, Vocal, etc.).
+- **Smart Stems**: Intelligent cleanup and processing options available via the right-click menu.
+
+---
+
+## 🎹 Keyboard Shortcuts
+
+| Shortcut | Action |
+| :--- | :--- |
+| `Space` | Toggle Play/Pause |
+| `Ctrl + S` | Manual Save |
+| `Ctrl + Z` / `Y` | Undo / Redo |
+| `Shift + Drag` | Lock horizontal movement |
+| `Backspace` / `Del` | Delete selected clips |
+| `Ctrl + D` | Duplicate selection |
+| `M` | Mute selected track |
+| `S` | Solo selected track |
+
+---
+
+## 📂 Project Structure
+
+- `/src/lib/audioEngine.ts`: The core Web Audio API logic.
+- `/src/lib/store.tsx`: Global state management and track logic.
+- `/src/components/Timeline.tsx`: The main visual editor.
+- `/src/components/ClipItem.tsx`: Individual audio stem logic and interaction.
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [TODO.md](todo.md) for current priorities and upcoming features.
