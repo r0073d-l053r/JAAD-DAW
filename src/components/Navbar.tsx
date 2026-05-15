@@ -11,6 +11,8 @@ import { saveAsset, getAsset } from '../lib/assetManager';
 import JSZip from 'jszip';
 import { LiquidGlassPanel } from './LiquidGlass';
 import { DocumentationModal } from './DocumentationModal';
+import { ShortcutsModal } from './ShortcutsModal';
+import { AboutModal } from './AboutModal';
 
 export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => void }) {
   const { state, dispatch } = useApp();
@@ -22,6 +24,8 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [menuPos, setMenuPos] = useState<{left: number; top: number} | null>(null);
   const [isDocOpen, setIsDocOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
 
   // Recalculate dropdown position when menu opens
   useEffect(() => {
@@ -376,10 +380,10 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
     ],
     'Help': [
       { label: 'Documentation', action: () => { setIsDocOpen(true); setOpenMenu(null); } },
-      { label: 'Keyboard Shortcuts', action: () => alert('Shortcuts modal coming soon') },
-      { label: 'AI Assistant Tutorial', action: () => alert('Loading tutorial...') },
+      { label: 'Keyboard Shortcuts', action: () => { setIsShortcutsOpen(true); setOpenMenu(null); } },
+      { label: 'AI Assistant Tutorial', disabled: true, action: () => {}, title: 'This feature will be available soon!' },
       { divider: true, label: '' },
-      { label: 'About', action: () => alert('GAW v1.0.0. Built with AI.') },
+      { label: 'About', action: () => { setIsAboutOpen(true); setOpenMenu(null); } },
     ]
   };
 
@@ -467,12 +471,14 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
                 return (
                   <button 
                     key={idx}
-                    onClick={menuItem.action}
-                    className="w-full text-left px-4 py-1.5 text-sm hover:bg-white/10 hover:text-white text-zinc-300 flex justify-between items-center group transition-colors"
+                    onClick={menuItem.disabled ? undefined : menuItem.action}
+                    disabled={menuItem.disabled}
+                    title={menuItem.title}
+                    className={`w-full text-left px-4 py-1.5 text-sm transition-colors flex justify-between items-center group ${menuItem.disabled ? 'text-zinc-600 cursor-not-allowed' : 'hover:bg-white/10 hover:text-white text-zinc-300'}`}
                   >
                     <span>{menuItem.label}</span>
                     {menuItem.shortcut && (
-                      <span className="text-xs text-zinc-500 group-hover:text-zinc-400">{menuItem.shortcut}</span>
+                      <span className={`text-xs group-hover:text-zinc-400 ${menuItem.disabled ? 'text-zinc-700' : 'text-zinc-500'}`}>{menuItem.shortcut}</span>
                     )}
                   </button>
                 );
@@ -730,6 +736,8 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
         document.body
       )}
       <DocumentationModal isOpen={isDocOpen} onClose={() => setIsDocOpen(false)} />
+      <ShortcutsModal isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} />
+      <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
     </header>
   );
 }
