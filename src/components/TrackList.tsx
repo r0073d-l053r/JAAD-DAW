@@ -114,14 +114,14 @@ export function TrackList() {
         >
           <div className="absolute left-0 top-0 bottom-0 w-1 shadow-[0_0_10px_rgba(255,255,255,0.1)]" style={{ backgroundColor: track.color }} />
           
-          <div className="flex items-center justify-between pl-2 relative">
+          <div className="flex items-center justify-between pl-2 pr-2 relative">
             <input 
               type="text" 
               value={track.name} 
               onChange={(e) => dispatch({ type: 'UPDATE_TRACK', payload: { id: track.id, changes: { name: e.target.value } } })}
               onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
               draggable
-              className="bg-transparent text-sm font-bold text-zinc-100 outline-none w-28 focus:border-b border-primary/50 transition-all uppercase tracking-tight"
+              className="bg-transparent text-sm font-bold text-zinc-100 outline-none w-20 focus:border-b border-primary/50 transition-all uppercase tracking-tight"
             />
             <div className="flex space-x-1 items-center">
               <button 

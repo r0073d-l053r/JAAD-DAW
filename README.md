@@ -42,6 +42,7 @@ Just Another AI DAW (JAAD) is a modern, web-browser-based Digital Audio Workstat
 - **Stem Cleanup Tool**: Automatically detect and remove silence from your stems to tidy up your mix.
 - **Exporting Options**: Export your final project as a high-fidelity `.WAV` mixdown or as individual multitrack stems in a `.ZIP` file.
 - **Customizable Project Naming**: Rename your projects at any time. Naming persists in exports.
+- **Forced Cloud Sync**: Blocking Liquid Glass progress overlay with retry logic ensures your assets are safely backed up without interruption.
 - **Keyboard Shortcuts**: Complete coverage of essential editing actions for a fast workflow.
 - **AI Integration (Beta)**: Built-in scaffolding for intelligent audio processing, stem separation, and generative UI assistance.
 
