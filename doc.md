@@ -83,13 +83,21 @@ If you want to use cloud saving, you'll need to create a Firebase project at the
 | Shortcut | Action |
 | :--- | :--- |
 | `Space` | Toggle Play/Pause |
-| `Ctrl + S` | Manual Save |
-| `Ctrl + Z` / `Y` | Undo / Redo |
-| `Shift + Drag` | Lock horizontal movement |
+| `R` | Toggle Record |
+| `S` | Split Clip at playhead |
 | `Backspace` / `Del` | Delete selected clips |
+| `Ctrl + S` | Save Project to Cloud |
+| `Ctrl + Z` | Undo |
+| `Ctrl + Y` / `Ctrl + Shift + Z` | Redo |
+| `Ctrl + A` | Select All Clips |
+| `Ctrl + C` | Copy Clips |
+| `Ctrl + X` | Cut Clips |
+| `Ctrl + V` | Paste Clips |
 | `Ctrl + D` | Duplicate selection |
-| `M` | Mute selected track |
-| `S` | Solo selected track |
+| `Ctrl + Shift + S` | Cleanup Stems (AI Process) |
+| `Shift + Drag` | Lock movement to vertical only |
+| `F9` / `Tab` | Toggle between Timeline and Mixer |
+| `Ctrl + +` / `-` | Zoom In / Out |
 
 ---
 
