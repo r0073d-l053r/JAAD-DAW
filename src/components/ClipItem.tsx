@@ -25,6 +25,7 @@ export function ClipItem({
   const y = useMotionValue(0);
   const PIXELS_PER_SECOND = state.zoomLevel;
 
+  const [isDragging, setIsDragging] = useState(false);
   const isSelected = state.selectedClipIds.includes(clip.id);
 
   // selection state coordinates relative to the clip
@@ -480,22 +481,18 @@ export function ClipItem({
       dragListener={false}
       dragControls={dragControls}
       dragConstraints={{ left: -clip.start * PIXELS_PER_SECOND }}
-      onDragEnd={(e, info) => {
-        let newStart = clip.start + info.offset.x / PIXELS_PER_SECOND;
-        if (state.snapToGrid) {
-          const beatDuration = 60 / state.bpm;
-          newStart = Math.round(newStart / beatDuration) * beatDuration;
-        }
-        newStart = Math.max(0, newStart);
-
-        if (isSelected && state.selectedClipIds.length > 1) {
-          const timeDelta = newStart - clip.start;
-          dispatch({ type: "MOVE_SELECTED_CLIPS", payload: { timeDelta } });
+      onDragStart={() => setIsDragging(true)}
+      onDrag={(e: any) => {
+        if (e.shiftKey) {
           x.set(0);
-          y.set(0);
-          return;
         }
-
+      }}
+      onDragEnd={(e: any, info) => {
+        setIsDragging(false);
+        let newStart = clip.start + (e.shiftKey ? 0 : info.offset.x / PIXELS_PER_SECOND);
+        
+        // MAGNETIC SNAPPING LOGIC
+        const SNAP_THRESHOLD_TIME = 0.15; // 150ms window for snapping
         let targetTrackId = trackId;
         let targetLaneId: string | undefined = undefined;
 
@@ -506,6 +503,67 @@ export function ClipItem({
           if (tId) targetTrackId = tId;
           if (lId) targetLaneId = lId;
           if (tId || lId) break;
+        }
+
+        const targetTrack = state.tracks.find(t => t.id === targetTrackId);
+        let snapped = false;
+
+        if (targetTrack) {
+          // Collect all possible snap points on this track (clips, lanes, and playhead)
+          const snapPoints = new Set<number>();
+          snapPoints.add(state.currentTime); // Always snap to playhead
+          
+          targetTrack.clips.forEach(c => {
+            if (c.id !== clip.id) {
+              snapPoints.add(c.start);
+              snapPoints.add(c.start + c.duration);
+            }
+          });
+          targetTrack.lanes?.forEach(l => {
+            l.clips.forEach(c => {
+              if (c.id !== clip.id) {
+                snapPoints.add(c.start);
+                snapPoints.add(c.start + c.duration);
+              }
+            });
+          });
+
+          // Check for snapping (Left edge of clip)
+          for (const point of snapPoints) {
+            if (Math.abs(newStart - point) < SNAP_THRESHOLD_TIME) {
+              newStart = point;
+              snapped = true;
+              break;
+            }
+          }
+
+          // Check for snapping (Right edge of clip)
+          if (!snapped) {
+            const currentEnd = newStart + clip.duration;
+            for (const point of snapPoints) {
+              if (Math.abs(currentEnd - point) < SNAP_THRESHOLD_TIME) {
+                newStart = point - clip.duration;
+                snapped = true;
+                break;
+              }
+            }
+          }
+        }
+
+        // Fallback to Grid Snapping if no clip/playhead snap occurred
+        if (!snapped && state.snapToGrid) {
+          const beatDuration = 60 / state.bpm;
+          newStart = Math.round(newStart / beatDuration) * beatDuration;
+        }
+        
+        newStart = Math.max(0, newStart);
+
+        if (isSelected && state.selectedClipIds.length > 1) {
+          const timeDelta = newStart - clip.start;
+          dispatch({ type: "MOVE_SELECTED_CLIPS", payload: { timeDelta } });
+          x.set(0);
+          y.set(0);
+          return;
         }
 
         if (targetLaneId) {
@@ -537,14 +595,16 @@ export function ClipItem({
         y.set(0);
       }}
       onContextMenu={handleClipContextMenu}
-      className={`clip-item absolute rounded-lg overflow-hidden group/clip transition-[background-color,box-shadow,opacity] duration-300 ${laneId ? "top-1 bottom-1 h-auto" : "top-2 bottom-2 max-h-24"} ${isSelected ? "z-10 shadow-xl" : "hover:z-20 shadow-md"}`}
+      className={`clip-item absolute rounded-lg overflow-hidden group/clip transition-[background-color,box-shadow,opacity,transform] duration-300 ${laneId ? "top-1 bottom-1 h-auto" : "top-2 bottom-2 max-h-24"} ${isDragging ? "z-[1000] opacity-90 scale-[1.02] shadow-2xl" : isSelected ? "z-10 shadow-xl" : "hover:z-20 shadow-md"}`}
       style={{
         x,
         y,
         left: `${clip.start * PIXELS_PER_SECOND}px`,
         width: `${clip.duration * PIXELS_PER_SECOND}px`,
-        backgroundColor: isSelected ? `${track.color}60` : `${track.color}30`,
-        boxShadow: isSelected
+        backgroundColor: isDragging ? `${track.color}90` : isSelected ? `${track.color}60` : `${track.color}30`,
+        boxShadow: isDragging 
+          ? `0 25px 50px -12px rgba(0, 0, 0, 0.7), inset 0 0 15px rgba(255,255,255,0.5), 0 0 0 2px ${track.color}`
+          : isSelected
           ? `0 12px 40px rgba(0,0,0,0.6), inset 0 0 10px rgba(255,255,255,0.4), inset 0 0 0 1.5px rgba(255,255,255,1)`
           : `0 4px 12px rgba(0,0,0,0.4), inset 0 0 8px rgba(0,0,0,0.3), inset 0 0 0 1.5px ${track.color}90`,
         willChange: "left, transform",
@@ -597,6 +657,20 @@ export function ClipItem({
               </button>
             )}
             <div className="h-px bg-white/10 my-1 w-full" />
+            {!laneId && (
+              <button
+                className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
+                onClick={() => {
+                  dispatch({ 
+                    type: "ADD_CLIP_TO_NEW_LANE", 
+                    payload: { trackId, clipId: clip.id } 
+                  });
+                  setClipContextMenu(null);
+                }}
+              >
+                Add to Alternate Lane
+              </button>
+            )}
             <button
               className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
               onClick={() => {
