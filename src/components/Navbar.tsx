@@ -16,6 +16,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [menuPos, setMenuPos] = useState<{left: number; top: number} | null>(null);
@@ -76,10 +77,13 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
 
     dispatch({ type: 'SET_HAS_MANUALLY_SAVED', payload: true });
     dispatch({ type: 'SET_SYNCING', payload: true });
+    setSyncError(null);
 
     // Reset progress for the new blocking UI
     setUploadProgress(1);
     setSyncProgress(1);
+
+    const MAX_RETRIES = 3;
 
     try {
       // Ensure all current project assets are synced to cloud storage
@@ -96,16 +100,30 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
       let uploadedCount = 0;
       if (assetIdsToSync.size > 0) {
         for (const id of assetIdsToSync) {
-          try {
-            const localAsset = await getAsset(id);
-            if (localAsset) {
-              await uploadAssetCloud(id, localAsset, () => {});
-            } else {
-              console.warn(`Local asset ${id} missing during sync, skipping upload.`);
+          let success = false;
+          let attempts = 0;
+          
+          while (!success && attempts < MAX_RETRIES) {
+            try {
+              const localAsset = await getAsset(id);
+              if (localAsset) {
+                await uploadAssetCloud(id, localAsset, () => {});
+                success = true;
+              } else {
+                console.warn(`Local asset ${id} missing during sync, skipping upload.`);
+                success = true; 
+              }
+            } catch (e) {
+              attempts++;
+              console.error(`Failed to upload asset ${id} (Attempt ${attempts}):`, e);
+              if (attempts >= MAX_RETRIES) {
+                throw new Error(`Cannot upload "${id}" at this time after ${MAX_RETRIES} attempts.`);
+              }
+              // Exponential backoff
+              await new Promise(r => setTimeout(r, 1000 * attempts));
             }
-          } catch (e) {
-            console.error(`Failed to upload asset ${id}:`, e);
           }
+
           uploadedCount++;
           const progress = Math.round((uploadedCount / assetIdsToSync.size) * 100);
           setUploadProgress(progress);
@@ -117,18 +135,22 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
       }
 
       // Final metadata update
-      setSyncProgress(99); // Transitioning to metadata
+      setSyncProgress(99); 
       await updateProjectCloud(targetId, targetName, state.tracks, state.bpm, state.masterVolume);
 
-      // Artificial delay to let the user see the "Complete" state if it was too fast
-      await new Promise(r => setTimeout(r, 500));
+      // Artificial delay to let the user see the "Complete" state
+      await new Promise(r => setTimeout(r, 800));
 
-    } catch (err) {
+    } catch (err: any) {
       console.error('Cloud Save Failed:', err);
-      alert('Failed to save project to cloud. Check your connection.');
+      setSyncError(err.message || 'Failed to save project to cloud. Check your connection.');
+      // Don't clear syncing immediately if there's an error so the user sees the popup
+      return; 
     } finally {
-      dispatch({ type: 'SET_SYNCING', payload: false });
-      setUploadProgress(0);
+      if (!syncError) {
+        dispatch({ type: 'SET_SYNCING', payload: false });
+        setUploadProgress(0);
+      }
     }
   };
 
@@ -637,6 +659,74 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
           <Wand2 size={18} />
         </button>
       </div>
+      {/* Forced Cloud Sync Progress Popup */}
+      {(state.isSyncing || syncError) && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="w-[450px]">
+            <LiquidGlassPanel 
+              cornerRadius={24} 
+              blurAmount={40} 
+              backgroundOpacity={0.25} 
+              contentClassName="p-8 flex flex-col items-center text-center"
+              displacementScale={40}
+            >
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 shadow-2xl ${syncError ? 'bg-red-500/20 text-red-500 border border-red-500/50' : 'bg-primary/20 text-primary border border-primary/50'}`}>
+                <Cloud size={32} className={!syncError ? 'animate-pulse' : ''} />
+              </div>
+              
+              <h2 className="text-xl font-black text-white mb-2 uppercase tracking-tight">
+                {syncError ? 'Upload Interrupted' : (uploadProgress === 100 ? 'Syncing Metadata...' : 'Cloud Synchronization')}
+              </h2>
+              
+              <p className="text-zinc-400 text-sm mb-8 max-w-[300px]">
+                {syncError 
+                  ? "We encountered a persistent error while trying to upload your assets." 
+                  : "Please wait while we securely upload your project assets to the cloud storage."}
+              </p>
+
+              {!syncError ? (
+                <div className="w-full space-y-4">
+                  <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden border border-white/5 p-[1px]">
+                    <div 
+                      className="h-full bg-gradient-to-r from-primary/60 to-primary rounded-full transition-all duration-500 ease-out shadow-[0_0_15px_rgba(255,45,85,0.4)]"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between items-center px-1">
+                    <span className="text-[10px] font-bold text-zinc-500 tracking-widest uppercase">Progress</span>
+                    <span className="text-lg font-black text-primary font-mono">{uploadProgress}%</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full space-y-4">
+                  <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium leading-relaxed">
+                    {syncError}
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setSyncError(null);
+                      dispatch({ type: 'SET_SYNCING', payload: false });
+                    }}
+                    className="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white text-sm font-bold transition-all border border-white/10"
+                  >
+                    Dismiss & Continue
+                  </button>
+                </div>
+              )}
+
+              {!syncError && (
+                 <div className="mt-8 pt-6 border-t border-white/5 w-full">
+                    <div className="flex items-center justify-center gap-2 text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">
+                       <div className="w-1 h-1 rounded-full bg-green-500 animate-ping" />
+                       Encryption Active
+                    </div>
+                 </div>
+              )}
+            </LiquidGlassPanel>
+          </div>
+        </div>,
+        document.body
+      )}
     </header>
   );
 }

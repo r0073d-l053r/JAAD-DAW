@@ -156,3 +156,8 @@ All of the following features have been successfully implemented:
 - [x] **Stem Cleanup Optimization:** Refactored heavy audio processing to be asynchronous, ensuring a 60fps UI even during cleanup. (2026-05-13)
 - [x] **Build & Performance Polish:** Optimized Vite chunking and vendor splitting for ultra-fast initial load times. (2026-05-13)
 - [x] **Waveform Persistence:** Fixed re-render logic to ensure waveforms "pop in" automatically after asset recovery. (2026-05-13)
+
+## 11. Major Update - 2026-05-14
+- [x] **Track Header Optimization:** Adjusted track controls and name input width to prevent UI clipping in the sidebar. (2026-05-14)
+- [x] **Forced Cloud Sync Overlay:** Implemented a blocking Liquid Glass progress modal that ensures asset uploads complete before further interaction. (2026-05-14)
+- [x] **Robust Upload Retry Logic:** Added automatic exponential backoff retry for failed cloud asset uploads (up to 3 attempts). (2026-05-14)
