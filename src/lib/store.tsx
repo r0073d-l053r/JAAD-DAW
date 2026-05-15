@@ -167,7 +167,8 @@ type Action =
   | { type: "TOGGLE_PROJECT_BROWSER" }
   | { type: "SYNC_STATE"; payload: Partial<AppState> }
   | { type: "INCREMENT_BUFFERS_VERSION" }
-  | { type: "SET_HAS_MANUALLY_SAVED"; payload: boolean };
+  | { type: "SET_HAS_MANUALLY_SAVED"; payload: boolean }
+  | { type: "ADD_CLIP_TO_NEW_LANE"; payload: { trackId: string; clipId: string } };
 
 interface AppStateWithHistory extends AppState {
   past: Track[][];
@@ -1395,6 +1396,29 @@ function appReducer(
               return l;
             }),
           };
+        }
+        return t;
+      });
+      return saveHistory(state, newTracks);
+    }
+    case "ADD_CLIP_TO_NEW_LANE": {
+      const { trackId, clipId } = action.payload;
+      const newTracks = state.tracks.map((t) => {
+        if (t.id === trackId) {
+          const clip = t.clips.find((c) => c.id === clipId);
+          if (clip) {
+            const laneNumber = t.lanes.length + 1;
+            const newLane: Lane = {
+              id: "lane_" + Date.now(),
+              name: `Version ${laneNumber}`,
+              clips: [{ ...clip, id: clip.id + "_copy_" + Date.now() }],
+            };
+            return {
+              ...t,
+              lanes: [newLane, ...t.lanes],
+              showLanes: true,
+            };
+          }
         }
         return t;
       });

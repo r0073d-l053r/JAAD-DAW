@@ -132,8 +132,8 @@ export function Transport() {
           }
         }
 
-        const allClips = [...track.clips, ...(track.lanes?.flatMap(l => l.clips) || [])];
-        allClips.forEach(clip => {
+        // ONLY play clips on the main track. Lanes are for storage/alternates.
+        track.clips.forEach(clip => {
           if (clip.start + clip.duration > state.currentTime) {
             let clipStartContextTime = scheduleTime;
             let offset = clip.audioOffset || 0;
@@ -176,7 +176,7 @@ export function Transport() {
     // Synchronization effect: Ensure audio engine reflects current track state during playback
     if (state.isPlaying) {
       const allCurrentClipIds = new Set(
-        state.tracks.flatMap(t => [...t.clips, ...(t.lanes?.flatMap(l => l.clips) || [])].map(c => c.id))
+        state.tracks.flatMap(t => t.clips.map(c => c.id))
       );
       
       // Stop clips that were removed from the project

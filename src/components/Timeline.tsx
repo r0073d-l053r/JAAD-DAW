@@ -716,7 +716,7 @@ export function Timeline() {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 40, opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    className="shrink-0 border-b border-[#2a2b30]/30 relative bg-[#0e0e11]/40 transition overflow-hidden"
+                    className="shrink-0 border-b border-[#2a2b30]/30 relative bg-[#0e0e11]/40 transition"
                     data-track-id={track.id}
                     data-lane-id={lane.id}
                     onDragOver={(e) => { e.preventDefault(); }}
