@@ -10,6 +10,7 @@ import { updateProjectCloud, uploadAssetCloud } from '../lib/syncUtils';
 import { saveAsset, getAsset } from '../lib/assetManager';
 import JSZip from 'jszip';
 import { LiquidGlassPanel } from './LiquidGlass';
+import { DocumentationModal } from './DocumentationModal';
 
 export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => void }) {
   const { state, dispatch } = useApp();
@@ -20,6 +21,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [menuPos, setMenuPos] = useState<{left: number; top: number} | null>(null);
+  const [isDocOpen, setIsDocOpen] = useState(false);
 
   // Recalculate dropdown position when menu opens
   useEffect(() => {
@@ -373,7 +375,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
       } },
     ],
     'Help': [
-      { label: 'Documentation', action: () => alert('Loading docs...') },
+      { label: 'Documentation', action: () => { setIsDocOpen(true); setOpenMenu(null); } },
       { label: 'Keyboard Shortcuts', action: () => alert('Shortcuts modal coming soon') },
       { label: 'AI Assistant Tutorial', action: () => alert('Loading tutorial...') },
       { divider: true, label: '' },
@@ -727,6 +729,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
         </div>,
         document.body
       )}
+      <DocumentationModal isOpen={isDocOpen} onClose={() => setIsDocOpen(false)} />
     </header>
   );
 }
