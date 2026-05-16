@@ -17,6 +17,7 @@ export function Mixer() {
   // Use a ref to access the latest state in async functions
   const stateRef = useRef(state);
   stateRef.current = state;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFixMyMix = async () => {
     const suggestions = await getFixMyMixSuggestions(state.tracks);

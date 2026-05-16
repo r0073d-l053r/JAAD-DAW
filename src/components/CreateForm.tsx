@@ -387,24 +387,80 @@ export function CreateForm() {
           <div className="relative group/create flex items-stretch h-12">
             <LiquidGlassPanel
               cornerRadius={9999}
-              blurAmount={10}
-              backgroundOpacity={0.05}
-              displacementScale={12}
-              aberrationIntensity={1.5}
-              mode="shader"
-              className="h-12 border border-white/20 shadow-[0_0_20px_rgba(255,45,85,0.15)] overflow-hidden"
+              blurAmount={8}
+              backgroundOpacity={0.15}
+              displacementScale={45}
+              aberrationIntensity={3}
+              mode="prominent"
+              className="h-12 border border-white/20 shadow-[0_0_15px_rgba(175,82,222,0.15)] overflow-hidden hover:shadow-[0_0_40px_rgba(175,82,222,0.5)] transition-shadow duration-500"
               contentClassName="h-full flex items-stretch px-1"
             >
-              <div className="absolute inset-0 opacity-40 animate-rainbow-shift pointer-events-none mix-blend-screen" 
-                   style={{ background: 'linear-gradient(45deg, #ff0000, #00ff00, #0000ff, #ff0000)' }} 
-              />
+              {/* Animated Liquid Mixing Blobs */}
+              <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-70 mix-blend-screen">
+                <motion.div
+                  animate={{
+                    x: [0, 40, -40, 0],
+                    y: [0, -20, 20, 0],
+                    scale: [1, 1.2, 0.8, 1],
+                  }}
+                  transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+                  className="absolute -top-10 -left-10 w-40 h-40 rounded-full bg-violet-600/60 blur-[40px]"
+                />
+                <motion.div
+                  animate={{
+                    x: [0, -50, 50, 0],
+                    y: [0, 30, -30, 0],
+                    scale: [1, 0.9, 1.3, 1],
+                  }}
+                  transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+                  className="absolute -bottom-10 -right-10 w-48 h-48 rounded-full bg-blue-500/60 blur-[45px]"
+                />
+                <motion.div
+                  animate={{
+                    x: [0, 60, -30, 0],
+                    y: [0, 40, -20, 0],
+                  }}
+                  transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                  className="absolute top-0 left-1/4 w-32 h-32 rounded-full bg-cyan-400/50 blur-[35px]"
+                />
+                <motion.div
+                  animate={{
+                    x: [0, -30, 60, 0],
+                    y: [0, -40, 30, 0],
+                  }}
+                  transition={{ duration: 14, repeat: Infinity, ease: "linear" }}
+                  className="absolute bottom-0 left-1/3 w-36 h-36 rounded-full bg-green-500/50 blur-[40px]"
+                />
+                <motion.div
+                  animate={{
+                    x: [0, 20, -50, 0],
+                    y: [0, -30, 40, 0],
+                    scale: [1, 1.5, 0.7, 1],
+                  }}
+                  transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                  className="absolute top-1/4 right-1/4 w-44 h-44 rounded-full bg-orange-500/40 blur-[50px]"
+                />
+                <motion.div
+                  animate={{
+                    opacity: [0.3, 0.6, 0.3],
+                  }}
+                  transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+                  className="absolute inset-0 bg-red-500/10 blur-2xl"
+                />
+              </div>
+
+              <div className="absolute inset-0 bg-white/5 group-hover/create:bg-white/15 transition-colors pointer-events-none" />
               <button
                 disabled={isGenerating}
                 className="hover:bg-white/10 disabled:opacity-80 text-sm px-8 py-2.5 transition-all flex items-center space-x-3 text-white font-black uppercase tracking-tighter relative z-10"
                 onClick={handleGenerate}
               >
-                {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Music size={16} className="text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]" />}
-                <span>{isGenerating ? "Generating..." : state.timeSelection ? "Replace" : "Create"}</span>
+                {isGenerating ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Sparkles size={16} className="text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)] animate-pulse" />
+                )}
+                <span className="drop-shadow-md">{isGenerating ? "Generating..." : state.timeSelection ? "Replace" : "Create"}</span>
               </button>
               <div className="w-px self-stretch bg-white/20 pointer-events-none relative z-10" />
               <button

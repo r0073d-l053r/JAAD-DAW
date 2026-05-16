@@ -109,3 +109,26 @@ body {
   animation: rainbow-shift 8s ease infinite;
   background-size: 400% 400%;
 }
+
+@keyframes liquid-organic {
+  0% { background-position: 0% 0%; background-size: 200% 200%; }
+  25% { background-position: 100% 50%; background-size: 250% 250%; }
+  50% { background-position: 50% 100%; background-size: 200% 200%; }
+  75% { background-position: 0% 100%; background-size: 250% 250%; }
+  100% { background-position: 0% 0%; background-size: 200% 200%; }
+}
+
+@keyframes liquid-organic-alt {
+  0% { background-position: 100% 100%; background-size: 300% 300%; }
+  33% { background-position: 0% 50%; background-size: 200% 200%; }
+  66% { background-position: 50% 0%; background-size: 300% 300%; }
+  100% { background-position: 100% 100%; background-size: 300% 300%; }
+}
+
+@utility animate-liquid-organic {
+  animation: liquid-organic 18s ease-in-out infinite;
+}
+
+@utility animate-liquid-organic-fast {
+  animation: liquid-organic-alt 12s ease-in-out infinite;
+}
