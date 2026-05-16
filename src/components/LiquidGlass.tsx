@@ -43,7 +43,7 @@ const getMap = (mode: 'standard' | 'polar' | 'prominent' | 'shader', shaderMapUr
     case 'polar': return polarDisplacementMap;
     case 'prominent': return prominentDisplacementMap;
     case 'shader': return shaderMapUrl || displacementMap;
-    default: return prominentDisplacementMap;
+    default: return displacementMap;
   }
 };
 
@@ -138,7 +138,7 @@ export function LiquidGlassPanel({
   blurAmount = 10,
   saturation = 140,
   backgroundOpacity = 0.1,
-  mode = 'prominent',
+  mode = 'standard',
   displacementScale = 100,
   aberrationIntensity = 2,
   overLight = false,

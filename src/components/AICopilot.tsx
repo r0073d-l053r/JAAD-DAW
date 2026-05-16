@@ -88,7 +88,7 @@ export function AICopilot() {
     <div className="w-80 flex-shrink-0 z-10 relative" style={{ animation: 'liquidGlassIn 0.3s ease-out' }}>
       <LiquidGlassPanel
         overLight={true}
-        mode="prominent"
+        mode="standard"
         className="h-full"
         contentClassName="h-full flex flex-col"
       >
