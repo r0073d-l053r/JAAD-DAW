@@ -298,7 +298,15 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const menus: Record<string, { label: string, shortcut?: string, action?: () => void, divider?: boolean, sub?: {label: string, action: () => void}[] }[]> = {
+  const menus: Record<string, { 
+    label: string, 
+    shortcut?: string, 
+    action?: () => void, 
+    divider?: boolean, 
+    disabled?: boolean,
+    title?: string,
+    sub?: {label: string, action: () => void}[] 
+  }[]> = {
     'File': [
       { label: 'New Project', action: () => { dispatch({ type: 'RESET_PROJECT' }); setOpenMenu(null); } },
       { label: 'Manage Projects...', action: () => { dispatch({ type: 'TOGGLE_PROJECT_BROWSER' }); setOpenMenu(null); } },
