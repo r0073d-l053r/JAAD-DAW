@@ -270,13 +270,29 @@ function appReducer(
         showLanes: action.payload.showLanes ?? false,
       };
       return saveHistory(state, [...state.tracks, trackWithLanes]);
-    case "UPDATE_TRACK":
+    case "UPDATE_TRACK": {
+      const { id, changes } = action.payload;
       return {
         ...state,
-        tracks: state.tracks.map((t) =>
-          t.id === action.payload.id ? { ...t, ...action.payload.changes } : t,
-        ),
+        tracks: state.tracks.map((t) => {
+          if (t.id === id) {
+            const updatedTrack = { ...t, ...changes };
+            // If the name changed, propagate it to all clips (stems) on this track
+            if (changes.name) {
+              updatedTrack.clips = t.clips.map(c => ({ ...c, audioData: changes.name }));
+              if (updatedTrack.lanes) {
+                updatedTrack.lanes = updatedTrack.lanes.map(l => ({
+                  ...l,
+                  clips: l.clips.map(c => ({ ...c, audioData: changes.name }))
+                }));
+              }
+            }
+            return updatedTrack;
+          }
+          return t;
+        }),
       };
+    }
     case "FREEZE_TRACK":
       return {
         ...state,
