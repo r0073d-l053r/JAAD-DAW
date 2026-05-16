@@ -98,3 +98,14 @@ body {
 @utility animate-studio-spin {
   animation: studio-spin 1.2s linear infinite;
 }
+
+@keyframes rainbow-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@utility animate-rainbow-shift {
+  animation: rainbow-shift 8s ease infinite;
+  background-size: 400% 400%;
+}

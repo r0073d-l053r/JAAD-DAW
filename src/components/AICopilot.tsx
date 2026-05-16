@@ -87,19 +87,10 @@ export function AICopilot() {
   return (
     <div className="w-80 flex-shrink-0 z-10 relative" style={{ animation: 'liquidGlassIn 0.3s ease-out' }}>
       <LiquidGlassPanel
-        cornerRadius={0}
-        blurAmount={36}
-        saturation={175}
-        backgroundOpacity={0.12}
-        displacementScale={10}
+        overLight={true}
         mode="prominent"
         className="h-full"
         contentClassName="h-full flex flex-col"
-        style={{
-          height: '100%',
-          borderLeft: '1px solid rgba(255,255,255,0.07)',
-          boxShadow: '-10px 0 40px rgba(0,0,0,0.4)',
-        }}
       >
         <div className="flex flex-col h-full">
           {/* Header */}

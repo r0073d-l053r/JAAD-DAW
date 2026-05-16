@@ -31,6 +31,8 @@ interface LiquidGlassProps {
   onDragLeave?: React.DragEventHandler<HTMLDivElement>;
   onDrop?: React.DragEventHandler<HTMLDivElement>;
   onClick?: React.MouseEventHandler<HTMLDivElement>;
+  /** Toggle dark tint for bright backgrounds */
+  overLight?: boolean;
   /** Optional: specific size for the glass area */
   glassSize?: { width: number; height: number };
 }
@@ -56,15 +58,21 @@ const GlassFilter: React.FC<{
 }> = ({ id, displacementScale, aberrationIntensity, width, height, mode, shaderMapUrl }) => (
   <svg style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} aria-hidden="true">
     <defs>
-      <filter id={id} x="-20%" y="-20%" width="140%" height="140%" colorInterpolationFilters="sRGB">
+      <filter 
+        id={id} 
+        x="-35%" y="-35%" width="170%" height="170%" 
+        filterUnits="objectBoundingBox"
+        primitiveUnits="userSpaceOnUse"
+        colorInterpolationFilters="sRGB"
+      >
         <feImage 
           x="0" y="0" width="100%" height="100%" 
           result="DISPLACEMENT_MAP" 
           href={getMap(mode, shaderMapUrl)} 
-          preserveAspectRatio="xMidYMid slice" 
+          preserveAspectRatio="none" 
         />
 
-        {/* Edge detection/intensity from map */}
+        {/* Create edge mask using the displacement map itself */}
         <feColorMatrix
           in="DISPLACEMENT_MAP"
           type="matrix"
@@ -74,63 +82,48 @@ const GlassFilter: React.FC<{
                   0 0 0 1 0"
           result="EDGE_INTENSITY"
         />
+        <feComponentTransfer in="EDGE_INTENSITY" result="EDGE_MASK">
+          <feFuncA type="discrete" tableValues={`0 ${aberrationIntensity * 0.05} 1`} />
+        </feComponentTransfer>
+
+        <feOffset in="SourceGraphic" dx="0" dy="0" result="CENTER_ORIGINAL" />
         
-        {/* Chromatic Aberration: Red channel */}
         <feDisplacementMap 
           in="SourceGraphic" in2="DISPLACEMENT_MAP" 
           scale={displacementScale} 
           xChannelSelector="R" yChannelSelector="G" 
           result="RED_DISPLACED" 
         />
-        <feColorMatrix
-          in="RED_DISPLACED"
-          type="matrix"
-          values="1 0 0 0 0
-                  0 0 0 0 0
-                  0 0 0 0 0
-                  0 0 0 1 0"
-          result="RED_CHANNEL"
-        />
+        <feColorMatrix in="RED_DISPLACED" type="matrix" values="1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0" result="RED_CHANNEL" />
 
-        {/* Green channel with slight scale offset */}
         <feDisplacementMap 
           in="SourceGraphic" in2="DISPLACEMENT_MAP" 
           scale={displacementScale - (aberrationIntensity * 2)} 
           xChannelSelector="R" yChannelSelector="G" 
           result="GREEN_DISPLACED" 
         />
-        <feColorMatrix
-          in="GREEN_DISPLACED"
-          type="matrix"
-          values="0 0 0 0 0
-                  0 1 0 0 0
-                  0 0 0 0 0
-                  0 0 0 1 0"
-          result="GREEN_CHANNEL"
-        />
+        <feColorMatrix in="GREEN_DISPLACED" type="matrix" values="0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 0" result="GREEN_CHANNEL" />
 
-        {/* Blue channel with more scale offset */}
         <feDisplacementMap 
           in="SourceGraphic" in2="DISPLACEMENT_MAP" 
           scale={displacementScale - (aberrationIntensity * 4)} 
           xChannelSelector="R" yChannelSelector="G" 
           result="BLUE_DISPLACED" 
         />
-        <feColorMatrix
-          in="BLUE_DISPLACED"
-          type="matrix"
-          values="0 0 0 0 0
-                  0 0 0 0 0
-                  0 0 1 0 0
-                  0 0 0 1 0"
-          result="BLUE_CHANNEL"
-        />
+        <feColorMatrix in="BLUE_DISPLACED" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 0" result="BLUE_CHANNEL" />
 
         <feBlend in="GREEN_CHANNEL" in2="BLUE_CHANNEL" mode="screen" result="GB_COMBINED" />
         <feBlend in="RED_CHANNEL" in2="GB_COMBINED" mode="screen" result="RGB_COMBINED" />
         
-        {/* Soften the edges */}
-        <feGaussianBlur in="RGB_COMBINED" stdDeviation="0.5" result="FINAL_BLUR" />
+        <feGaussianBlur in="RGB_COMBINED" stdDeviation="0.5" result="ABERRATED_BLURRED" />
+        <feComposite in="ABERRATED_BLURRED" in2="EDGE_MASK" operator="in" result="EDGE_ABERRATION" />
+
+        <feComponentTransfer in="EDGE_MASK" result="INVERTED_MASK">
+          <feFuncA type="table" tableValues="1 0" />
+        </feComponentTransfer>
+        <feComposite in="CENTER_ORIGINAL" in2="INVERTED_MASK" operator="in" result="CENTER_CLEAN" />
+
+        <feComposite in="EDGE_ABERRATION" in2="CENTER_CLEAN" operator="over" />
       </filter>
     </defs>
   </svg>
@@ -142,12 +135,13 @@ export function LiquidGlassPanel({
   contentClassName = '',
   style,
   cornerRadius = 20,
-  blurAmount = 32,
-  saturation = 180,
-  backgroundOpacity = 0.08,
+  blurAmount = 10,
+  saturation = 140,
+  backgroundOpacity = 0.1,
   mode = 'prominent',
-  displacementScale = 30,
+  displacementScale = 100,
   aberrationIntensity = 2,
+  overLight = false,
   onDragOver,
   onDragLeave,
   onDrop,
@@ -189,7 +183,6 @@ export function LiquidGlassPanel({
       style={{
         position: 'relative',
         borderRadius: `${cornerRadius}px`,
-        overflow: 'hidden',
         isolation: 'isolate',
         ...style,
       }}
@@ -198,59 +191,129 @@ export function LiquidGlassPanel({
       onDrop={onDrop}
       onClick={onClick}
     >
-      <GlassFilter 
-        id={filterId}
-        displacementScale={displacementScale}
-        aberrationIntensity={aberrationIntensity}
-        width={size.width}
-        height={size.height}
-        mode={mode}
-        shaderMapUrl={shaderMapUrl}
-      />
+      <svg style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} aria-hidden="true">
+        <defs>
+          <filter 
+            id={filterId} 
+            x="-35%" y="-35%" width="170%" height="170%" 
+            filterUnits="objectBoundingBox"
+            primitiveUnits="userSpaceOnUse"
+            colorInterpolationFilters="sRGB"
+          >
+            <feImage 
+              x="0" y="0" width="100%" height="100%" 
+              result="DISPLACEMENT_MAP" 
+              href={getMap(mode, shaderMapUrl)} 
+              preserveAspectRatio="none" 
+            />
 
-      {/* ── Layer 1: Frosted glass backdrop with liquid warp ── */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
+            {/* Create edge mask using the displacement map itself */}
+            <feColorMatrix
+              in="DISPLACEMENT_MAP"
+              type="matrix"
+              values="0.3 0.3 0.3 0 0
+                      0.3 0.3 0.3 0 0
+                      0.3 0.3 0.3 0 0
+                      0 0 0 1 0"
+              result="EDGE_INTENSITY"
+            />
+            <feComponentTransfer in="EDGE_INTENSITY" result="EDGE_MASK">
+              <feFuncA type="discrete" tableValues={`0 ${aberrationIntensity * 0.05} 1`} />
+            </feComponentTransfer>
+
+            <feOffset in="SourceGraphic" dx="0" dy="0" result="CENTER_ORIGINAL" />
+            
+            <feDisplacementMap 
+              in="SourceGraphic" in2="DISPLACEMENT_MAP" 
+              scale={displacementScale} 
+              xChannelSelector="R" yChannelSelector="G" 
+              result="RED_DISPLACED" 
+            />
+            <feColorMatrix in="RED_DISPLACED" type="matrix" values="1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0" result="RED_CHANNEL" />
+
+            <feDisplacementMap 
+              in="SourceGraphic" in2="DISPLACEMENT_MAP" 
+              scale={displacementScale - (aberrationIntensity * 2)} 
+              xChannelSelector="R" yChannelSelector="G" 
+              result="GREEN_DISPLACED" 
+            />
+            <feColorMatrix in="GREEN_DISPLACED" type="matrix" values="0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 0" result="GREEN_CHANNEL" />
+
+            <feDisplacementMap 
+              in="SourceGraphic" in2="DISPLACEMENT_MAP" 
+              scale={displacementScale - (aberrationIntensity * 4)} 
+              xChannelSelector="R" yChannelSelector="G" 
+              result="BLUE_DISPLACED" 
+            />
+            <feColorMatrix in="BLUE_DISPLACED" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 0" result="BLUE_CHANNEL" />
+
+            <feBlend in="GREEN_CHANNEL" in2="BLUE_CHANNEL" mode="screen" result="GB_COMBINED" />
+            <feBlend in="RED_CHANNEL" in2="GB_COMBINED" mode="screen" result="RGB_COMBINED" />
+            
+            <feGaussianBlur in="RGB_COMBINED" stdDeviation="0.5" result="ABERRATED_BLURRED" />
+            <feComposite in="ABERRATED_BLURRED" in2="EDGE_MASK" operator="in" result="EDGE_ABERRATION" />
+
+            <feComponentTransfer in="EDGE_MASK" result="INVERTED_MASK">
+              <feFuncA type="table" tableValues="1 0" />
+            </feComponentTransfer>
+            <feComposite in="CENTER_ORIGINAL" in2="INVERTED_MASK" operator="in" result="CENTER_CLEAN" />
+
+            <feComposite in="EDGE_ABERRATION" in2="CENTER_CLEAN" operator="over" />
+          </filter>
+        </defs>
+      </svg>
+
+      {/* ── Background Glass Layers (Clipped) ── */}
+      <div 
+        style={{ 
+          position: 'absolute', 
+          inset: 0, 
+          overflow: 'hidden', 
           borderRadius: `${cornerRadius}px`,
-          backdropFilter: `blur(${blurAmount}px) saturate(${saturation}%) brightness(1.05)`,
-          WebkitBackdropFilter: `blur(${blurAmount}px) saturate(${saturation}%) brightness(1.05)`,
-          filter: `url(#${filterId})`,
-          backgroundColor: `rgba(15, 15, 25, ${backgroundOpacity})`,
           zIndex: 0,
-        }}
-      />
-
-      {/* ── Layer 2: Subtle Prismatic Sheen ── */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          borderRadius: `${cornerRadius}px`,
-          background: `linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.05) 100%)`,
-          zIndex: 1,
           pointerEvents: 'none',
+          boxShadow: overLight ? '0 16px 70px rgba(0,0,0,0.5)' : '0 12px 40px rgba(0,0,0,0.3)',
         }}
-      />
+      >
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            borderRadius: `${cornerRadius}px`,
+            backdropFilter: `blur(${blurAmount + (overLight ? 4 : 0)}px) saturate(${saturation}%) brightness(${overLight ? 0.8 : 1.1})`,
+            WebkitBackdropFilter: `blur(${blurAmount + (overLight ? 4 : 0)}px) saturate(${saturation}%) brightness(${overLight ? 0.8 : 1.1})`,
+            filter: `url(#${filterId})`,
+            backgroundColor: overLight ? 'rgba(0, 0, 0, 0.4)' : `rgba(15, 15, 25, ${backgroundOpacity})`,
+            zIndex: 0,
+          }}
+        />
 
-      {/* ── Layer 3: Specular Edge (Glass border) ── */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          borderRadius: `${cornerRadius}px`,
-          padding: '1px',
-          background: `linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.05) 40%, rgba(255,255,255,0.1) 100%)`,
-          WebkitMask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
-          WebkitMaskComposite: 'xor',
-          maskComposite: 'exclude',
-          zIndex: 2,
-          pointerEvents: 'none',
-        }}
-      />
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            borderRadius: `${cornerRadius}px`,
+            background: `linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.05) 100%)`,
+            zIndex: 1,
+          }}
+        />
 
-      {/* ── Content ── */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            borderRadius: `${cornerRadius}px`,
+            padding: '1px',
+            background: `linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.02) 40%, rgba(255,255,255,0.1) 100%)`,
+            WebkitMask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
+            WebkitMaskComposite: 'xor',
+            maskComposite: 'exclude',
+            zIndex: 2,
+          }}
+        />
+      </div>
+
+      {/* ── Content (Unclipped for dropdowns) ── */}
       <div className={contentClassName} style={{ position: 'relative', zIndex: 10 }}>
         {children}
       </div>
