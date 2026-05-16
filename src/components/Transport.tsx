@@ -93,10 +93,19 @@ export function Transport() {
   }, [dispatch]);
 
   const prevIsPlaying = useRef(state.isPlaying);
+  const lastTimeRef = useRef(state.currentTime);
 
   useEffect(() => {
-    // Only trigger when isPlaying changes
-    if (state.isPlaying && !prevIsPlaying.current) {
+    // Determine if we should trigger a playback start (either from stop or a manual seek)
+    const isStarting = state.isPlaying && !prevIsPlaying.current;
+    const isSeeking = state.isPlaying && prevIsPlaying.current && state.currentTime !== lastTimeRef.current;
+
+    if (isStarting || isSeeking) {
+      // STOP EXISTING if we are seeking
+      if (isSeeking) {
+        audioEngine.stopAll();
+      }
+
       // START PLAYBACK
       audioEngine.init();
       audioEngine.setMasterVolume(state.masterVolume);
@@ -109,7 +118,6 @@ export function Transport() {
       state.tracks.forEach(track => {
         if (track.muted) return;
         
-        // SUPPORT FOR TRACK FREEZING: If frozen, play the pre-rendered buffer instead of individual clips
         if (track.isFrozen && track.frozenBufferId) {
           const buffer = audioEngine.buffers.get(track.frozenBufferId);
           if (buffer) {
@@ -119,20 +127,12 @@ export function Transport() {
                let offset = state.currentTime;
                let remaining = trackDuration - state.currentTime;
                
-               audioEngine.playClip(
-                 `frozen_${track.id}`,
-                 track.id,
-                 startContextTime,
-                 offset,
-                 remaining,
-                 track.frozenBufferId
-               );
-               return; // Skip individual clips
+               audioEngine.playClip(`frozen_${track.id}`, track.id, startContextTime, offset, remaining, track.frozenBufferId);
+               return;
              }
           }
         }
 
-        // ONLY play clips on the main track. Lanes are for storage/alternates.
         track.clips.forEach(clip => {
           if (clip.start + clip.duration > state.currentTime) {
             let clipStartContextTime = scheduleTime;
@@ -140,24 +140,14 @@ export function Transport() {
             let remainingDuration = clip.duration;
             
             if (clip.start > state.currentTime) {
-              // Clip starts in the future relative to current playhead
               clipStartContextTime = scheduleTime + (clip.start - state.currentTime);
             } else {
-              // Clip is already playing at current playhead
               const overlap = state.currentTime - clip.start;
               offset += overlap;
               remainingDuration -= overlap;
             }
             
-            audioEngine.playClip(
-              clip.id, 
-              track.id, 
-              clipStartContextTime, 
-              offset, 
-              remainingDuration,
-              clip.bufferId,
-              clip.volumeEnvelope
-            );
+            audioEngine.playClip(clip.id, track.id, clipStartContextTime, offset, remainingDuration, clip.bufferId, clip.volumeEnvelope);
           }
         });
       });
@@ -165,7 +155,9 @@ export function Transport() {
       // STOP PLAYBACK
       audioEngine.stopAll();
     }
+
     prevIsPlaying.current = state.isPlaying;
+    lastTimeRef.current = state.currentTime;
   }, [state.isPlaying, state.currentTime, state.tracks, state.looping, state.loopStart, state.loopEnd, state.masterVolume]);
 
   useEffect(() => {
