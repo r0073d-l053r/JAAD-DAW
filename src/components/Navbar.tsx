@@ -13,6 +13,7 @@ import { LiquidGlassPanel } from './LiquidGlass';
 import { DocumentationModal } from './DocumentationModal';
 import { ShortcutsModal } from './ShortcutsModal';
 import { AboutModal } from './AboutModal';
+import { LearnModal } from './LearnModal';
 
 export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => void }) {
   const { state, dispatch } = useApp();
@@ -26,6 +27,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
   const [isDocOpen, setIsDocOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [isLearnOpen, setIsLearnOpen] = useState(false);
 
   // Recalculate dropdown position when menu opens
   useEffect(() => {
@@ -379,9 +381,9 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
       } },
     ],
     'Help': [
+      { label: 'Learn J.A.A.D. (Wiki)', action: () => { setIsLearnOpen(true); setOpenMenu(null); } },
       { label: 'Documentation', action: () => { setIsDocOpen(true); setOpenMenu(null); } },
       { label: 'Keyboard Shortcuts', action: () => { setIsShortcutsOpen(true); setOpenMenu(null); } },
-      { label: 'AI Assistant Tutorial', disabled: true, action: () => {}, title: 'This feature will be available soon!' },
       { divider: true, label: '' },
       { label: 'About', action: () => { setIsAboutOpen(true); setOpenMenu(null); } },
     ]
@@ -738,6 +740,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
       <DocumentationModal isOpen={isDocOpen} onClose={() => setIsDocOpen(false)} />
       <ShortcutsModal isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} />
       <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
+      <LearnModal isOpen={isLearnOpen} onClose={() => setIsLearnOpen(false)} />
     </header>
   );
 }
