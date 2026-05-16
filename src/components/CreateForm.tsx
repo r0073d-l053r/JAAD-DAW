@@ -266,7 +266,7 @@ export function CreateForm() {
       <LiquidGlassPanel
         cornerRadius={isExpanded ? 32 : 9999}
         overLight={true}
-        mode="prominent"
+        mode="standard"
         className={`border transition-all duration-500 ${isDragOver ? "border-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.4)]" : "border-white/10 shadow-[0_0_60px_rgba(0,0,0,0.6)]"}`}
         contentClassName={`flex flex-col transition-all duration-500 ${isExpanded ? 'w-[900px]' : 'w-auto'}`}
         onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
@@ -391,7 +391,7 @@ export function CreateForm() {
               backgroundOpacity={0.15}
               displacementScale={45}
               aberrationIntensity={3}
-              mode="prominent"
+              mode="standard"
               className="h-12 border border-white/20 shadow-[0_0_15px_rgba(175,82,222,0.15)] overflow-hidden hover:shadow-[0_0_40px_rgba(175,82,222,0.5)] transition-shadow duration-500"
               contentClassName="h-full flex items-stretch px-1"
             >

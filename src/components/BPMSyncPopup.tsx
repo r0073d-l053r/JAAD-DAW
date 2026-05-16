@@ -30,7 +30,7 @@ export function BPMSyncPopup() {
             cornerRadius={24}
             blurAmount={40}
             backgroundOpacity={0.2}
-            mode="prominent"
+            mode="standard"
             className="border border-white/20 shadow-2xl"
             contentClassName="p-8 flex flex-col items-center text-center"
           >

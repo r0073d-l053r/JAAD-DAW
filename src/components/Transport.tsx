@@ -189,7 +189,7 @@ export function Transport() {
     <LiquidGlassPanel
       cornerRadius={0}
       overLight={true}
-      mode="prominent"
+      mode="standard"
       className="h-16 flex-shrink-0 z-[100] relative border-t border-white/10"
       contentClassName="h-full flex items-center justify-between px-6"
     >
