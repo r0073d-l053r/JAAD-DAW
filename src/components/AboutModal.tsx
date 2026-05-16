@@ -35,14 +35,14 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
              <div className="absolute inset-0 opacity-30" 
                   style={{ backgroundImage: `radial-gradient(circle at 20% 50%, rgba(255,45,85,0.4) 0%, transparent 50%), radial-gradient(circle at 80% 50%, rgba(107,68,255,0.4) 0%, transparent 50%)` }} 
              />
-             <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
-                <div className="w-20 h-20 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xl flex items-center justify-center mb-4 shadow-2xl relative group overflow-hidden">
-                   <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                   <Sparkles size={40} className="text-white group-hover:scale-110 transition-transform duration-500" />
-                </div>
-                <h2 className="text-3xl font-black text-white tracking-tighter uppercase">JAAD-DAW</h2>
-                <p className="text-[10px] text-primary font-bold tracking-[0.4em] uppercase mt-1">v1.1.0 • Built with Passion</p>
-             </div>
+                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
+                 <div className="w-20 h-20 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xl flex items-center justify-center mb-4 shadow-2xl relative group overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <Sparkles size={40} className="text-white group-hover:scale-110 transition-transform duration-500" />
+                 </div>
+                 <h2 className="text-3xl font-black text-white tracking-tighter uppercase">JAAD</h2>
+                 <p className="text-[10px] text-primary font-bold tracking-[0.4em] uppercase mt-1">v1.1.0 • Built with Passion</p>
+              </div>
 
              <button 
                 onClick={onClose}
@@ -59,9 +59,9 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
                  <Music size={18} />
                  <h4 className="text-[10px] font-black uppercase tracking-[0.3em]">The Vision</h4>
               </div>
-              <p className="text-zinc-300 leading-relaxed text-base italic">
-                "JAAD-DAW started as a personal quest. After years spent in smoky basements with vintage synths and late nights debugging neural networks, I realized the world didn't need 'Just Another' tool—it needed a workspace that felt alive. I built this because I wanted a DAW that understands the rhythm of my thoughts as much as the frequency of my kicks."
-              </p>
+                 <p className="text-zinc-300 leading-relaxed text-base italic">
+                   "JAAD started as a personal quest. After years spent in smoky basements with vintage synths and late nights debugging neural networks, I realized the world didn't need 'Just Another' tool—it needed a workspace that felt alive. I built this because I wanted a DAW that understands the rhythm of my thoughts as much as the frequency of my kicks."
+                 </p>
             </div>
 
             <div className="space-y-4">

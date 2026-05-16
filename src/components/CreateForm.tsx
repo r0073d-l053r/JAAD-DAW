@@ -1,8 +1,29 @@
 import React, { useState } from "react";
-import { Expand, ChevronDown, Wand2, Loader2 } from "lucide-react";
+import { 
+  Expand, 
+  ChevronDown, 
+  Wand2, 
+  Loader2, 
+  Shrink, 
+  Music, 
+  Drum, 
+  Mic2, 
+  Mic, 
+  Piano, 
+  Settings2, 
+  Sparkles,
+  Info,
+  Guitar,
+  Wind,
+  Fan,
+  Volume2,
+  Type,
+  ChevronUp
+} from "lucide-react";
 import { useApp } from "../lib/store";
 import { GoogleGenAI } from "@google/genai";
 import { audioEngine } from "../lib/audioEngine";
+import { motion, AnimatePresence } from "motion/react";
 
 declare global {
   interface Window {
@@ -15,13 +36,100 @@ declare global {
 
 import { LiquidGlassPanel } from "./LiquidGlass";
 
+const ScrollIndicatorMenu = ({ children, maxHeight, contentClassName }: { children: React.ReactNode, maxHeight: string, contentClassName?: string }) => {
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const [showTop, setShowTop] = React.useState(false);
+  const [showBottom, setShowBottom] = React.useState(false);
+
+  const checkScroll = () => {
+    if (!scrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    setShowTop(scrollTop > 5);
+    setShowBottom(scrollTop + clientHeight < scrollHeight - 5);
+  };
+
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (el) {
+      const resizeObserver = new ResizeObserver(checkScroll);
+      resizeObserver.observe(el);
+      checkScroll();
+      return () => resizeObserver.disconnect();
+    }
+  }, [children]);
+
+  return (
+    <div className="relative w-full group/scroll">
+      <AnimatePresence>
+        {showTop && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute top-1 left-1/2 -translate-x-1/2 z-[60] pointer-events-none text-primary/80"
+          >
+            <ChevronUp size={14} className="animate-bounce" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <div 
+        ref={scrollRef}
+        onScroll={checkScroll}
+        className={`overflow-y-auto custom-scrollbar ${contentClassName}`}
+        style={{ maxHeight }}
+      >
+        {children}
+      </div>
+      <AnimatePresence>
+        {showBottom && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute bottom-1 left-1/2 -translate-x-1/2 z-[60] pointer-events-none text-primary/80"
+          >
+            <ChevronDown size={14} className="animate-bounce" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const INSTRUMENTS = [
+  { name: "Drums", icon: <Drum size={14} /> },
+  { name: "Bass", icon: <Volume2 size={14} /> },
+  { name: "Guitar", icon: <Guitar size={14} /> },
+  { name: "Keyboard", icon: <Piano size={14} /> },
+  { name: "Percussion", icon: <Drum size={14} /> },
+  { name: "Strings", icon: <Music size={14} /> },
+  { name: "Synth", icon: <Fan size={14} /> },
+  { name: "FX", icon: <Sparkles size={14} /> },
+  { name: "Brass", icon: <Wind size={14} /> },
+  { name: "Woodwinds", icon: <Wind size={14} /> },
+  { name: "Vocals", icon: <Mic size={14} /> },
+  { name: "Backing Vocals", icon: <Mic2 size={14} /> },
+  { name: "Song", icon: <Music size={14} /> },
+  { name: "Custom", icon: <Settings2 size={14} /> },
+];
+
+const MODELS = ["V1", "V2", "V3", "V4", "V5"];
+
 export function CreateForm() {
-  const [instrument, setInstrument] = useState("Song");
+  const [instrument, setInstrument] = useState("Vocals");
   const [styles, setStyles] = useState("");
   const [lyrics, setLyrics] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const { state, dispatch } = useApp();
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState<"lyrics" | "advanced">("lyrics");
+  const [model, setModel] = useState("V5");
+  
+  // Advanced Settings State
+  const [weirdness, setWeirdness] = useState(50);
+  const [styleInfluence, setStyleInfluence] = useState(50);
+  const [audioInfluence, setAudioInfluence] = useState(25);
 
+  const { state, dispatch } = useApp();
   const [isDragOver, setIsDragOver] = useState(false);
 
   const handleGenerate = async () => {
@@ -91,21 +199,9 @@ export function CreateForm() {
       const duration = await audioEngine.loadAudio(clipId, file);
 
       if (state.timeSelection) {
-        // Place it on the selected track at the selection start
-        const trackId = state.timeSelection.trackId;
         const start = state.timeSelection.startOffset;
-
-        // Rather than replacing, we'll just add it into the track there, or create a new track
-        // to not destroy user data right now, let's just make a new track
         const trackName = `Generated ${instrument}`;
-        const colors = [
-          "#FF2A5F",
-          "#00E871",
-          "#6B44FF",
-          "#FFBB00",
-          "#00E5FF",
-          "#FF00EA",
-        ];
+        const colors = ["#FF2A5F", "#00E871", "#6B44FF", "#FFBB00", "#00E5FF", "#FF00EA"];
         const randomColor = colors[Math.floor(Math.random() * colors.length)];
 
         dispatch({
@@ -130,14 +226,7 @@ export function CreateForm() {
         });
       } else {
         const trackName = `Generated ${instrument}`;
-        const colors = [
-          "#FF2A5F",
-          "#00E871",
-          "#6B44FF",
-          "#FFBB00",
-          "#00E5FF",
-          "#FF00EA",
-        ];
+        const colors = ["#FF2A5F", "#00E871", "#6B44FF", "#FFBB00", "#00E5FF", "#FF00EA"];
         const randomColor = colors[Math.floor(Math.random() * colors.length)];
 
         dispatch({
@@ -170,118 +259,267 @@ export function CreateForm() {
   };
 
   return (
-    <div
-      className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] transition-all`}
+    <motion.div
+      layout
+      className={`fixed bottom-20 left-1/2 -translate-x-1/2 z-[150] transition-all duration-500`}
     >
       <LiquidGlassPanel
-        cornerRadius={9999}
-        blurAmount={40}
-        backgroundOpacity={0.18}
+        cornerRadius={isExpanded ? 32 : 9999}
+        overLight={true}
         mode="prominent"
-        displacementScale={25}
-        className={`border transition-all ${isDragOver ? "border-orange-500 shadow-[0_0_20px_#f9731680]" : "border-white/10 shadow-2xl"}`}
-        contentClassName="px-6 py-2 flex items-center space-x-4"
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragOver(true);
-        }}
+        className={`border transition-all duration-500 ${isDragOver ? "border-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.4)]" : "border-white/10 shadow-[0_0_60px_rgba(0,0,0,0.6)]"}`}
+        contentClassName={`flex flex-col transition-all duration-500 ${isExpanded ? 'w-[900px]' : 'w-auto'}`}
+        onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
         onDragLeave={() => setIsDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsDragOver(false);
-        }}
+        onDrop={(e) => { e.preventDefault(); setIsDragOver(false); }}
       >
-      <button className="p-2.5 text-zinc-400 hover:text-white hover:bg-white/5 rounded-full transition-colors">
-        <Expand size={16} />
-      </button>
+        {/* Header Section */}
+        <div className={`flex items-center space-x-4 p-2 transition-all ${isExpanded ? 'px-6 pt-6' : 'px-6 py-2'}`}>
+          <button 
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/5 rounded-full transition-all group"
+          >
+            {isExpanded ? <Shrink size={18} /> : <Expand size={18} className="group-hover:scale-110" />}
+          </button>
 
-      <div className="relative group/menu">
-        <button
-          disabled={isGenerating}
-          className="flex items-center space-x-2 bg-white/5 hover:bg-white/10 disabled:opacity-50 text-white px-4 py-2.5 rounded-full transition-colors"
-        >
-          <Wand2 size={16} />
-          <span className="text-sm font-medium">{instrument}</span>
-          <ChevronDown size={14} className="text-zinc-400" />
-        </button>
-        <div className="absolute bottom-full left-0 mb-2 w-48 hidden group-hover/menu:block pointer-events-auto">
-          <LiquidGlassPanel cornerRadius={12} blurAmount={32} backgroundOpacity={0.35} contentClassName="py-1">
-              {[
-                "Song",
-                "Drums",
-                "Bass",
-                "Guitar",
-                "Keyboard",
-                "Percussion",
-                "Strings",
-                "Synth",
-                "FX",
-                "Vocals",
-                "Backing Vocals",
-                "Custom",
-              ].map((item) => (
-                <button
-                  key={item}
-                  className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
-                  onClick={() => setInstrument(item)}
-                >
-                  {item}
-                </button>
-              ))}
-          </LiquidGlassPanel>
-        </div>
-      </div>
+          <div className="relative group/menu">
+            <button
+              disabled={isGenerating}
+              className="flex items-center space-x-3 bg-white/5 hover:bg-white/10 disabled:opacity-50 text-white px-5 py-2.5 rounded-full transition-all border border-white/5"
+            >
+              <div className="text-primary">{INSTRUMENTS.find(i => i.name === instrument)?.icon}</div>
+              <span className="text-sm font-black tracking-tight">{instrument}</span>
+              <ChevronDown size={14} className="text-zinc-500" />
+            </button>
+            <div className="absolute bottom-full left-0 w-64 hidden group-hover/menu:block pointer-events-auto animate-in fade-in slide-in-from-bottom-2 duration-300 z-[1000] pb-2">
+              <LiquidGlassPanel cornerRadius={20} blurAmount={48} backgroundOpacity={0.35} contentClassName="p-1">
+                <ScrollIndicatorMenu maxHeight="280px" contentClassName="py-2">
+                  {INSTRUMENTS.map((item) => (
+                    <button
+                      key={item.name}
+                      className="w-full text-left px-4 py-3 text-sm font-bold text-zinc-300 hover:text-white hover:bg-white/10 transition-all rounded-xl flex items-center gap-4"
+                      onClick={() => setInstrument(item.name)}
+                    >
+                      <span className="text-primary/70">{item.icon}</span>
+                      {item.name}
+                    </button>
+                  ))}
+                </ScrollIndicatorMenu>
+              </LiquidGlassPanel>
+            </div>
+          </div>
 
-      <div className="h-6 w-px bg-white/10" />
-
-      <input
-        type="text"
-        placeholder="Styles"
-        value={styles}
-        onChange={(e) => setStyles(e.target.value)}
-        disabled={isGenerating}
-        className="bg-transparent border-none outline-none text-sm text-white placeholder-zinc-500 w-32 px-2 focus:w-48 transition-all disabled:opacity-50"
-      />
-
-      <div className="h-6 w-px bg-white/10" />
-
-      <input
-        type="text"
-        placeholder="Lyrics"
-        value={lyrics}
-        onChange={(e) => setLyrics(e.target.value)}
-        disabled={isGenerating}
-        className="bg-transparent border-none outline-none text-sm text-white placeholder-zinc-500 w-32 px-2 focus:w-48 transition-all disabled:opacity-50"
-      />
-
-      <div className="flex items-center overflow-hidden rounded-full font-medium bg-gradient-to-r from-pink-500 to-orange-500 text-white">
-        <button
-          disabled={isGenerating}
-          className="hover:bg-black/10 disabled:opacity-80 text-sm px-6 py-2.5 transition-all flex items-center space-x-2"
-          onClick={handleGenerate}
-        >
-          {isGenerating ? (
-            <Loader2 size={16} className="animate-spin" />
-          ) : (
-            <Wand2 size={16} />
+          {isExpanded && (
+            <div className="relative group/model">
+              <button className="flex items-center space-x-3 bg-white/5 hover:bg-white/10 text-white px-5 py-2.5 rounded-full transition-all border border-white/5">
+                <Music size={14} className="text-primary" />
+                <span className="text-sm font-black">{model}</span>
+                <ChevronDown size={14} className="text-zinc-500" />
+              </button>
+              <div className="absolute bottom-full left-0 w-32 hidden group-hover/model:block pointer-events-auto animate-in fade-in slide-in-from-bottom-2 duration-300 z-[1000] pb-2">
+                <LiquidGlassPanel cornerRadius={16} blurAmount={32} backgroundOpacity={0.3} contentClassName="p-1">
+                  <ScrollIndicatorMenu maxHeight="200px" contentClassName="py-1">
+                  {MODELS.map(m => (
+                    <button 
+                      key={m}
+                      onClick={() => setModel(m)}
+                      className="w-full text-left px-4 py-2.5 text-sm font-bold text-zinc-300 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+                    >
+                      {m}
+                    </button>
+                  ))}
+                  </ScrollIndicatorMenu>
+                </LiquidGlassPanel>
+              </div>
+            </div>
           )}
-          <span>
-            {isGenerating
-              ? "Generating..."
-              : state.timeSelection
-                ? "Replace"
-                : "Create"}
-          </span>
-        </button>
-        <div className="w-px self-stretch bg-white/20 pointer-events-none" />
-        <button
-          disabled={isGenerating}
-          className="hover:bg-black/10 disabled:opacity-80 px-2 py-2.5 transition-all flex items-center justify-center min-w-[32px]"
-        >
-          <ChevronDown size={16} />
-        </button>
-      </div>
+
+          {!isExpanded && <div className="h-6 w-px bg-white/10" />}
+
+          {!isExpanded && (
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                <Music size={14} />
+                <input
+                  type="text"
+                  placeholder="Styles"
+                  value={styles}
+                  onChange={(e) => setStyles(e.target.value)}
+                  disabled={isGenerating}
+                  className="bg-transparent border-none outline-none text-sm text-white placeholder-zinc-700 w-32 px-2 focus:w-48 transition-all disabled:opacity-50 font-bold"
+                />
+              </div>
+              <div className="h-6 w-px bg-white/10" />
+              <div className="flex items-center space-x-2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                <Type size={14} />
+                <input
+                  type="text"
+                  placeholder="Lyrics"
+                  value={lyrics}
+                  onChange={(e) => setLyrics(e.target.value)}
+                  disabled={isGenerating}
+                  className="bg-transparent border-none outline-none text-sm text-white placeholder-zinc-700 w-32 px-2 focus:w-48 transition-all disabled:opacity-50 font-bold"
+                />
+              </div>
+            </div>
+          )}
+
+          {isExpanded && (
+            <div className="flex bg-black/40 p-1.5 rounded-full border border-white/5 backdrop-blur-xl">
+              <button 
+                onClick={() => setActiveTab("lyrics")}
+                className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'lyrics' ? 'bg-white/15 text-white shadow-xl' : 'text-zinc-600 hover:text-zinc-400'}`}
+              >
+                Lyrics
+              </button>
+              <button 
+                onClick={() => setActiveTab("advanced")}
+                className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'advanced' ? 'bg-white/15 text-white shadow-xl' : 'text-zinc-600 hover:text-zinc-400'}`}
+              >
+                Advanced Options
+              </button>
+            </div>
+          )}
+
+          <div className="flex-1" />
+
+          {/* Rainbow Create Button Section */}
+          <div className="relative group/create flex items-stretch h-12">
+            <LiquidGlassPanel
+              cornerRadius={9999}
+              blurAmount={10}
+              backgroundOpacity={0.05}
+              displacementScale={12}
+              aberrationIntensity={1.5}
+              mode="shader"
+              className="h-12 border border-white/20 shadow-[0_0_20px_rgba(255,45,85,0.15)] overflow-hidden"
+              contentClassName="h-full flex items-stretch px-1"
+            >
+              <div className="absolute inset-0 opacity-40 animate-rainbow-shift pointer-events-none mix-blend-screen" 
+                   style={{ background: 'linear-gradient(45deg, #ff0000, #00ff00, #0000ff, #ff0000)' }} 
+              />
+              <button
+                disabled={isGenerating}
+                className="hover:bg-white/10 disabled:opacity-80 text-sm px-8 py-2.5 transition-all flex items-center space-x-3 text-white font-black uppercase tracking-tighter relative z-10"
+                onClick={handleGenerate}
+              >
+                {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Music size={16} className="text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]" />}
+                <span>{isGenerating ? "Generating..." : state.timeSelection ? "Replace" : "Create"}</span>
+              </button>
+              <div className="w-px self-stretch bg-white/20 pointer-events-none relative z-10" />
+              <button
+                disabled={isGenerating}
+                className="hover:bg-white/10 disabled:opacity-80 px-4 py-2.5 transition-all flex items-center justify-center min-w-[48px] text-white relative z-10"
+              >
+                <ChevronDown size={20} className="drop-shadow-[0_0_5px_rgba(255,255,255,0.4)]" />
+              </button>
+            </LiquidGlassPanel>
+          </div>
+        </div>
+
+        {/* Expansion Content */}
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+              className="overflow-hidden px-8 pb-10 pt-6 flex gap-8"
+            >
+              {/* Styles Pane */}
+              <div className="flex-1 flex flex-col space-y-4">
+                <div className="flex items-center gap-2 px-1">
+                  <h4 className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.3em]">Styles</h4>
+                </div>
+                <div className="flex-1 bg-black/50 rounded-[28px] border border-white/5 p-6 min-h-[300px] shadow-inner relative group/styles">
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover/styles:opacity-100 transition-opacity pointer-events-none" />
+                  <textarea 
+                    value={styles}
+                    onChange={(e) => setStyles(e.target.value)}
+                    placeholder="Describe the genre, mood, instruments, tempo..."
+                    className="w-full h-full bg-transparent border-none outline-none text-zinc-200 placeholder-zinc-800 resize-none text-sm font-bold leading-relaxed relative z-10"
+                  />
+                </div>
+              </div>
+
+              {/* Dynamic Right Pane */}
+              <div className="flex-1 flex flex-col space-y-4">
+                <div className="flex items-center justify-between px-1">
+                  <h4 className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.3em]">
+                    {activeTab === 'lyrics' ? 'Lyrics' : 'Advanced Settings'}
+                  </h4>
+                  {activeTab === 'lyrics' && <Wand2 size={12} className="text-zinc-700 hover:text-primary cursor-pointer transition-colors" />}
+                </div>
+                
+                <div className="flex-1 bg-black/50 rounded-[28px] border border-white/5 p-8 min-h-[300px] shadow-inner relative group/right">
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover/right:opacity-100 transition-opacity pointer-events-none" />
+                  
+                  {activeTab === 'lyrics' ? (
+                    <textarea 
+                      value={lyrics}
+                      onChange={(e) => setLyrics(e.target.value)}
+                      placeholder="Write your lyrics here or leave empty for an instrumental masterpiece..."
+                      className="w-full h-full bg-transparent border-none outline-none text-zinc-200 placeholder-zinc-800 resize-none text-sm font-bold leading-relaxed relative z-10"
+                    />
+                  ) : (
+                    <div className="space-y-8 relative z-10">
+                       <div className="relative">
+                          <input 
+                            type="text" 
+                            placeholder="Exclude styles..." 
+                            className="w-full bg-black/40 border border-white/10 rounded-2xl px-12 py-4 text-sm font-bold outline-none focus:border-primary/50 transition-all placeholder-zinc-800" 
+                          />
+                          <Settings2 size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-700" />
+                       </div>
+
+                       <div className="space-y-8 pt-4">
+                          {[
+                            { label: 'Weirdness', val: weirdness, set: setWeirdness, info: 'Control the AI creativity level' },
+                            { label: 'Style Influence', val: styleInfluence, set: setStyleInfluence, info: 'How strictly to follow the style tags' },
+                            { label: 'Audio Influence', val: audioInfluence, set: setAudioInfluence, info: 'Impact of the reference audio input' },
+                          ].map((s, idx) => (
+                            <div key={idx} className="space-y-4">
+                               <div className="flex justify-between items-center">
+                                  <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-zinc-500">
+                                     {s.label}
+                                     <div className="group/info relative">
+                                        <Info size={12} className="text-zinc-700 cursor-help" />
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-3 bg-black/90 border border-white/10 rounded-xl text-[9px] text-zinc-400 opacity-0 group-hover/info:opacity-100 transition-opacity pointer-events-none backdrop-blur-xl z-[2000]">
+                                           {s.info}
+                                        </div>
+                                     </div>
+                                  </div>
+                                  <span className="text-white font-mono font-black text-sm">{s.val}%</span>
+                               </div>
+                               <div className="flex items-center gap-6">
+                                  <div className="flex gap-1.5">
+                                     {Array.from({ length: 12 }).map((_, i) => (
+                                       <div 
+                                         key={i} 
+                                         className={`w-1 h-5 rounded-full transition-all duration-500 ${i/12 * 100 < s.val ? 'bg-primary' : 'bg-white/5'}`} 
+                                       />
+                                     ))}
+                                  </div>
+                                  <input 
+                                    type="range" 
+                                    min="0" max="100" 
+                                    value={s.val} 
+                                    onChange={(e) => s.set(parseInt(e.target.value))}
+                                    className="flex-1 accent-primary h-1.5 bg-white/5 rounded-full cursor-pointer appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(255,255,255,0.5)]" 
+                                  />
+                               </div>
+                            </div>
+                          ))}
+                       </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </LiquidGlassPanel>
-    </div>
+    </motion.div>
   );
 }

@@ -45,15 +45,15 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
         >
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-white/5 bg-white/5">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary border border-primary/30 shadow-[0_0_15px_rgba(255,45,85,0.2)]">
-                <Keyboard size={22} />
-              </div>
-              <div>
-                <h2 className="text-xl font-black text-white uppercase tracking-tight">Keyboard Shortcuts</h2>
-                <p className="text-[10px] text-zinc-500 font-bold tracking-[0.2em] uppercase">Power User Commands</p>
-              </div>
-            </div>
+                 <div className="flex items-center gap-4">
+                   <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary border border-primary/30 shadow-[0_0_15px_rgba(255,45,85,0.2)]">
+                     <Keyboard size={22} />
+                   </div>
+                   <div>
+                     <h2 className="text-xl font-black text-white uppercase tracking-tight">Keyboard Shortcuts</h2>
+                     <p className="text-[10px] text-zinc-500 font-bold tracking-[0.2em] uppercase">Just Another AI DAW</p>
+                   </div>
+                 </div>
             
             <button 
               onClick={onClose}

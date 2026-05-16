@@ -1,6 +1,6 @@
-# JAAD-DAW Documentation
+# JAAD Documentation
 
-Welcome to **JAAD-DAW** (Just Another Awesome DAW), a high-fidelity, local-first Digital Audio Workstation built for the modern web. This project combines professional-grade audio processing with a stunning "Liquid Glass" aesthetic.
+Welcome to **JAAD** (Just Another AI DAW), a high-fidelity, local-first Digital Audio Workstation built for the modern web. This project combines professional-grade audio processing with a stunning "Liquid Glass" aesthetic.
 
 ## 🚀 Quick Start & Installation
 
@@ -10,27 +10,32 @@ Welcome to **JAAD-DAW** (Just Another Awesome DAW), a high-fidelity, local-first
 
 ### Installation Steps
 1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/your-repo/JAAD-DAW.git
-   cd JAAD-DAW
-   ```
+    ```bash
+    git clone hhttps://github.com/r0073d-l053r/JAAD-DAW.git
+    cd JAAD-DAW
+    ```
 
 2. **Install dependencies**:
    ```bash
    npm install
    ```
 
-3. **Run the development server**:
+3. **First Time Build & Updates**:
+   ```bash
+   npm run build
+   ```
+
+4. **Run the development server**:
    ```bash
    npm run dev
    ```
-   Open [http://localhost:3000](http://localhost:3000) in your browser.
+   Open [http://localhost:3000/JAAD-DAW/] in your browser.
 
 ---
 
 ## 🛠 Setup & Environment Variables
 
-JAAD-DAW uses environment variables for its AI and Cloud features. Create a `.env` file in the root directory:
+JAAD uses environment variables for its AI and Cloud features. Create a `.env` file in the root directory:
 
 ```env
 # Gemini AI (For Auto-Tagging and Intelligent Features)
@@ -112,4 +117,4 @@ If you want to use cloud saving, you'll need to create a Firebase project at the
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [TODO.md](todo.md) for current priorities and upcoming features.
+We welcome contributions! Please see the (todo.md) for current priorities and upcoming features.

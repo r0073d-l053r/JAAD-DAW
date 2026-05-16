@@ -7,7 +7,7 @@ import docContentImport from '../../doc.md?raw';
 
 // Fallback content in case the file doesn't load
 const FALLBACK_DOC = `
-# JAAD-DAW Documentation (Emergency Backup)
+# JAAD Documentation (Emergency Backup)
 
 It looks like the external documentation file failed to load, but don't worry! Here is a quick start guide.
 
