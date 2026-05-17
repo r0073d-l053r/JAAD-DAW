@@ -5,6 +5,8 @@ import { audioEngine } from '../lib/audioEngine';
 import { Volume2 } from './Icons';
 import { MoreHorizontal, Trash2, Download, Wand2 } from 'lucide-react';
 import { useGemini } from '../lib/useGemini';
+import { saveAsset } from '../lib/assetManager';
+import { uploadAssetCloud } from '../lib/syncUtils';
 
 import { LiquidGlassPanel } from './LiquidGlass';
 import { detectBPMOffline } from '../lib/essentiaBPM';
@@ -59,6 +61,10 @@ export function Mixer() {
           const id = 'clip_' + Date.now() + '_' + i;
           const duration = await audioEngine.loadAudio(id, file);
           loadedClipIds.push(id);
+
+          await saveAsset(id, file);
+          uploadAssetCloud(id, file).catch(err => console.error("Cloud upload for mixer asset failed", err));
+          dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
 
           const clip: Clip = {
             id,
