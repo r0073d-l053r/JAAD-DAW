@@ -140,7 +140,8 @@ export function Transport() {
             let remainingDuration = clip.duration;
             
             if (clip.start > state.currentTime) {
-              clipStartContextTime = scheduleTime + (clip.start - state.currentTime);
+              const rate = audioEngine.playbackRate > 0 ? audioEngine.playbackRate : 1.0;
+              clipStartContextTime = scheduleTime + (clip.start - state.currentTime) / rate;
             } else {
               const overlap = state.currentTime - clip.start;
               offset += overlap;

@@ -101,7 +101,8 @@ class AudioEngine {
   }
 
   nextNote() {
-    const secondsPerBeat = 60.0 / this.getBpmAtTime(this.getCurrentTime());
+    const projectTime = this.playPositionAtStart + (this.nextNoteTime - this.playStartTime) * this.playbackRate;
+    const secondsPerBeat = 60.0 / this.getBpmAtTime(projectTime);
     const rate = this.playbackRate > 0 ? this.playbackRate : 1.0;
     this.nextNoteTime += secondsPerBeat / rate;
     this.currentBeat++;
@@ -386,15 +387,20 @@ class AudioEngine {
     
     // Calculate which beat we are currently on
     const beatsPassed = startTimeInSeconds / secondsPerBeat;
-    this.currentBeat = Math.floor(beatsPassed);
+    const decimalPart = beatsPassed % 1;
+    const isCloseToBeat = decimalPart < 0.001 || decimalPart > 0.999;
     
-    // Determine the exact time for the NEXT beat to be scheduled
-    const nextBeatInProject = (this.currentBeat + 1) * secondsPerBeat;
-    const rate = this.playbackRate > 0 ? this.playbackRate : 1.0;
-    const timeUntilNextBeat = (nextBeatInProject - startTimeInSeconds) / rate;
-    
-    this.nextNoteTime = this.playStartTime + timeUntilNextBeat;
-    this.currentBeat++; // Advance beat counter for the next scheduled note
+    if (isCloseToBeat) {
+      this.currentBeat = Math.round(beatsPassed);
+      this.nextNoteTime = this.playStartTime;
+    } else {
+      this.currentBeat = Math.floor(beatsPassed);
+      const nextBeatInProject = (this.currentBeat + 1) * secondsPerBeat;
+      const rate = this.playbackRate > 0 ? this.playbackRate : 1.0;
+      const timeUntilNextBeat = (nextBeatInProject - startTimeInSeconds) / rate;
+      this.nextNoteTime = this.playStartTime + timeUntilNextBeat;
+      this.currentBeat++; // Advance beat counter for the next scheduled note
+    }
     
     if (this.metronomeTimerID !== null) {
       window.clearTimeout(this.metronomeTimerID);
