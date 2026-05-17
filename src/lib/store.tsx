@@ -947,6 +947,10 @@ function appReducer(
         clipboard: [],
         past: [],
         future: [],
+        projectName: "Untitled Project",
+        projectId: "",
+        isDefaultName: true,
+        hasManuallySaved: false,
       };
     }
     case "LOAD_PROJECT":

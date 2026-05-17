@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../lib/store';
-import { listProjects, deleteProjectCloud, downloadProjectBundleCloud } from '../lib/syncUtils';
+import { listProjects, deleteProjectCloud, downloadProjectBundleCloud, downloadAssetCloud } from '../lib/syncUtils';
 import { X, FolderOpen, Clock, Music, Trash2, Cloud, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiquidGlassPanel } from './LiquidGlass';
-import { saveAsset, deleteLocalProjectState } from '../lib/assetManager';
+import { saveAsset, deleteLocalProjectState, getAsset } from '../lib/assetManager';
 import JSZip from 'jszip';
 
 export function ProjectBrowser() {
@@ -59,61 +59,133 @@ export function ProjectBrowser() {
   const handleOpenProject = async (project: any) => {
     if (project.hasBundle) {
       setOpeningProjectId(project.id);
-      setOpenStatus('Downloading project bundle...');
+      setOpenStatus('Analyzing required project assets...');
       setOpenProgress(0);
       try {
-        // Download ZIP bundle
-        const blob = await downloadProjectBundleCloud(project.id, (progress) => {
-          // We scale download progress between 0 and 70
-          setOpenProgress(Math.max(0, Math.min(70, Math.round(progress * 0.7))));
-        });
-
-        setOpenStatus('Extracting assets...');
-        setOpenProgress(75);
-
-        const zip = await JSZip.loadAsync(blob);
-        const projectJson = await zip.file("project.json")?.async("string");
-        if (!projectJson) {
-          throw new Error("Invalid .jaad file: project.json missing in cloud bundle");
+        // 1. Identify all required asset IDs
+        const assetIds = new Set<string>();
+        const tracks = project.tracks || [];
+        for (const track of tracks) {
+          track.clips?.forEach((c: any) => assetIds.add(c.bufferId || c.id));
+          track.lanes?.forEach((l: any) => l.clips?.forEach((c: any) => assetIds.add(c.bufferId || c.id)));
+          if (track.isFrozen && track.frozenBufferId) {
+            assetIds.add(track.frozenBufferId);
+          }
         }
+        const assetIdsArray = Array.from(assetIds);
 
-        const parsed = JSON.parse(projectJson);
-        
-        const assetsFolder = zip.folder("assets");
-        if (assetsFolder) {
-          const fileEntries: { relativePath: string; file: any }[] = [];
-          assetsFolder.forEach((relativePath, file) => {
-            if (relativePath.endsWith(".audio")) {
-              fileEntries.push({ relativePath, file });
-            }
-          });
-
-          const totalFiles = fileEntries.length;
-          if (totalFiles > 0) {
-            let processedFiles = 0;
-            const promises = fileEntries.map(async ({ relativePath, file }) => {
-              const id = relativePath.replace(".audio", "");
-              const audioBlob = await file.async("blob");
-              await saveAsset(id, audioBlob);
-              processedFiles++;
-              // Scale asset extraction progress between 75 and 98
-              const extractProgress = 75 + Math.round((processedFiles / totalFiles) * 23);
-              setOpenProgress(extractProgress);
-            });
-            await Promise.all(promises);
+        // 2. Identify missing asset IDs
+        const missingAssetIds: string[] = [];
+        for (const id of assetIdsArray) {
+          const cached = await getAsset(id);
+          if (!cached) {
+            missingAssetIds.push(id);
           }
         }
 
-        setOpenProgress(100);
-        setOpenStatus('Opening project...');
-        // Small delay to show completion
-        await new Promise(r => setTimeout(r, 600));
+        console.log(`Smart Pull: Required assets = ${assetIdsArray.length}, Missing locally = ${missingAssetIds.length}`);
 
-        dispatch({ type: 'SET_PROJECT_ID', payload: project.id });
-        dispatch({ type: 'SYNC_STATE', payload: parsed });
-        dispatch({ type: 'SET_HAS_MANUALLY_SAVED', payload: true });
-        dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
-        dispatch({ type: 'TOGGLE_PROJECT_BROWSER' });
+        let successIncremental = true;
+        
+        // Zero-Wait Path
+        if (missingAssetIds.length === 0) {
+          setOpenStatus('Instant loading from local cache...');
+          setOpenProgress(100);
+          await new Promise(r => setTimeout(r, 500));
+        } else {
+          // Smart Incremental Path
+          setOpenStatus(`Downloading ${missingAssetIds.length} missing assets...`);
+          setOpenProgress(10);
+          
+          let downloadedCount = 0;
+          for (const id of missingAssetIds) {
+            try {
+              const asset = await downloadAssetCloud(id);
+              if (asset) {
+                await saveAsset(id, asset);
+                downloadedCount++;
+                const progress = 10 + Math.round((downloadedCount / missingAssetIds.length) * 80);
+                setOpenProgress(progress);
+              } else {
+                console.warn(`Smart Pull: Asset ${id} missing in Cloud Storage asset folder, falling back to ZIP`);
+                successIncremental = false;
+                break;
+              }
+            } catch (err) {
+              console.error(`Smart Pull: Error downloading asset ${id}`, err);
+              successIncremental = false;
+              break;
+            }
+          }
+        }
+
+        if (successIncremental) {
+          // Both Zero-Wait Path and successfully finished Smart Incremental Path load metadata directly
+          setOpenStatus('Opening project...');
+          setOpenProgress(100);
+          await new Promise(r => setTimeout(r, 600));
+
+          dispatch({ type: 'SET_PROJECT_ID', payload: project.id });
+          dispatch({ type: 'SYNC_STATE', payload: project });
+          dispatch({ type: 'SET_HAS_MANUALLY_SAVED', payload: true });
+          dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
+          localStorage.setItem('jaad_last_active_project_id', project.id);
+          dispatch({ type: 'TOGGLE_PROJECT_BROWSER' });
+        } else {
+          // Fallback to downloading full ZIP bundle
+          setOpenStatus('Incremental sync failed. Downloading full project bundle...');
+          setOpenProgress(0);
+          
+          const blob = await downloadProjectBundleCloud(project.id, (progress) => {
+            setOpenProgress(Math.max(0, Math.min(70, Math.round(progress * 0.7))));
+          });
+
+          setOpenStatus('Extracting assets...');
+          setOpenProgress(75);
+
+          const zip = await JSZip.loadAsync(blob);
+          const projectJson = await zip.file("project.json")?.async("string");
+          if (!projectJson) {
+            throw new Error("Invalid .jaad file: project.json missing in cloud bundle");
+          }
+
+          const parsed = JSON.parse(projectJson);
+          
+          const assetsFolder = zip.folder("assets");
+          if (assetsFolder) {
+            const fileEntries: { relativePath: string; file: any }[] = [];
+            assetsFolder.forEach((relativePath, file) => {
+              if (relativePath.endsWith(".audio")) {
+                fileEntries.push({ relativePath, file });
+              }
+            });
+
+            const totalFiles = fileEntries.length;
+            if (totalFiles > 0) {
+              let processedFiles = 0;
+              const promises = fileEntries.map(async ({ relativePath, file }) => {
+                const id = relativePath.replace(".audio", "");
+                const audioBlob = await file.async("blob");
+                await saveAsset(id, audioBlob);
+                processedFiles++;
+                const extractProgress = 75 + Math.round((processedFiles / totalFiles) * 23);
+                setOpenProgress(extractProgress);
+              });
+              await Promise.all(promises);
+            }
+          }
+
+          setOpenProgress(100);
+          setOpenStatus('Opening project...');
+          await new Promise(r => setTimeout(r, 600));
+
+          dispatch({ type: 'SET_PROJECT_ID', payload: project.id });
+          dispatch({ type: 'SYNC_STATE', payload: parsed });
+          dispatch({ type: 'SET_HAS_MANUALLY_SAVED', payload: true });
+          dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
+          localStorage.setItem('jaad_last_active_project_id', project.id);
+          dispatch({ type: 'TOGGLE_PROJECT_BROWSER' });
+        }
       } catch (err: any) {
         console.error("Failed to open project bundle", err);
         alert(`Failed to load project: ${err.message || err}`);
@@ -126,8 +198,9 @@ export function ProjectBrowser() {
       // Legacy fallback: metadata only loading
       dispatch({ type: 'SET_PROJECT_ID', payload: project.id });
       dispatch({ type: 'SYNC_STATE', payload: project });
-      dispatch({ type: 'SET_HAS_MANUALLY_SAVED', payload: false });
+      dispatch({ type: 'SET_HAS_MANUALLY_SAVED', payload: true });
       dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
+      localStorage.setItem('jaad_last_active_project_id', project.id);
       dispatch({ type: 'TOGGLE_PROJECT_BROWSER' });
     }
   };
