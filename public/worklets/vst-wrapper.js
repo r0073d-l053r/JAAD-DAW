@@ -24,7 +24,7 @@ class VstWrapperProcessor extends AudioWorkletProcessor {
     const input = inputs[0];
     const output = outputs[0];
 
-    if (!input || !input.length) return true;
+    if (!input || !output) return true;
 
     // For now, simple bypass/passthrough
     // When real WASM is integrated:
@@ -32,8 +32,11 @@ class VstWrapperProcessor extends AudioWorkletProcessor {
     // 2. Call wasmInstance.exports.process()
     // 3. Copy WASM memory back to output buffer
     
-    for (let channel = 0; channel < input.length; ++channel) {
-      const inputChannel = input[channel];
+    const inputChannels = input.length;
+    const outputChannels = output.length;
+
+    for (let channel = 0; channel < outputChannels; ++channel) {
+      const inputChannel = channel < inputChannels ? input[channel] : input[0];
       const outputChannel = output[channel];
       if (inputChannel && outputChannel) {
         for (let i = 0; i < inputChannel.length; ++i) {

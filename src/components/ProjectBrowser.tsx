@@ -4,7 +4,7 @@ import { listProjects, deleteProjectCloud, downloadProjectBundleCloud } from '..
 import { X, FolderOpen, Clock, Music, Trash2, Cloud, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiquidGlassPanel } from './LiquidGlass';
-import { saveAsset } from '../lib/assetManager';
+import { saveAsset, deleteLocalProjectState } from '../lib/assetManager';
 import JSZip from 'jszip';
 
 export function ProjectBrowser() {
@@ -36,7 +36,18 @@ export function ProjectBrowser() {
     e.stopPropagation();
     if (window.confirm(`Are you sure you want to delete "${projectName || 'Untitled'}"? This cannot be undone.`)) {
       try {
+        // Delete cloud project
         await deleteProjectCloud(projectId);
+        
+        // Purge local project cache state
+        await deleteLocalProjectState(projectId);
+
+        // Remove active tracker if this was the last active project
+        const lastActiveProjectId = localStorage.getItem('jaad_last_active_project_id');
+        if (lastActiveProjectId === projectId) {
+          localStorage.removeItem('jaad_last_active_project_id');
+        }
+
         setProjects(projects.filter(p => p.id !== projectId));
       } catch (err) {
         console.error("Failed to delete project", err);
