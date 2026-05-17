@@ -69,7 +69,7 @@ You need Node.js installed on your machine.
    git clone https://github.com/r0073d-l053r/JAAD-DAW.git
    cd JAAD-DAW
    ```
-   *(Note: Ensure you are in the `JAAD` directory before running the following commands.)*
+   *(Note: Ensure you are in the `JAAD-DAW` directory before running the following commands.)*
 
 2. Set up your environment variables:
    Copy the example environment file and add your configuration (e.g. `GEMINI_API_KEY`).
