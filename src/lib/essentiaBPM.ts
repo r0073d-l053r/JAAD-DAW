@@ -30,7 +30,7 @@ export async function initEssentia() {
       // Factory mode
       wasm = await EssentiaWASM({
         locateFile: (path: string) => {
-          const url = path.endsWith('.wasm') ? '/essentia-wasm.web.wasm' : path;
+          const url = path.endsWith('.wasm') ? `${import.meta.env.BASE_URL}essentia-wasm.web.wasm` : path;
           console.log(`Essentia WASM: Locating ${path} -> ${url}`);
           return url;
         }
@@ -38,7 +38,7 @@ export async function initEssentia() {
     } else {
       // Object mode (already instantiated or non-factory build)
       EssentiaWASM.locateFile = (path: string) => {
-        const url = path.endsWith('.wasm') ? '/essentia-wasm.web.wasm' : path;
+        const url = path.endsWith('.wasm') ? `${import.meta.env.BASE_URL}essentia-wasm.web.wasm` : path;
         console.log(`Essentia WASM (obj): Locating ${path} -> ${url}`);
         return url;
       };

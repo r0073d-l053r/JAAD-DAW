@@ -11,7 +11,7 @@ Welcome to **JAAD** (Just Another AI DAW), a high-fidelity, local-first Digital 
 ### Installation Steps
 1. **Clone the repository**:
     ```bash
-    git clone hhttps://github.com/r0073d-l053r/JAAD-DAW.git
+    git clone https://github.com/r0073d-l053r/JAAD-DAW.git
     cd JAAD-DAW
     ```
 
