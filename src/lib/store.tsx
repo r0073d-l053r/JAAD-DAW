@@ -257,7 +257,7 @@ function appReducer(
       return { ...state, tempoAutomation: action.payload };
     case "SET_TIME": {
       // Ensure we don't accidentally update time during transit states
-      return { ...state, currentTime: action.payload };
+      return { ...state, currentTime: action.payload, playStartPosition: action.payload };
     }
     case "SET_MASTER_VOLUME": {
       audioEngine.setMasterVolume(action.payload);
