@@ -24,7 +24,7 @@ const SHORTCUTS = [
   { key: 'Ctrl + Shift + S', action: 'AI Cleanup Stems', category: 'AI / Process' },
   { key: 'Shift + Drag', action: 'Vertical Movement Lock', category: 'Editing' },
   { key: 'F9 / Tab', action: 'Toggle Timeline/Mixer', category: 'View' },
-  { key: 'Ctrl + + / -', action: 'Zoom In / Out', category: 'View' },
+  { key: 'Ctrl + Shift + Scroll', action: 'Zoom In / Out', category: 'View' },
 ];
 
 export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {

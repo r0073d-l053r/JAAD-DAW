@@ -102,7 +102,7 @@ If you want to use cloud saving, you'll need to create a Firebase project at the
 | `Ctrl + Shift + S` | Cleanup Stems (AI Process) |
 | `Shift + Drag` | Lock movement to vertical only |
 | `F9` / `Tab` | Toggle between Timeline and Mixer |
-| `Ctrl + +` / `-` | Zoom In / Out |
+| `Ctrl + Shift + Scroll` | Zoom In / Out |
 
 ---
 
