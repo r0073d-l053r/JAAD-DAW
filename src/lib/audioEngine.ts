@@ -102,7 +102,8 @@ class AudioEngine {
 
   nextNote() {
     const secondsPerBeat = 60.0 / this.getBpmAtTime(this.getCurrentTime());
-    this.nextNoteTime += secondsPerBeat;
+    const rate = this.playbackRate > 0 ? this.playbackRate : 1.0;
+    this.nextNoteTime += secondsPerBeat / rate;
     this.currentBeat++;
   }
 
@@ -385,7 +386,8 @@ class AudioEngine {
     
     // Determine the exact time for the NEXT beat to be scheduled
     const nextBeatInProject = (this.currentBeat + 1) * secondsPerBeat;
-    const timeUntilNextBeat = (nextBeatInProject - startTimeInSeconds) / this.playbackRate;
+    const rate = this.playbackRate > 0 ? this.playbackRate : 1.0;
+    const timeUntilNextBeat = (nextBeatInProject - startTimeInSeconds) / rate;
     
     this.nextNoteTime = this.playStartTime + timeUntilNextBeat;
     this.currentBeat++; // Advance beat counter for the next scheduled note

@@ -154,12 +154,12 @@ export const subscribeToProject = (projectId: string, onUpdate: (data: any) => v
   });
 };
 
-export const updateProjectCloud = async (projectId: string, projectName: string, tracks: Track[], bpm: number, masterVolume: number, hasBundle?: boolean) => {
+export const updateProjectCloud = async (projectId: string, projectName: string, tracks: Track[], bpm: number, originalBpm: number, masterVolume: number, hasBundle?: boolean) => {
   if (!isFirebaseAvailable) return;
   const docRef = doc(db, 'projects', projectId);
 
   // Estimate payload size for Firestore (1MB limit)
-  const estimatedSize = JSON.stringify({ tracks, bpm, masterVolume, projectName }).length;
+  const estimatedSize = JSON.stringify({ tracks, bpm, originalBpm, masterVolume, projectName }).length;
   if (estimatedSize > 1000000) {
     console.error("Project metadata exceeds Firestore 1MB limit. Optimization required.");
     alert("Project is too large to sync to cloud metadata. Try reducing the number of clips or volume points.");
@@ -208,6 +208,7 @@ export const updateProjectCloud = async (projectId: string, projectName: string,
     projectName,
     tracks: sanitizedTracks, 
     bpm, 
+    originalBpm,
     masterVolume,
     lastUpdated: Date.now() 
   };
