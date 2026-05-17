@@ -60,7 +60,7 @@ export function DocumentationModal({ isOpen, onClose }: DocumentationModalProps)
     const lines = docContent.split('\n');
     let inCodeBlock = false;
     let codeBlockContent: string[] = [];
-    
+
     return lines.map((line: string, index: number) => {
       // Handle Code Blocks
       if (line.trim().startsWith('```')) {
@@ -131,7 +131,7 @@ export function DocumentationModal({ isOpen, onClose }: DocumentationModalProps)
 
       // Handle Paragraphs
       if (line.trim().length === 0) return <div key={index} className="h-4" />;
-      
+
       const parts = line.split('**');
       return (
         <p key={index} className="text-zinc-400 leading-relaxed mb-4 text-base">
@@ -146,7 +146,7 @@ export function DocumentationModal({ isOpen, onClose }: DocumentationModalProps)
   return createPortal(
     <div className="fixed inset-0 z-[100000] flex items-center justify-center animate-in fade-in duration-500">
       <div className="absolute inset-0 bg-[#050507]/90 backdrop-blur-2xl" onClick={onClose} />
-      
+
       <div className="w-screen h-screen relative flex flex-col p-4 md:p-8 lg:p-12 overflow-hidden">
         <LiquidGlassPanel
           cornerRadius={32}
@@ -185,9 +185,9 @@ export function DocumentationModal({ isOpen, onClose }: DocumentationModalProps)
               </nav>
 
               <div className="mt-8 pt-6 border-t border-white/5">
-                <a 
-                  href="https://github.com/r0073d-l053r/JAAD-DAW" 
-                  target="_blank" 
+                <a
+                  href="https://github.com/r0073d-l053r/JAAD-DAW"
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-xs text-zinc-400 hover:text-white transition-all border border-white/5 group"
                 >
@@ -203,7 +203,7 @@ export function DocumentationModal({ isOpen, onClose }: DocumentationModalProps)
             <div className="flex-1 flex flex-col min-w-0">
               {/* Floating Header Actions (for mobile/tablet mostly, but good for X button) */}
               <div className="absolute top-8 right-8 z-[100001]">
-                <button 
+                <button
                   onClick={onClose}
                   className="w-14 h-14 rounded-2xl bg-white/5 hover:bg-red-500/80 backdrop-blur-xl flex items-center justify-center text-white transition-all duration-300 border border-white/10 shadow-2xl hover:scale-110 hover:rotate-90 active:scale-95"
                   title="Close Wiki"
@@ -215,7 +215,7 @@ export function DocumentationModal({ isOpen, onClose }: DocumentationModalProps)
               <div className="flex-1 overflow-y-auto p-12 lg:p-20 custom-scrollbar scroll-smooth" ref={contentRef}>
                 <div className="max-w-4xl mx-auto pb-24">
                   {renderedContent}
-                  
+
                   <div className="mt-20 pt-10 border-t border-white/5 flex flex-col items-center gap-4">
                     <div className="w-12 h-1 bg-gradient-to-r from-transparent via-primary to-transparent rounded-full opacity-50" />
                     <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-[0.4em]">End of Documentation</p>

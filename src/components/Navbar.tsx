@@ -6,7 +6,7 @@ import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { audioBufferToWav, createStemZip, downloadBlob, estimateWavSize, formatFileSize } from '../lib/exportUtils';
 import { cleanUpStemsAsync } from '../lib/audioUtils';
-import { updateProjectCloud, uploadAssetCloud } from '../lib/syncUtils';
+import { updateProjectCloud, uploadAssetCloud, uploadProjectBundleCloud } from '../lib/syncUtils';
 import { saveAsset, getAsset } from '../lib/assetManager';
 import JSZip from 'jszip';
 import { LiquidGlassPanel } from './LiquidGlass';
@@ -94,57 +94,78 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
     const MAX_RETRIES = 3;
 
     try {
-      // Ensure all current project assets are synced to cloud storage
-      const assetIdsToSync = new Set<string>();
-      for (const track of state.tracks) {
-        // 1. Clips
-        track.clips.forEach(c => assetIdsToSync.add(c.bufferId || c.id));
-        // 2. Lanes
-        track.lanes?.forEach(l => l.clips.forEach(c => assetIdsToSync.add(c.bufferId || c.id)));
-        // 3. Frozen
-        if (track.isFrozen && track.frozenBufferId) assetIdsToSync.add(track.frozenBufferId);
-      }
-
-      let uploadedCount = 0;
-      if (assetIdsToSync.size > 0) {
-        for (const id of assetIdsToSync) {
-          let success = false;
-          let attempts = 0;
-          
-          while (!success && attempts < MAX_RETRIES) {
-            try {
-              const localAsset = await getAsset(id);
-              if (localAsset) {
-                await uploadAssetCloud(id, localAsset, () => {});
-                success = true;
-              } else {
-                console.warn(`Local asset ${id} missing during sync, skipping upload.`);
-                success = true; 
-              }
-            } catch (e) {
-              attempts++;
-              console.error(`Failed to upload asset ${id} (Attempt ${attempts}):`, e);
-              if (attempts >= MAX_RETRIES) {
-                throw new Error(`Cannot upload "${id}" at this time after ${MAX_RETRIES} attempts.`);
-              }
-              // Exponential backoff
-              await new Promise(r => setTimeout(r, 1000 * attempts));
-            }
+      // 1. Pack project state and audio assets into a JSZip bundle
+      const zip = new JSZip();
+      
+      const projectState = {
+        projectName: targetName,
+        tracks: state.tracks,
+        bpm: state.bpm,
+        masterVolume: state.masterVolume,
+        exportVersion: "2.0 (Bundle)"
+      };
+      zip.file("project.json", JSON.stringify(projectState, null, 2));
+      
+      const assetsFolder = zip.folder("assets");
+      if (assetsFolder) {
+        const savedAssetIds = new Set<string>();
+        let missingAssets = 0;
+        
+        for (const track of state.tracks) {
+          const assetIds = new Set<string>();
+          track.clips.forEach(c => assetIds.add(c.bufferId || c.id));
+          track.lanes?.forEach(l => l.clips.forEach(c => assetIds.add(c.bufferId || c.id)));
+          if (track.isFrozen && track.frozenBufferId) {
+            assetIds.add(track.frozenBufferId);
           }
 
-          uploadedCount++;
-          const progress = Math.round((uploadedCount / assetIdsToSync.size) * 100);
-          setUploadProgress(progress);
-          setSyncProgress(progress);
+          for (const id of assetIds) {
+            if (savedAssetIds.has(id)) continue;
+            const asset = await getAsset(id);
+            if (asset) {
+              assetsFolder.file(`${id}.audio`, asset);
+              savedAssetIds.add(id);
+            } else {
+              missingAssets++;
+              console.warn(`Missing asset during cloud save zip packing: ${id}`);
+            }
+          }
         }
-      } else {
-        setUploadProgress(100);
-        setSyncProgress(100);
       }
 
-      // Final metadata update
+      console.log("Generating unified .jaad zip bundle for Cloud Save...");
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+
+      // 2. Upload zip bundle with exponential backoff and progress callbacks
+      let success = false;
+      let attempts = 0;
+      
+      while (!success && attempts < MAX_RETRIES) {
+        try {
+          await uploadProjectBundleCloud(targetId, zipBlob, (progress) => {
+            // Keep progress between 1 and 98 to reserve space for final metadata save
+            const mappedProgress = Math.max(1, Math.min(98, Math.round(progress)));
+            setUploadProgress(mappedProgress);
+            setSyncProgress(mappedProgress);
+          });
+          success = true;
+        } catch (e) {
+          attempts++;
+          console.error(`Failed to upload project bundle ${targetId} (Attempt ${attempts}):`, e);
+          if (attempts >= MAX_RETRIES) {
+            throw new Error(`Cannot upload project bundle at this time after ${MAX_RETRIES} attempts.`);
+          }
+          await new Promise(r => setTimeout(r, 1000 * attempts));
+        }
+      }
+
+      // 3. Final metadata update in Firestore with hasBundle: true
+      setUploadProgress(99);
       setSyncProgress(99); 
-      await updateProjectCloud(targetId, targetName, state.tracks, state.bpm, state.masterVolume);
+      await updateProjectCloud(targetId, targetName, state.tracks, state.bpm, state.masterVolume, true);
+
+      setUploadProgress(100);
+      setSyncProgress(100); 
 
       // Artificial delay to let the user see the "Complete" state
       await new Promise(r => setTimeout(r, 800));
@@ -152,7 +173,6 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
     } catch (err: any) {
       console.error('Cloud Save Failed:', err);
       setSyncError(err.message || 'Failed to save project to cloud. Check your connection.');
-      // Don't clear syncing immediately if there's an error so the user sees the popup
       return; 
     } finally {
       if (!syncError) {

@@ -357,10 +357,10 @@ export function LearnModal({ isOpen, onClose }: { isOpen: boolean, onClose: () =
               </p>
             </div>
             <div className="flex gap-4">
-              <a 
-                href="https://github.com/r0073d-l053r/JAAD-DAW/discussions" 
-                target="_blank" 
-                rel="noopener noreferrer" 
+              <a
+                href="https://github.com/r0073d-l053r/JAAD-DAW/discussions"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-[8px] text-zinc-500 hover:text-white font-black uppercase tracking-widest transition-colors flex items-center gap-1"
               >
                 Community <ExternalLink size={8} />
