@@ -330,7 +330,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
     sub?: {label: string, action: () => void}[] 
   }[]> = {
     'File': [
-      { label: 'New Project', action: () => { dispatch({ type: 'RESET_PROJECT' }); setOpenMenu(null); } },
+      { label: 'New Project', action: () => { localStorage.removeItem('jaad_last_active_project_id'); dispatch({ type: 'RESET_PROJECT' }); setOpenMenu(null); } },
       { label: 'Manage Projects...', action: () => { dispatch({ type: 'TOGGLE_PROJECT_BROWSER' }); setOpenMenu(null); } },
       { label: 'Save Project', shortcut: 'Ctrl+S', action: () => { 
         handleSaveToCloud(false);
@@ -569,13 +569,17 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
         <div className="flex items-center space-x-2">
           <button 
               onClick={async () => {
-                if (!state.projectId) return;
-                dispatch({ type: 'SET_SYNCING', payload: true });
-                try {
-                  await updateProjectCloud(state.projectId, state.projectName, state.tracks, state.bpm, state.originalBpm, state.masterVolume);
-                  alert('Force sync complete! Your project is now up to date in the cloud.');
-                } finally {
-                  dispatch({ type: 'SET_SYNCING', payload: false });
+                if (!state.projectId || !state.hasManuallySaved) {
+                  await handleSaveToCloud(false);
+                } else {
+                  dispatch({ type: 'SET_SYNCING', payload: true });
+                  try {
+                    await updateProjectCloud(state.projectId, state.projectName, state.tracks, state.bpm, state.originalBpm, state.masterVolume);
+                  } catch (e) {
+                    console.error("Silent background sync failed:", e);
+                  } finally {
+                    dispatch({ type: 'SET_SYNCING', payload: false });
+                  }
                 }
               }}
               className={`flex items-center space-x-2 px-3 py-1.5 text-sm border rounded transition ${state.isSyncing ? 'bg-primary/20 text-primary border-primary/50' : 'bg-[#222] hover:bg-[#333] border-gray-700 text-text-muted hover:text-white'}`}>
