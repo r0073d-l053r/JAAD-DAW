@@ -128,6 +128,7 @@ docker-compose down
 | `Ctrl/Cmd + A` | Select All Clips |
 | `Ctrl + Shift + S` | Cleanup Stems |
 | `F9` | Toggle Mixer View |
+| `Ctrl + Shift + Scroll` | Zoom In / Out |
 
 ## Roadmap
 

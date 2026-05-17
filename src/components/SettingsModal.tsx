@@ -213,7 +213,7 @@ export function SettingsModal() {
                       <h4 className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] mb-3 mt-4">Navigation & View</h4>
                       <div className="space-y-2 text-sm text-gray-300">
                         <div className="flex justify-between items-center py-1 border-b border-white/5"><span>Toggle Mixer / Timeline</span><span className="font-mono text-xs text-zinc-400 bg-white/5 px-2 py-0.5 rounded border border-white/10">Tab</span></div>
-                        <div className="flex justify-between items-center py-1 border-b border-white/5"><span>Zoom In / Out</span><span className="font-mono text-xs text-zinc-400 bg-white/5 px-2 py-0.5 rounded border border-white/10">Ctrl + / -</span></div>
+                        <div className="flex justify-between items-center py-1 border-b border-white/5"><span>Zoom In / Out</span><span className="font-mono text-xs text-zinc-400 bg-white/5 px-2 py-0.5 rounded border border-white/10">Ctrl + Shift + Scroll</span></div>
                         <div className="flex justify-between items-center py-1 border-b border-white/5"><span>Clean Up Audio Stems</span><span className="font-mono text-xs text-zinc-400 bg-white/5 px-2 py-0.5 rounded border border-white/10">Ctrl + Shift + S</span></div>
                       </div>
                     </div>
