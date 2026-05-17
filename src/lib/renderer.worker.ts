@@ -19,13 +19,26 @@ self.onmessage = async (e) => {
     const clipOffset = Math.floor((clip.audioOffset || 0) * sampleRate);
     const clipLength = Math.floor(clip.duration * sampleRate);
     
-    for (let c = 0; c < Math.min(numChannels, bufferData.length); c++) {
-      const channelData = bufferData[c];
+    if (bufferData.length === 1) {
+      const channelData = bufferData[0];
       for (let i = 0; i < clipLength; i++) {
         const outIdx = startSample + i;
         const inIdx = clipOffset + i;
         if (outIdx < length && inIdx < channelData.length) {
-          output[c][outIdx] += channelData[inIdx];
+          const val = channelData[inIdx];
+          output[0][outIdx] += val;
+          output[1][outIdx] += val;
+        }
+      }
+    } else {
+      for (let c = 0; c < Math.min(numChannels, bufferData.length); c++) {
+        const channelData = bufferData[c];
+        for (let i = 0; i < clipLength; i++) {
+          const outIdx = startSample + i;
+          const inIdx = clipOffset + i;
+          if (outIdx < length && inIdx < channelData.length) {
+            output[c][outIdx] += channelData[inIdx];
+          }
         }
       }
     }

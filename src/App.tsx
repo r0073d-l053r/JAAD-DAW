@@ -20,7 +20,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { audioEngine } from './lib/audioEngine';
 import { useGemini } from './lib/useGemini';
 import { subscribeToProject, updateProjectCloud, uploadAssetCloud, downloadAssetCloud } from './lib/syncUtils';
-import { saveAsset, getAsset } from './lib/assetManager';
+import { saveAsset, getAsset, saveLocalProjectState, getLocalProjectState } from './lib/assetManager';
 
 import { WebGLBackground } from './components/WebGLBackground';
 import { detectBPMOffline } from './lib/essentiaBPM';
@@ -39,6 +39,57 @@ function AppContent() {
     (window as any).dispatchForTesting = dispatch;
     (window as any).stateForTesting = state;
   }, [state, dispatch]);
+
+  // 1. Startup Restoration Effect (Local-First Caching)
+  useEffect(() => {
+    const restoreLastProject = async () => {
+      try {
+        const lastActiveProjectId = localStorage.getItem('jaad_last_active_project_id');
+        if (lastActiveProjectId && !state.projectId) {
+          console.log(`Local-First Startup: Found last active project ID ${lastActiveProjectId}`);
+          const localState = await getLocalProjectState(lastActiveProjectId);
+          if (localState) {
+            console.log('Local-First Startup: Successfully retrieved cached project state. Restoring...', localState);
+            dispatch({ type: 'SET_PROJECT_ID', payload: lastActiveProjectId });
+            dispatch({ type: 'SYNC_STATE', payload: localState });
+            dispatch({ type: 'SET_HAS_MANUALLY_SAVED', payload: localState.hasManuallySaved ?? true });
+            dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to restore last active project from local cache:', err);
+      }
+    };
+    restoreLastProject();
+  }, [dispatch]);
+
+  // 2. Continuous Auto-Caching Effect (Local-First Caching)
+  useEffect(() => {
+    if (!state.projectId) return;
+
+    const saveCache = async () => {
+      try {
+        const stateToCache = {
+          projectName: state.projectName,
+          tracks: state.tracks,
+          bpm: state.bpm,
+          originalBpm: state.originalBpm,
+          masterVolume: state.masterVolume,
+          hasManuallySaved: state.hasManuallySaved
+        };
+        await saveLocalProjectState(state.projectId, stateToCache);
+        localStorage.setItem('jaad_last_active_project_id', state.projectId);
+      } catch (err) {
+        console.error('Failed to save continuous local cache:', err);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      saveCache();
+    }, 1000); // 1-second debounce to optimize performance
+
+    return () => clearTimeout(timer);
+  }, [state.tracks, state.bpm, state.originalBpm, state.masterVolume, state.projectId, state.projectName, state.hasManuallySaved]);
 
   useEffect(() => {
     // Determine if any track is soloed

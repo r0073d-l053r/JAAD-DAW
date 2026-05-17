@@ -204,7 +204,9 @@ class AudioEngine {
     
     if (type === 'wasm-vst') {
       try {
-        const vstNode = new AudioWorkletNode(this.context, 'vst-wrapper');
+        const vstNode = new AudioWorkletNode(this.context, 'vst-wrapper', {
+          outputChannelCount: [2]
+        });
         vstNode.port.postMessage({ type: 'LOAD_WASM' });
         
         nodes.panner.disconnect();
@@ -344,7 +346,9 @@ class AudioEngine {
     }
 
     try {
-      const soundtouchNode = new AudioWorkletNode(this.context, 'soundtouch-processor');
+      const soundtouchNode = new AudioWorkletNode(this.context, 'soundtouch-processor', {
+        outputChannelCount: [2]
+      });
       soundtouchNode.port.postMessage({ type: 'INIT', tempo: this.playbackRate, sampleRate: sampleRate });
       
       let source = this.context.createBufferSource();
