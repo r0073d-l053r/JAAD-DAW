@@ -101,6 +101,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
         projectName: targetName,
         tracks: state.tracks,
         bpm: state.bpm,
+        originalBpm: state.originalBpm,
         masterVolume: state.masterVolume,
         exportVersion: "2.0 (Bundle)"
       };
@@ -162,7 +163,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
       // 3. Final metadata update in Firestore with hasBundle: true
       setUploadProgress(99);
       setSyncProgress(99); 
-      await updateProjectCloud(targetId, targetName, state.tracks, state.bpm, state.masterVolume, true);
+      await updateProjectCloud(targetId, targetName, state.tracks, state.bpm, state.originalBpm, state.masterVolume, true);
 
       setUploadProgress(100);
       setSyncProgress(100); 
@@ -196,6 +197,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
       projectName: state.projectName,
       tracks: state.tracks,
       bpm: state.bpm,
+      originalBpm: state.originalBpm,
       masterVolume: state.masterVolume,
       exportVersion: "2.0 (Bundle)"
     };
@@ -570,7 +572,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
                 if (!state.projectId) return;
                 dispatch({ type: 'SET_SYNCING', payload: true });
                 try {
-                  await updateProjectCloud(state.projectId, state.projectName, state.tracks, state.bpm, state.masterVolume);
+                  await updateProjectCloud(state.projectId, state.projectName, state.tracks, state.bpm, state.originalBpm, state.masterVolume);
                   alert('Force sync complete! Your project is now up to date in the cloud.');
                 } finally {
                   dispatch({ type: 'SET_SYNCING', payload: false });

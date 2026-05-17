@@ -75,11 +75,11 @@ function AppContent() {
 
     const timer = setTimeout(() => {
       // Background sync (not blocking)
-      updateProjectCloud(state.projectId, state.projectName, state.tracks, state.bpm, state.masterVolume);
+      updateProjectCloud(state.projectId, state.projectName, state.tracks, state.bpm, state.originalBpm, state.masterVolume);
     }, 10000); // Increase to 10s to reduce network congestion
 
     return () => clearTimeout(timer);
-  }, [state.tracks, state.bpm, state.masterVolume, state.projectId, state.isOffline, state.hasManuallySaved, state.projectName, state.isSyncing]);
+  }, [state.tracks, state.bpm, state.originalBpm, state.masterVolume, state.projectId, state.isOffline, state.hasManuallySaved, state.projectName, state.isSyncing]);
 
   useEffect(() => {
     const recoverAssets = async () => {
