@@ -4,6 +4,8 @@ import { useApp, Clip } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { Waveform } from './Waveform';
 import { detectBPMOffline } from '../lib/essentiaBPM';
+import { saveAsset } from '../lib/assetManager';
+import { uploadAssetCloud } from '../lib/syncUtils';
 
 import { ClipItem } from './ClipItem';
 
@@ -176,6 +178,10 @@ export function Timeline() {
           const duration = await audioEngine.loadAudio(clipId, file);
           loadedClipIds.push(clipId);
           
+          await saveAsset(clipId, file);
+          uploadAssetCloud(clipId, file).catch(err => console.error("Cloud upload for dropped asset failed", err));
+          dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
+          
           const TRACK_COLORS = ['#FF2A5F', '#00E871', '#6B44FF', '#4B7BFF', '#FFEB3B', '#FF9800', '#00BCD4', '#E91E63', '#9C27B0', '#8BC34A'];
           const newTrackColor = TRACK_COLORS[(state.tracks.length + i) % TRACK_COLORS.length];
           
@@ -244,6 +250,10 @@ export function Timeline() {
           const id = 'clip_' + Date.now() + '_' + i;
           const duration = await audioEngine.loadAudio(id, file);
           loadedClipIds.push(id);
+          
+          await saveAsset(id, file);
+          uploadAssetCloud(id, file).catch(err => console.error("Cloud upload for selected asset failed", err));
+          dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
           
           const clip: Clip = {
             id,

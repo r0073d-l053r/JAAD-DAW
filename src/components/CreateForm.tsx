@@ -24,6 +24,8 @@ import { useApp } from "../lib/store";
 import { GoogleGenAI } from "@google/genai";
 import { audioEngine } from "../lib/audioEngine";
 import { motion, AnimatePresence } from "motion/react";
+import { saveAsset } from "../lib/assetManager";
+import { uploadAssetCloud } from "../lib/syncUtils";
 
 declare global {
   interface Window {
@@ -197,6 +199,10 @@ export function CreateForm() {
 
       const clipId = "clip_" + Date.now();
       const duration = await audioEngine.loadAudio(clipId, file);
+
+      await saveAsset(clipId, file);
+      uploadAssetCloud(clipId, file).catch(err => console.error("Cloud upload for AI asset failed", err));
+      dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
 
       if (state.timeSelection) {
         const start = state.timeSelection.startOffset;

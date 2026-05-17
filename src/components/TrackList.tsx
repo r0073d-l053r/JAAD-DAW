@@ -4,6 +4,9 @@ import { useApp, Track, Clip } from '../lib/store';
 import { Volume2, Sliders, Timer } from './Icons';
 import { MoreHorizontal, Trash2, Download, Scissors, Layers, Wand2, ArrowUp, ChevronDown, ChevronRight, Snowflake } from 'lucide-react';
 import { audioEngine } from '../lib/audioEngine';
+import { saveAsset } from '../lib/assetManager';
+import { uploadAssetCloud } from '../lib/syncUtils';
+import { audioBufferToWav } from '../lib/exportUtils';
 
 const EXPANDED_COLORS = [
   '#FF2A5F', '#FF3B30', '#FF9500', '#FFCC00', 
@@ -151,6 +154,12 @@ export function TrackList() {
                     const frozenBuffer = await audioEngine.freezeTrack(track, audioEngine.buffers);
                     const bufferId = `frozen_${track.id}_${Date.now()}`;
                     audioEngine.buffers.set(bufferId, frozenBuffer);
+
+                    // Persist the frozen track to IndexedDB and backup to cloud
+                    const wavBlob = audioBufferToWav(frozenBuffer);
+                    await saveAsset(bufferId, wavBlob);
+                    uploadAssetCloud(bufferId, wavBlob).catch(err => console.error("Cloud upload for frozen track failed", err));
+
                     dispatch({ type: 'FREEZE_TRACK', payload: { trackId: track.id, bufferId } });
                   }
                 }}
