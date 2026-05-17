@@ -27,15 +27,20 @@ class SoundTouchProcessor extends AudioWorkletProcessor {
     const input = inputs[0];
     const output = outputs[0];
 
-    if (!input || input.length === 0) return true;
+    if (!input || !output) return true;
 
-    const inputChannel = input[0];
-    const outputChannel = output[0];
+    const inputChannels = input.length;
+    const outputChannels = output.length;
 
-    if (!inputChannel || !outputChannel) return true;
+    for (let channel = 0; channel < outputChannels; ++channel) {
+      const inputChannel = channel < inputChannels ? input[channel] : input[0];
+      const outputChannel = output[channel];
+      
+      if (!inputChannel || !outputChannel) continue;
 
-    for (let i = 0; i < inputChannel.length; ++i) {
-      outputChannel[i] = inputChannel[i];
+      for (let i = 0; i < outputChannel.length; ++i) {
+        outputChannel[i] = inputChannel[i];
+      }
     }
 
     return true;
