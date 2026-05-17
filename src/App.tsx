@@ -36,6 +36,11 @@ function AppContent() {
   stateRef.current = state;
 
   useEffect(() => {
+    (window as any).dispatchForTesting = dispatch;
+    (window as any).stateForTesting = state;
+  }, [state, dispatch]);
+
+  useEffect(() => {
     // Determine if any track is soloed
     const anySolo = state.tracks.some(t => t.solo);
 

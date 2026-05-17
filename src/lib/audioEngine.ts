@@ -37,8 +37,13 @@ class AudioEngine {
       this.masterGain.connect(this.context.destination);
       
       const workletUrl = `${import.meta.env.BASE_URL}worklets/vst-wrapper.js`.replace(/\/+/g, '/');
+      const soundtouchUrl = `${import.meta.env.BASE_URL}worklets/soundtouch-processor.js`.replace(/\/+/g, '/');
+      
       this.context.audioWorklet.addModule(workletUrl).catch(err => {
         console.warn("Failed to load vst-wrapper worklet (might be expected during SSR or tests):", err);
+      });
+      this.context.audioWorklet.addModule(soundtouchUrl).catch(err => {
+        console.warn("Failed to load soundtouch-processor worklet:", err);
       });
     }
   }
@@ -318,34 +323,10 @@ class AudioEngine {
       return;
     }
     
-    // SOUNDTOUCH PITCH-PRESERVING TIME-STRETCH (Only for non-unity rates)
-    let soundtouch: any;
-    let stSource: any;
-    let filter: any;
-    
-    try {
-      soundtouch = new (SoundTouch as any)();
-      soundtouch.tempo = this.playbackRate;
-      
-      if (soundtouch.stretch) {
-        soundtouch.stretch.setParameters(this.context!.sampleRate);
-      }
-      
-      stSource = new (WebAudioBufferSource as any)(buffer);
-      filter = new (SimpleFilter as any)(stSource, soundtouch);
-      
-      if (startOffset > 0) {
-        stSource.position = Math.floor(startOffset * buffer.sampleRate);
-      }
-    } catch (e) {
-      console.error("SoundTouch Initialization Error:", e);
-      return;
-    }
+    const totalFramesToExtract = duration > 0 ? Math.floor(duration * buffer.sampleRate) : Infinity;
+    const framesExtractedSoFar = 0;
+    const sampleRate = this.context!.sampleRate;
 
-    const bufferSize = 4096;
-    const scriptNode = this.context.createScriptProcessor(bufferSize, 0, 2);
-    const samples = new Float32Array(bufferSize * 2);
-    
     let targetNode: AudioNode = nodes.gain;
     if (volumeEnvelope && volumeEnvelope.length > 0) {
       const envGain = this.context.createGain();
@@ -360,37 +341,30 @@ class AudioEngine {
       envGain.connect(nodes.gain);
       targetNode = envGain;
     }
-    
-    scriptNode.connect(targetNode);
-    
-    const totalFramesToExtract = duration > 0 ? Math.floor(duration * buffer.sampleRate) : Infinity;
-    let framesExtractedSoFar = 0;
 
-    scriptNode.onaudioprocess = (e) => {
-      const l = e.outputBuffer.getChannelData(0);
-      const r = e.outputBuffer.getChannelData(1);
+    try {
+      const soundtouchNode = new AudioWorkletNode(this.context, 'soundtouch-processor');
+      soundtouchNode.port.postMessage({ type: 'INIT', tempo: this.playbackRate, sampleRate: sampleRate });
       
-      const framesExtracted = filter.extract(samples, bufferSize);
-      framesExtractedSoFar += framesExtracted;
+      let source = this.context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(soundtouchNode);
+      soundtouchNode.connect(targetNode);
       
-      for (let i = 0; i < framesExtracted; i++) {
-        l[i] = samples[i * 2];
-        r[i] = samples[i * 2 + 1];
-      }
+      source.start(targetTime, startOffset, duration > 0 ? duration : undefined);
       
-      if (framesExtracted === 0 || framesExtractedSoFar >= totalFramesToExtract) {
-        this.stopClip(clipId);
-      }
-    };
-
-    this.activeSources.set(clipId, { node: scriptNode, filter, soundtouch });
+      this.activeSources.set(clipId, { node: source });
+    } catch (e) {
+      console.error("SoundTouch AudioWorklet Error:", e);
+      return;
+    }
   }
 
   setPlaybackRate(rate: number) {
     this.playbackRate = rate;
     this.activeSources.forEach((source) => {
-      if (source.soundtouch) {
-        source.soundtouch.tempo = rate;
+      if (source.node && (source.node as any).port) {
+        (source.node as any).port.postMessage({ type: 'SET_TEMPO', tempo: rate });
       }
     });
   }
@@ -567,3 +541,6 @@ class AudioEngine {
 }
 
 export const audioEngine = new AudioEngine();
+if (typeof window !== 'undefined') {
+  (window as any).audioEngine = audioEngine;
+}
