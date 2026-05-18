@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../lib/store';
-import { listProjects, deleteProjectCloud, downloadProjectBundleCloud, downloadAssetCloud } from '../lib/syncUtils';
-import { X, FolderOpen, Clock, Music, Trash2, Cloud, Loader2 } from 'lucide-react';
+import { listProjects, deleteProjectCloud, downloadProjectBundleCloud, downloadAssetCloud, isGitHubPagesBuild, isDemoProject } from '../lib/syncUtils';
+import { X, FolderOpen, Clock, Music, Trash2, Cloud, Loader2, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiquidGlassPanel } from './LiquidGlass';
 import { saveAsset, deleteLocalProjectState, getAsset } from '../lib/assetManager';
@@ -34,10 +34,16 @@ export function ProjectBrowser() {
 
   const handleDelete = async (e: React.MouseEvent, projectId: string, projectName: string) => {
     e.stopPropagation();
+    
+    if (isGitHubPagesBuild() && isDemoProject(projectName)) {
+      alert("This project is a read-only template for the demo build. Deletion of the demo template project is disabled.");
+      return;
+    }
+
     if (window.confirm(`Are you sure you want to delete "${projectName || 'Untitled'}"? This cannot be undone.`)) {
       try {
         // Delete cloud project
-        await deleteProjectCloud(projectId);
+        await deleteProjectCloud(projectId, projectName);
         
         // Purge local project cache state
         await deleteLocalProjectState(projectId);
@@ -294,13 +300,26 @@ export function ProjectBrowser() {
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <button
-                              onClick={(e) => handleDelete(e, project.id, project.projectName)}
-                              className="p-2 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all z-10"
-                              title="Delete Project"
-                            >
-                              <Trash2 size={18} />
-                            </button>
+                            {isGitHubPagesBuild() && isDemoProject(project.projectName) ? (
+                              <div
+                                className="p-2 text-amber-400 bg-amber-500/10 rounded-lg border border-amber-500/20 z-10"
+                                title="Demo Template Project (Locked/Read-Only)"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  alert("This template project is locked to keep it clean for all testers! Your edits will be saved locally in the browser cache, but cannot be uploaded to the shared cloud database.");
+                                }}
+                              >
+                                <Lock size={18} />
+                              </div>
+                            ) : (
+                              <button
+                                onClick={(e) => handleDelete(e, project.id, project.projectName)}
+                                className="p-2 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all z-10"
+                                title="Delete Project"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            )}
                             <div className="px-4 py-2 bg-white/5 rounded-lg text-xs font-medium group-hover:bg-primary group-hover:text-black transition-all">
                               Open Project
                             </div>
