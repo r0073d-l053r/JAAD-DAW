@@ -3,7 +3,41 @@ import { doc, onSnapshot, setDoc, getDocs, collection, deleteDoc } from 'firebas
 import { ref, uploadBytes, getBlob, getMetadata, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Track } from './store';
 
-export const deleteProjectCloud = async (projectId: string) => {
+export const isGitHubPagesBuild = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  
+  // Exclude local development environments explicitly (so localhost/127.0.0.1 is never locked or shown the modal)
+  const hostname = window.location.hostname;
+  if (
+    hostname === 'localhost' || 
+    hostname === '127.0.0.1' || 
+    hostname === '[::1]' || 
+    hostname.startsWith('192.168.') || 
+    hostname.startsWith('10.') || 
+    hostname.startsWith('172.')
+  ) {
+    return false;
+  }
+
+  return (
+    hostname.includes('github.io') ||
+    hostname.includes('github.net') ||
+    window.location.pathname.includes('/JAAD') ||
+    window.location.pathname.includes('/JAAD-DAW')
+  );
+};
+
+export const isDemoProject = (projectName: string): boolean => {
+  const name = (projectName || '').toLowerCase();
+  return name.includes('fractured protocol') || name.includes('kaelo');
+};
+
+export const deleteProjectCloud = async (projectId: string, projectName?: string) => {
+  if (isGitHubPagesBuild() && projectName && isDemoProject(projectName)) {
+    console.warn(`Cloud Sync Blocked: Deletion of demo project "${projectName}" is blocked in hosted environment.`);
+    throw new Error("Deletion of the demo project is disabled in the GitHub Pages build.");
+  }
+  
   if (!isFirebaseAvailable) return;
   
   // 1. Delete Firestore metadata document
@@ -24,11 +58,17 @@ export const deleteProjectCloud = async (projectId: string) => {
 export const uploadProjectBundleCloud = async (
   projectId: string,
   blob: Blob,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  projectName?: string
 ): Promise<string> => {
+  if (isGitHubPagesBuild() && projectName && isDemoProject(projectName)) {
+    throw new Error("Saving edits of the demo project to the cloud is disabled in the GitHub Pages build.");
+  }
+  
   if (!isFirebaseAvailable) throw new Error("Firebase is not initialized");
   const fileRef = ref(storage, `projects/${projectId}.jaad`);
   console.log(`Cloud Sync: Starting upload of project bundle ${projectId}...`);
+
 
   return new Promise((resolve, reject) => {
     const uploadTask = uploadBytesResumable(fileRef, blob, {
@@ -102,7 +142,7 @@ export const downloadProjectBundleCloud = async (
     }
   }
 
-  const blob = new Blob(chunks, { type: 'application/zip' });
+  const blob = new Blob(chunks as any[], { type: 'application/zip' });
   console.log(`Cloud Sync: Finished downloading bundle ${projectId}. Total size: ${(receivedBytes / 1024 / 1024).toFixed(2)} MB`);
   if (onProgress) onProgress(100);
   return blob;
@@ -155,6 +195,11 @@ export const subscribeToProject = (projectId: string, onUpdate: (data: any) => v
 };
 
 export const updateProjectCloud = async (projectId: string, projectName: string, tracks: Track[], bpm: number, originalBpm: number, masterVolume: number, hasBundle?: boolean) => {
+  if (isGitHubPagesBuild() && isDemoProject(projectName)) {
+    console.warn(`Cloud Sync Blocked: Overwriting/saving demo project "${projectName}" is blocked in hosted environment.`);
+    throw new Error("Saving edits of the demo project to the cloud is disabled in the GitHub Pages build.");
+  }
+  
   if (!isFirebaseAvailable) return;
   const docRef = doc(db, 'projects', projectId);
 

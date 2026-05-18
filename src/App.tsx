@@ -15,11 +15,12 @@ import { CreateForm } from './components/CreateForm';
 import { ProjectBrowser } from './components/ProjectBrowser';
 import { SyncOverlay } from './components/SyncOverlay';
 import { BPMSyncPopup } from './components/BPMSyncPopup';
+import { WelcomeModal } from './components/WelcomeModal';
 import { useApp } from './lib/store';
 import React, { useState, useEffect, useRef } from 'react';
 import { audioEngine } from './lib/audioEngine';
 import { useGemini } from './lib/useGemini';
-import { subscribeToProject, updateProjectCloud, uploadAssetCloud, downloadAssetCloud } from './lib/syncUtils';
+import { subscribeToProject, updateProjectCloud, uploadAssetCloud, downloadAssetCloud, isGitHubPagesBuild, isDemoProject } from './lib/syncUtils';
 import { saveAsset, getAsset, saveLocalProjectState, getLocalProjectState } from './lib/assetManager';
 
 import { WebGLBackground } from './components/WebGLBackground';
@@ -123,6 +124,9 @@ function AppContent() {
     // Only autosave if we have a project ID, we're online, we've saved manually once,
     // AND we're not currently in the middle of a manual blocking sync.
     if (!state.projectId || state.isOffline || !state.hasManuallySaved || state.isSyncing) return;
+
+    // Bypass background cloud auto-save for the demo project on GitHub Pages
+    if (isGitHubPagesBuild() && isDemoProject(state.projectName)) return;
 
     const timer = setTimeout(() => {
       // Background sync (not blocking)
@@ -316,6 +320,7 @@ function AppContent() {
         <ProjectBrowser />
         <BPMSyncPopup />
         <SyncOverlay progress={syncProgress} />
+        <WelcomeModal />
       </div>
     </div>
   );

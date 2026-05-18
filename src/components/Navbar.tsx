@@ -6,7 +6,7 @@ import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { audioBufferToWav, createStemZip, downloadBlob, estimateWavSize, formatFileSize } from '../lib/exportUtils';
 import { cleanUpStemsAsync } from '../lib/audioUtils';
-import { updateProjectCloud, uploadAssetCloud, uploadProjectBundleCloud } from '../lib/syncUtils';
+import { updateProjectCloud, uploadAssetCloud, uploadProjectBundleCloud, isGitHubPagesBuild, isDemoProject } from '../lib/syncUtils';
 import { saveAsset, getAsset } from '../lib/assetManager';
 import JSZip from 'jszip';
 import { LiquidGlassPanel } from './LiquidGlass';
@@ -76,6 +76,11 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
           targetName = newName;
           dispatch({ type: 'SET_PROJECT_NAME', payload: newName });
        }
+    }
+
+    if (isGitHubPagesBuild() && isDemoProject(targetName)) {
+      alert("This project is a read-only template for the demo build. You can edit and test the project, but saving edits to the cloud is disabled to keep the template clean for other testers. Your edits are saved locally in the browser cache!");
+      return;
     }
 
     if (isNew || targetId === '') {
