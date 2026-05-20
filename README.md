@@ -34,27 +34,30 @@ Just Another AI DAW (JAAD) is a modern, web-browser-based Digital Audio Workstat
 
 ## Features
 
-- **Multitrack Audio Editing**: Add, arrange, and edit audio clips across multiple tracks and lanes.
-- **Web Audio Engine**: High-performance audio playback and manipulation entirely in the browser.
-- **Drag and Drop / Import**: Easily drag and drop audio files directly into the timeline.
-- **Real-time Background Animation**: Immersive, performant visuals that respond to the app state (can be toggled for performance).
-- **Time Selection & Looping**: Select specific regions of time and loop playback seamlessly.
-- **Stem Cleanup Tool**: Automatically detect and remove silence from your stems to tidy up your mix.
-- **Exporting Options**: Export your final project as a high-fidelity `.WAV` mixdown or as individual multitrack stems in a `.ZIP` file.
-- **Customizable Project Naming**: Rename your projects at any time. Naming persists in exports.
-- **Forced Cloud Sync**: Blocking Liquid Glass progress overlay with retry logic ensures your assets are safely backed up without interruption.
-- **Keyboard Shortcuts**: Complete coverage of essential editing actions for a fast workflow.
-- **AI Integration (Beta)**: Built-in scaffolding for intelligent audio processing, stem separation, and generative UI assistance.
+- **AudioWorklet DSP Playback Engine**: Low-latency, ultra-smooth tempo-shifted audio playback utilizing a custom `soundtouch-processor` running on a dedicated hardware audio thread.
+- **Local-First OPFS & IndexedDB Caching**: Implemented a highly optimized dual-stage caching layer utilizing Origin Private File System and IndexedDB for offline-ready, lightning-fast storage of large audio assets (GBs of WAVs).
+- **Gated Cloud Collaboration & Deep Links**: Share projects instantly via unique collaborative URLs (`?project=PROJECT_ID`). Gated by manual cloud saving to guarantee all tracks, audio assets, and project configurations are synced.
+- **Hybrid BPM Detection Engine**: Integrated `essentia.js` for fast offline tempo analysis with an automatic Gemini AI fallback to calculate track BPM dynamically and sync it with WebGL visuals.
+- **Generative AI Copilot & Creation**: Natural language generation of audio stems, lyrics-to-vocals, and MIDI patterns directly onto the timeline, powered by Google Gemini.
+- **AI "Fix My Mix" Automator**: One-click intelligent analysis that applies corrective parametric EQ, multi-band compression, and mastering presets.
+- **Interactive Timeline & Mixer**: Complete DAW workspace with dynamic resizing, volume/panning faders, mute, solo, and real-time routing buses.
+- **Demo Protection & Onboarding**: Shielded read-only templates on public hosted builds with automatic copy-on-edit logic, complemented by a premium Glassmorphism onboarding Welcome Modal.
+- **Forced Cloud Sync Overlay**: Blocking Liquid Glass progress overlay with exponential backoff upload retry logic ensures your assets are safely backed up.
+- **Exporting Options**: Export your final project as a high-fidelity `.WAV` mixdown, individual multitrack stems in a `.ZIP` file, or a portable `.JAAD` bundle.
+- **Customizable Project Naming & Settings**: Inline project renaming, audio interface buffer settings, MIDI configuration, and theme customizations.
 
 ## Technology Stack
 
-- **Frontend Framework**: React 19 + Vite
-- **Styling**: Tailwind CSS
+- **Core Framework**: React 19 + Vite + TypeScript
+- **State Management**: React Context + Custom Store Architecture
+- **Styling & UI**: Tailwind CSS + Custom Liquid Glass Design Tokens
+- **Animations**: Motion (Framer Motion) + WebGL Fragment Shader Backgrounds
+- **Audio & DSP Engine**: Web Audio API + SoundTouch AudioWorklet + Wasm SIMD
+- **Analysis Algorithms**: essentia.js (BPM)
+- **Local Persistence**: Origin Private File System (OPFS) + IndexedDB
+- **Cloud Backend**: Firebase (Firestore Real-time Sync, Auth, Storage)
+- **File Utilities**: JSZip (.jaad & stem bundles)
 - **Icons**: Lucide React
-- **Animations**: Motion (Framer Motion)
-- **Audio Processing**: Web Audio API
-- **Zip Generation**: JSZip
-- **Language**: TypeScript
 
 ## Getting Started
 
@@ -127,16 +130,21 @@ docker-compose down
 | `Ctrl/Cmd + Y` | Redo |
 | `Ctrl/Cmd + A` | Select All Clips |
 | `Ctrl + Shift + S` | Cleanup Stems |
-| `F9` | Toggle Mixer View |
+| `Tab` / `F9` | Toggle Mixer View |
 | `Ctrl + Shift + Scroll` | Zoom In / Out |
 
 ## Roadmap
 
-- [ ] Complete MIDI support and piano roll integration
-- [ ] VST/AudioUnit plugin emulation via WebAssembly
-- [ ] Fully implemented Real-time Collaboration (WebSockets/WebRTC)
-- [ ] Advanced AI features (style transfer, automatic mastering, noise reduction)
-- [ ] Cloud save via Firebase integration
+- [x] **Complete MIDI Support** & Interactive Piano Roll Integration
+- [x] **VST/AudioUnit Emulation** via WebAssembly Wrapper
+- [x] **Real-time Collaborative Sync** (Firestore Database Sync & Delta Caching)
+- [x] **Advanced AI Features** (Stem Separation, Automatic Mastering, essentia.js BPM Detection)
+- [x] **Fully Gated Cloud Share & Deep Link System** with Firebase Integration
+- [x] **AudioWorklet Playback Pipeline** for glitch-free performance
+- [x] **High-Performance Caching** via OPFS (Origin Private File System)
+- [ ] **Multiplayer Audio Streaming** (Real-time voice and audio sharing via WebRTC)
+- [ ] **Mobile Touch-Optimized Layout** & Gesture Controls
+
 
 ## Contributing
 
