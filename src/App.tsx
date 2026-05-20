@@ -20,7 +20,7 @@ import { useApp } from './lib/store';
 import React, { useState, useEffect, useRef } from 'react';
 import { audioEngine } from './lib/audioEngine';
 import { useGemini } from './lib/useGemini';
-import { subscribeToProject, updateProjectCloud, uploadAssetCloud, downloadAssetCloud, isGitHubPagesBuild, isDemoProject } from './lib/syncUtils';
+import { subscribeToProject, updateProjectCloud, uploadAssetCloud, downloadAssetCloud, isGitHubPagesBuild, isDemoProject, getProjectCloud } from './lib/syncUtils';
 import { saveAsset, getAsset, saveLocalProjectState, getLocalProjectState } from './lib/assetManager';
 
 import { WebGLBackground } from './components/WebGLBackground';
@@ -45,6 +45,38 @@ function AppContent() {
   useEffect(() => {
     const restoreLastProject = async () => {
       try {
+        // Intercept deep link first (e.g. ?project=PROJECT_ID)
+        const params = new URLSearchParams(window.location.search);
+        const urlProjectId = params.get('project');
+        
+        if (urlProjectId) {
+          console.log(`Deep Link Startup: Found project ID ${urlProjectId} in URL`);
+          
+          // Clear query parameters from URL so they don't stay on refresh or contaminate the history
+          const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+          window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
+
+          try {
+            // Attempt to load project metadata from the cloud
+            const projectData = await getProjectCloud(urlProjectId);
+            if (projectData) {
+              console.log('Deep Link Startup: Successfully retrieved project from cloud. Restoring...', projectData);
+              dispatch({ type: 'SET_PROJECT_ID', payload: urlProjectId });
+              dispatch({ type: 'SYNC_STATE', payload: projectData });
+              dispatch({ type: 'SET_HAS_MANUALLY_SAVED', payload: true });
+              dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
+              localStorage.setItem('jaad_last_active_project_id', urlProjectId);
+              return; // Successfully loaded shared project, skip restoring last local project!
+            } else {
+              console.warn(`Deep Link Startup: Shared project ID ${urlProjectId} was not found in Firestore.`);
+              alert("The shared project you tried to open was not found or is no longer available.");
+            }
+          } catch (cloudErr) {
+            console.error('Deep Link Startup: Error fetching shared project from cloud:', cloudErr);
+            alert("An error occurred while loading the shared project. Check your internet connection.");
+          }
+        }
+
         const lastActiveProjectId = localStorage.getItem('jaad_last_active_project_id');
         if (lastActiveProjectId && !state.projectId) {
           console.log(`Local-First Startup: Found last active project ID ${lastActiveProjectId}`);

@@ -1,5 +1,5 @@
 import { db, storage, isFirebaseAvailable } from './firebase';
-import { doc, onSnapshot, setDoc, getDocs, collection, deleteDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, getDocs, getDoc, collection, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getBlob, getMetadata, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Track } from './store';
 
@@ -264,3 +264,17 @@ export const updateProjectCloud = async (projectId: string, projectName: string,
 
   await setDoc(docRef, payload, { merge: true });
 };
+
+export const getProjectCloud = async (projectId: string) => {
+  if (!isFirebaseAvailable) return null;
+  const docRef = doc(db, 'projects', projectId);
+  const docSnap = await getDoc(docRef);
+  if (docSnap.exists()) {
+    return {
+      id: docSnap.id,
+      ...docSnap.data()
+    };
+  }
+  return null;
+};
+
