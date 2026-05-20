@@ -8,3 +8,4 @@ coverage/
 !.env.example
 liquid-glass-package
 patchnotes.md
+.~lock.*#
