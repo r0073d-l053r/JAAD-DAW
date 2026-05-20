@@ -165,3 +165,28 @@ All of the following features have been successfully implemented:
 - [x] **Dynamic UI Synchronization:** Implemented real-time synchronization between the project BPM, the AudioEngine, and the pulsing WebGL background animations. (2026-05-15)
 - [x] **Editable Transport BPM:** Made the BPM field in the transport bar editable, allowing for manual tempo overrides and refined project control. (2026-05-15)
 - [x] **Advanced Build Optimization:** Configured Vite with dynamic imports and custom manual chunks to manage large audio analysis libraries efficiently. (2026-05-15)
+
+## 12. Major Update - 2026-05-17
+- [x] **Zipped Cloud Bundle Uploads:** Implemented full `.jaad` zip bundle uploads to Firebase Storage for large binary project saves, enabling portable cloud persistence. (2026-05-17)
+- [x] **Vite Base Path Configuration:** Updated Vite config for correct asset resolution on GitHub Pages deployments. (2026-05-17)
+- [x] **Local IndexedDB Persistence:** Implemented robust local IndexedDB asset persistence and cloud storage synchronization for seamless offline/online transitions. (2026-05-17)
+- [x] **Service Worker Cache Hardening:** Fixed aggressive service worker caching of `index.html` that was preventing app updates from propagating to users. (2026-05-17)
+- [x] **AudioWorklet Playback Engine:** Replaced legacy `ScriptProcessorNode` playback with a new `soundtouch-processor` AudioWorklet for non-unity playback rates, improving performance and reducing audio glitches. (2026-05-17)
+- [x] **Mono/Stereo Channel Fix:** Resolved audio channel routing issue that caused incorrect mono/stereo playback behavior in the audio engine. (2026-05-17)
+- [x] **BPM & Metronome Sync Alignment:** Fixed timing alignment between detected BPM, the metronome click track, and the transport playhead for accurate tempo-synced playback. (2026-05-17)
+- [x] **Local-First OPFS Caching & Delta-Sync Architecture (Phase 1):** Implemented Origin Private File System caching layer for fast local asset access with delta-sync preparation for efficient cloud synchronization. (2026-05-17)
+- [x] **Autosave, LocalStorage Caching & Project Reset:** Improved continuous autosave reliability, localStorage-based project state caching, and clean project reset behavior. (2026-05-17)
+- [x] **Metronome Timing & Playhead Pause-Revert:** Resolved metronome timing alignment drift and fixed playhead position reverting on pause to maintain accurate transport state. (2026-05-17)
+- [x] **Keyboard Shortcut Documentation Update:** Updated the Shortcuts modal with accurate, current keybinding documentation matching all implemented shortcuts. (2026-05-17)
+
+## 13. Major Update - 2026-05-18
+- [x] **Demo Protection & Read-Only Templates:** Added safeguards preventing overwrite or deletion of demo projects in the GitHub Pages hosted build, keeping template projects clean for all users. (2026-05-18)
+- [x] **GitHub Pages Welcome Modal:** Created a premium onboarding modal for first-time visitors on the hosted demo, explaining offline persistence, read-only template behavior, and how to get started. (2026-05-18)
+- [x] **Cloud Project Browser Enhancements:** Improved the Project Browser with demo project protection indicators, download bundle support, and better error handling for restricted operations. (2026-05-18)
+
+## 14. Major Update - 2026-05-20
+- [x] **Share Modal & Deep Link System:** Built a premium Share modal with project deep link generation (`?project=PROJECT_ID`), enabling one-click project sharing via unique URLs. (2026-05-20)
+- [x] **Discord Brand Integration:** Added the official Discord SVG brand icon and "Share to Discord" button that opens Discord DMs with the project share link auto-copied to clipboard. (2026-05-20)
+- [x] **Social Sharing Suite:** Integrated Twitter/X share intent, Discord share, and email share with pre-formatted messages for quick project distribution. (2026-05-20)
+- [x] **Cloud-First Share Gating:** Implemented a two-state Share modal that requires a full cloud save (`.jaad` bundle + Firestore metadata) before generating share links, ensuring recipients receive all tracks and audio assets. (2026-05-20)
+- [x] **Deep Link Auto-Load Flow:** Verified and documented the end-to-end flow where clicking a shared link automatically fetches project metadata from Firestore, restores track layout, and recovers all audio assets from Firebase Storage. (2026-05-20)
