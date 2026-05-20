@@ -117,4 +117,4 @@ If you want to use cloud saving, you'll need to create a Firebase project at the
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see the (todo.md) for current priorities and upcoming features.
+We welcome contributions! Please see our [Architecture Decision Records](adr/README.md) for active designs, roadmaps, and technical proposals.
