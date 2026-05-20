@@ -14,6 +14,7 @@ import { DocumentationModal } from './DocumentationModal';
 import { ShortcutsModal } from './ShortcutsModal';
 import { AboutModal } from './AboutModal';
 import { LearnModal } from './LearnModal';
+import { ShareModal } from './ShareModal';
 
 export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => void }) {
   const { state, dispatch } = useApp();
@@ -28,6 +29,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isLearnOpen, setIsLearnOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
 
   // Recalculate dropdown position when menu opens
   useEffect(() => {
@@ -562,10 +564,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
           </div>
         )}
         <button 
-          onClick={() => {
-            navigator.clipboard.writeText(state.projectId);
-            alert(`Project ID copied: ${state.projectId}. Share this with collaborators!`);
-          }}
+          onClick={() => setIsShareOpen(true)}
           className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-[#222] hover:bg-[#333] border border-gray-700 rounded transition text-text-muted hover:text-white"
         >
           <Users size={16} />
@@ -780,6 +779,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
       <ShortcutsModal isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} />
       <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
       <LearnModal isOpen={isLearnOpen} onClose={() => setIsLearnOpen(false)} />
+      <ShareModal isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} onSaveToCloud={() => handleSaveToCloud(false)} />
     </header>
   );
 }
