@@ -6,6 +6,7 @@
 import { AppProvider } from './lib/store';
 import { Navbar } from './components/Navbar';
 import { Transport } from './components/Transport';
+import { AnimatePresence, motion } from 'motion/react';
 import { TrackList } from './components/TrackList';
 import { Timeline } from './components/Timeline';
 import { Mixer } from './components/Mixer';
@@ -24,13 +25,18 @@ import { subscribeToProject, updateProjectCloud, uploadAssetCloud, downloadAsset
 import { saveAsset, getAsset, saveLocalProjectState, getLocalProjectState } from './lib/assetManager';
 
 import { WebGLBackground } from './components/WebGLBackground';
+import { LiquidGlassPanel } from './components/LiquidGlass';
 import { detectBPMOffline } from './lib/essentiaBPM';
+import { Cloud, Loader2 } from 'lucide-react';
 
 // We extract the inner content to use the useApp hook
 function AppContent() {
   const { state, dispatch } = useApp();
   const { detectBPM } = useGemini();
   const [syncProgress, setSyncProgress] = useState(0);
+  const [deepLinkLoading, setDeepLinkLoading] = useState(false);
+  const [deepLinkStatus, setDeepLinkStatus] = useState('');
+  const [deepLinkProgress, setDeepLinkProgress] = useState(0);
 
   // Ref to access latest state in async callbacks
   const stateRef = useRef(state);
@@ -57,15 +63,81 @@ function AppContent() {
           window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
 
           try {
+            // Show loading overlay
+            setDeepLinkLoading(true);
+            setDeepLinkStatus('Fetching shared project...');
+            setDeepLinkProgress(5);
+
             // Attempt to load project metadata from the cloud
             const projectData = await getProjectCloud(urlProjectId);
             if (projectData) {
               console.log('Deep Link Startup: Successfully retrieved project from cloud. Restoring...', projectData);
+              setDeepLinkProgress(15);
+              setDeepLinkStatus('Analyzing required assets...');
+
+              // Identify all required asset IDs from the project data
+              const assetIds = new Set<string>();
+              const tracks = (projectData as any).tracks || [];
+              for (const track of tracks) {
+                track.clips?.forEach((c: any) => assetIds.add(c.bufferId || c.id));
+                track.lanes?.forEach((l: any) => l.clips?.forEach((c: any) => assetIds.add(c.bufferId || c.id)));
+                if (track.isFrozen && track.frozenBufferId) {
+                  assetIds.add(track.frozenBufferId);
+                }
+              }
+              const assetIdsArray = Array.from(assetIds);
+
+              // Identify missing assets
+              const missingAssetIds: string[] = [];
+              for (const id of assetIdsArray) {
+                const cached = await getAsset(id);
+                if (!cached) {
+                  missingAssetIds.push(id);
+                }
+              }
+
+              console.log(`Deep Link: Required assets = ${assetIdsArray.length}, Missing locally = ${missingAssetIds.length}`);
+
+              if (missingAssetIds.length === 0) {
+                setDeepLinkStatus('All assets cached locally!');
+                setDeepLinkProgress(100);
+                await new Promise(r => setTimeout(r, 400));
+              } else {
+                setDeepLinkStatus(`Downloading ${missingAssetIds.length} asset${missingAssetIds.length > 1 ? 's' : ''} from cloud...`);
+                setDeepLinkProgress(20);
+
+                let downloadedCount = 0;
+                for (const id of missingAssetIds) {
+                  try {
+                    const asset = await downloadAssetCloud(id);
+                    if (asset) {
+                      await saveAsset(id, asset);
+                      downloadedCount++;
+                      const progress = 20 + Math.round((downloadedCount / missingAssetIds.length) * 75);
+                      setDeepLinkProgress(progress);
+                      setDeepLinkStatus(`Downloaded ${downloadedCount} of ${missingAssetIds.length} assets...`);
+                    } else {
+                      console.warn(`Deep Link: Asset ${id} not found in cloud storage`);
+                    }
+                  } catch (assetErr) {
+                    console.error(`Deep Link: Error downloading asset ${id}`, assetErr);
+                  }
+                }
+                setDeepLinkProgress(98);
+              }
+
+              setDeepLinkStatus('Opening project...');
+              setDeepLinkProgress(100);
+              await new Promise(r => setTimeout(r, 500));
+
               dispatch({ type: 'SET_PROJECT_ID', payload: urlProjectId });
               dispatch({ type: 'SYNC_STATE', payload: projectData });
               dispatch({ type: 'SET_HAS_MANUALLY_SAVED', payload: true });
               dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
               localStorage.setItem('jaad_last_active_project_id', urlProjectId);
+
+              setDeepLinkLoading(false);
+              setDeepLinkProgress(0);
               return; // Successfully loaded shared project, skip restoring last local project!
             } else {
               console.warn(`Deep Link Startup: Shared project ID ${urlProjectId} was not found in Firestore.`);
@@ -74,6 +146,9 @@ function AppContent() {
           } catch (cloudErr) {
             console.error('Deep Link Startup: Error fetching shared project from cloud:', cloudErr);
             alert("An error occurred while loading the shared project. Check your internet connection.");
+          } finally {
+            setDeepLinkLoading(false);
+            setDeepLinkProgress(0);
           }
         }
 
@@ -353,6 +428,59 @@ function AppContent() {
         <BPMSyncPopup />
         <SyncOverlay progress={syncProgress} />
         <WelcomeModal />
+
+        {/* Deep link loading overlay */}
+        <AnimatePresence>
+          {deepLinkLoading && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[20000] flex items-center justify-center bg-black/60 backdrop-blur-md"
+            >
+              <div className="w-full max-w-md px-6">
+                <LiquidGlassPanel
+                  cornerRadius={24}
+                  blurAmount={40}
+                  backgroundOpacity={0.2}
+                  className="shadow-2xl border border-white/10"
+                  contentClassName="p-8 flex flex-col items-center text-center space-y-6"
+                >
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full animate-pulse" />
+                    <div className="relative bg-zinc-900/50 p-4 rounded-2xl border border-white/10">
+                      <Cloud size={48} className="text-primary animate-bounce" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h2 className="text-2xl font-bold tracking-tight text-white">Loading Shared Project</h2>
+                    <p className="text-zinc-400 text-sm">{deepLinkStatus}</p>
+                  </div>
+
+                  <div className="w-full space-y-3">
+                    <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                      <span>{deepLinkProgress < 75 ? 'Downloading' : 'Preparing Project'}</span>
+                      <span className="text-primary">{deepLinkProgress}%</span>
+                    </div>
+
+                    <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden border border-white/5 p-0.5">
+                      <div
+                        className="h-full bg-gradient-to-r from-primary to-primary/60 rounded-full transition-all duration-300 ease-out shadow-[0_0_10px_rgba(255,45,85,0.4)]"
+                        style={{ width: `${deepLinkProgress}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-zinc-500 text-xs font-medium">
+                    <Loader2 size={14} className="animate-spin text-primary" />
+                    <span>Please do not close this tab...</span>
+                  </div>
+                </LiquidGlassPanel>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
