@@ -99,9 +99,8 @@ function AppContent() {
               console.log(`Deep Link: Required assets = ${assetIdsArray.length}, Missing locally = ${missingAssetIds.length}`);
 
               if (missingAssetIds.length === 0) {
-                setDeepLinkStatus('All assets cached locally!');
-                setDeepLinkProgress(100);
-                await new Promise(r => setTimeout(r, 400));
+                setDeepLinkStatus('All assets cached locally. Decoding audio...');
+                setDeepLinkProgress(15);
               } else {
                 setDeepLinkStatus(`Downloading ${missingAssetIds.length} asset${missingAssetIds.length > 1 ? 's' : ''} from cloud...`);
                 setDeepLinkProgress(20);
@@ -113,7 +112,7 @@ function AppContent() {
                     if (asset) {
                       await saveAsset(id, asset);
                       downloadedCount++;
-                      const progress = 20 + Math.round((downloadedCount / missingAssetIds.length) * 75);
+                      const progress = 20 + Math.round((downloadedCount / missingAssetIds.length) * 45);
                       setDeepLinkProgress(progress);
                       setDeepLinkStatus(`Downloaded ${downloadedCount} of ${missingAssetIds.length} assets...`);
                     } else {
@@ -123,7 +122,28 @@ function AppContent() {
                     console.error(`Deep Link: Error downloading asset ${id}`, assetErr);
                   }
                 }
-                setDeepLinkProgress(98);
+              }
+
+              // Phase 2: Decode ALL assets into the audio engine before loading the project
+              // This ensures waveforms are fully rendered the moment the overlay dismisses.
+              if (assetIdsArray.length > 0) {
+                setDeepLinkStatus(`Decoding ${assetIdsArray.length} audio file${assetIdsArray.length !== 1 ? 's' : ''}...`);
+                let decodedCount = 0;
+                for (const id of assetIdsArray) {
+                  if (!audioEngine.buffers.has(id)) {
+                    try {
+                      const asset = await getAsset(id);
+                      if (asset) {
+                        await audioEngine.loadAudio(id, asset as File);
+                      }
+                    } catch (decodeErr) {
+                      console.error(`Deep Link: Error decoding asset ${id}`, decodeErr);
+                    }
+                  }
+                  decodedCount++;
+                  const decodeProgress = 65 + Math.round((decodedCount / assetIdsArray.length) * 30);
+                  setDeepLinkProgress(decodeProgress);
+                }
               }
 
               setDeepLinkStatus('Opening project...');
