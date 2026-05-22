@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { LiquidGlassPanel } from './LiquidGlass';
 import { useApp } from '../lib/store';
-import { X, Link, Check, Twitter, Mail, Share2, Lock, CloudUpload, AlertTriangle } from 'lucide-react';
+import { isGitHubPagesBuild } from '../lib/syncUtils';
+import { X, Link, Check, Twitter, Mail, Share2, Lock, CloudUpload, AlertTriangle, Github } from 'lucide-react';
 
 // Discord brand icon SVG component
 function DiscordIcon({ size = 20, className = '' }: { size?: number; className?: string }) {
@@ -100,13 +101,37 @@ export function ShareModal({ isOpen, onClose, onSaveToCloud }: ShareModalProps) 
 
           {/* Main Body */}
           <div className="p-8 space-y-6">
-            {!isCloudSaved ? (
+            {isGitHubPagesBuild() ? (
+              /* ─── GitHub Pages Build: Feature Restricted ─── */
+              <div className="flex flex-col items-center text-center space-y-6">
+                <div className="w-16 h-16 rounded-2xl bg-zinc-800/80 border border-white/10 flex items-center justify-center shadow-lg">
+                  <Github size={28} className="text-zinc-400" />
+                </div>
+
+                <div className="space-y-3 max-w-sm">
+                  <h3 className="text-white font-bold text-base">Not Available in the GitHub Build</h3>
+                  <p className="text-zinc-400 text-xs leading-relaxed">
+                    Cloud save and project sharing are <span className="text-white font-semibold">disabled</span> in the public GitHub Pages preview build. This demo environment is read-only so the shared template projects stay clean for all testers.
+                  </p>
+                  <p className="text-zinc-500 text-xs leading-relaxed">
+                    To share your own projects, use the <span className="text-primary font-semibold">full hosted version</span> of JAAD where cloud sync and collaboration features are fully enabled.
+                  </p>
+                </div>
+
+                <div className="w-full max-w-xs space-y-3">
+                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-[10px] text-zinc-500 leading-relaxed">
+                    <span className="text-zinc-300 font-bold uppercase tracking-wider block mb-1">What you can still do</span>
+                    Edit the demo project freely · Export a .WAV mixdown · Save a .jaad file to your desktop
+                  </div>
+                </div>
+              </div>
+            ) : !isCloudSaved ? (
               /* ─── Unsaved State: Cloud Save Required ─── */
               <div className="flex flex-col items-center text-center space-y-6">
                 <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shadow-lg">
                   <AlertTriangle size={28} className="text-amber-400" />
                 </div>
-                
+
                 <div className="space-y-2 max-w-sm">
                   <h3 className="text-white font-bold text-base">Cloud Save Required</h3>
                   <p className="text-zinc-400 text-xs leading-relaxed">
@@ -201,7 +226,9 @@ export function ShareModal({ isOpen, onClose, onSaveToCloud }: ShareModalProps) 
           {/* Animated Footer */}
           <div className="p-5 bg-black/40 border-t border-white/5 flex items-center justify-center gap-3">
              <div className="relative flex items-center justify-center">
-                {isCloudSaved ? (
+                {isGitHubPagesBuild() ? (
+                  <div className="w-2.5 h-2.5 rounded-full bg-zinc-600 relative" />
+                ) : isCloudSaved ? (
                   <>
                     <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-ping absolute opacity-75" />
                     <div className="w-2.5 h-2.5 rounded-full bg-green-500 relative" />
@@ -211,7 +238,12 @@ export function ShareModal({ isOpen, onClose, onSaveToCloud }: ShareModalProps) 
                 )}
              </div>
              <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-[0.25em] flex items-center gap-1.5">
-                {isCloudSaved ? (
+                {isGitHubPagesBuild() ? (
+                  <>
+                    <Github size={10} className="text-zinc-500" />
+                    GitHub Preview Build · Cloud Features Disabled
+                  </>
+                ) : isCloudSaved ? (
                   <>
                     <Lock size={10} className="text-green-500" />
                     Cloud Sync Active & Encrypted
