@@ -499,30 +499,62 @@ function appReducer(
     case "SELECT_CLIP": {
       const { clipId, multi } = action.payload;
       let newSelection = state.selectedClipIds;
-      
+
       let targetGroupId: string | undefined;
       for (const t of state.tracks) {
-        const c = t.clips.find(c => c.id === clipId);
-        if (c) { targetGroupId = c.groupId; break; }
-        const lc = t.lanes?.flatMap(l => l.clips).find(c => c.id === clipId);
-        if (lc) { targetGroupId = lc.groupId; break; }
+        let found = false;
+        for (const c of t.clips) {
+          if (c.id === clipId) {
+            targetGroupId = c.groupId;
+            found = true;
+            break;
+          }
+        }
+        if (found) break;
+
+        if (t.lanes) {
+          for (const l of t.lanes) {
+            for (const c of l.clips) {
+              if (c.id === clipId) {
+                targetGroupId = c.groupId;
+                found = true;
+                break;
+              }
+            }
+            if (found) break;
+          }
+        }
+        if (found) break;
       }
 
       let idsToToggle = [clipId];
       if (targetGroupId) {
         idsToToggle = [];
-        state.tracks.forEach(t => {
-          t.clips.forEach(c => { if (c.groupId === targetGroupId) idsToToggle.push(c.id); });
-          t.lanes?.forEach(l => l.clips.forEach(c => { if (c.groupId === targetGroupId) idsToToggle.push(c.id); }));
-        });
+        for (const t of state.tracks) {
+          for (const c of t.clips) {
+            if (c.groupId === targetGroupId) idsToToggle.push(c.id);
+          }
+          if (t.lanes) {
+            for (const l of t.lanes) {
+              for (const c of l.clips) {
+                if (c.groupId === targetGroupId) idsToToggle.push(c.id);
+              }
+            }
+          }
+        }
       }
 
       if (multi) {
-        const isCurrentlySelected = newSelection.includes(clipId);
+        const selectedSet = new Set(newSelection);
+        const isCurrentlySelected = selectedSet.has(clipId);
         if (isCurrentlySelected) {
-          newSelection = newSelection.filter(id => !idsToToggle.includes(id));
+          const idsToToggleSet = new Set(idsToToggle);
+          newSelection = newSelection.filter((id) => !idsToToggleSet.has(id));
         } else {
-          newSelection = Array.from(new Set([...newSelection, ...idsToToggle]));
+          for (const id of idsToToggle) {
+            selectedSet.add(id);
+          }
+          newSelection = Array.from(selectedSet);
         }
       } else {
         newSelection = idsToToggle;
@@ -546,14 +578,19 @@ function appReducer(
     case "UNGROUP_CLIPS": {
       if (state.selectedClipIds.length === 0) return state;
       const groupIdsToRemove = new Set<string>();
-      state.tracks.forEach(t => {
-        t.clips.forEach(c => {
-          if (state.selectedClipIds.includes(c.id) && c.groupId) groupIdsToRemove.add(c.groupId);
-        });
-        t.lanes?.forEach(l => l.clips.forEach(c => {
-          if (state.selectedClipIds.includes(c.id) && c.groupId) groupIdsToRemove.add(c.groupId);
-        }));
-      });
+      const selectedSet = new Set(state.selectedClipIds);
+      for (const t of state.tracks) {
+        for (const c of t.clips) {
+          if (selectedSet.has(c.id) && c.groupId) groupIdsToRemove.add(c.groupId);
+        }
+        if (t.lanes) {
+          for (const l of t.lanes) {
+            for (const c of l.clips) {
+              if (selectedSet.has(c.id) && c.groupId) groupIdsToRemove.add(c.groupId);
+            }
+          }
+        }
+      }
       if (groupIdsToRemove.size === 0) return state;
 
       const newTracks = state.tracks.map(t => ({
@@ -956,7 +993,19 @@ function appReducer(
     case "LOAD_PROJECT":
       return action.payload;
     case "SELECT_ALL_CLIPS": {
-      const allClips = state.tracks.flatMap((t) => t.clips.map((c) => c.id));
+      const allClips: string[] = [];
+      for (const t of state.tracks) {
+        for (const c of t.clips) {
+          allClips.push(c.id);
+        }
+        if (t.lanes) {
+          for (const l of t.lanes) {
+            for (const c of l.clips) {
+              allClips.push(c.id);
+            }
+          }
+        }
+      }
       return { ...state, selectedClipIds: allClips };
     }
     case "FINALIZE_CLIP_OVERLAPS": {
