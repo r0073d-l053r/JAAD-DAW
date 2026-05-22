@@ -1110,11 +1110,13 @@ function appReducer(
             audioOffset: actualStart - originalStart,
           };
 
-          const nonIntersectingMain = t.clips.filter((c) => !intersectingClips.find(ic => ic.id === c.id));
+          const intersectingClipIds = new Set(intersectingClips.map((ic) => ic.id));
+
+          const nonIntersectingMain = t.clips.filter((c) => !intersectingClipIds.has(c.id));
           
           let newLanes = t.lanes ? t.lanes.map(l => ({
             ...l,
-            clips: l.clips.filter((c) => !intersectingClips.find(ic => ic.id === c.id))
+            clips: l.clips.filter((c) => !intersectingClipIds.has(c.id))
           })) : undefined;
 
           // Remove empty lanes
