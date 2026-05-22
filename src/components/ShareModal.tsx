@@ -45,6 +45,7 @@ export function ShareModal({ isOpen, onClose, onSaveToCloud }: ShareModalProps) 
     // Copy the share message to clipboard, then open Discord
     const discordText = `🎵 Check out my project on JAAD DAW! 🎵\n👉 ${shareUrl}`;
     navigator.clipboard.writeText(discordText).catch(() => {});
+    alert("Share link copied to clipboard! Paste it into your Discord message to share.");
     window.open(discordShareUrl, '_blank', 'noopener,noreferrer');
   };
 
