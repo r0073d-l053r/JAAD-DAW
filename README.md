@@ -1,6 +1,7 @@
 # Just Another AI DAW (JAAD)
 
 ![Just Another AI DAW](https://img.shields.io/badge/Status-Early%20Alpha-orange)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)
 ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white)
@@ -155,6 +156,10 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## License
+## License and Editions
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+**JAAD Community Edition**  
+This repository contains the completely open-source "Community Edition" of JAAD, licensed under the [MIT License](LICENSE). This version is free to use, modify, and self-host. It is designed with a "Bring Your Own API Key" approach for all AI features.
+
+**JAAD Pro (Upcoming Desktop Release)**  
+While this core web repository will remain free and open-source, we plan to offer a premium "Pro" subscription model in the future. The Pro desktop application will include exclusive features, bundled AI API access, and advanced capabilities under a separate commercial license.
