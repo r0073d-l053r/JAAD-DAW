@@ -175,12 +175,20 @@ class AudioEngine {
     osc.stop(ctx.currentTime + 1);
   }
 
-  async loadAudio(id: string, file: File): Promise<number> {
+  async loadAudio(id: string, file: File | Blob): Promise<number> {
     if (!this.context) this.init();
-    const arrayBuffer = await file.arrayBuffer();
-    const audioBuffer = await this.context!.decodeAudioData(arrayBuffer);
-    this.buffers.set(id, audioBuffer);
-    return audioBuffer.duration;
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const audioBuffer = await this.context!.decodeAudioData(arrayBuffer);
+      this.buffers.set(id, audioBuffer);
+      return audioBuffer.duration;
+    } catch (err) {
+      console.warn(`AudioEngine: Failed to decode audio data for asset ${id}. Creating a silent fallback.`, err);
+      // Create a 1-second silent buffer to prevent app crashes on corrupt/empty files
+      const silentBuffer = this.context!.createBuffer(1, this.context!.sampleRate, this.context!.sampleRate);
+      this.buffers.set(id, silentBuffer);
+      return 1.0;
+    }
   }
 
   setupTrackRouting(trackId: string, volume: number = 0.8, pan: number = 0) {
