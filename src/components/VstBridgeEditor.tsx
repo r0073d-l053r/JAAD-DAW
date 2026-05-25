@@ -66,14 +66,14 @@ export const VstBridgeEditor: React.FC = () => {
     const startYRef = useRef(0);
     const startValRef = useRef(0);
 
-    const handleMouseDown = (e: React.MouseEvent) => {
+    const handlePointerDown = (e: React.PointerEvent) => {
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(true);
       startYRef.current = e.clientY;
       startValRef.current = param.value;
 
-      const handleMouseMove = (moveEvent: MouseEvent) => {
+      const handlePointerMove = (moveEvent: PointerEvent) => {
         const deltaY = startYRef.current - moveEvent.clientY; // up is positive
         const sensitivity = 0.005;
         const newValue = Math.max(0, Math.min(1, startValRef.current + deltaY * sensitivity));
@@ -83,14 +83,14 @@ export const VstBridgeEditor: React.FC = () => {
         }
       };
 
-      const handleMouseUp = () => {
+      const handlePointerUp = () => {
         setIsDragging(false);
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', handlePointerUp);
       };
 
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUp);
     };
 
     // Calculate angle: 0..1 mapped to -135deg to +135deg
@@ -106,8 +106,7 @@ export const VstBridgeEditor: React.FC = () => {
         <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider font-mono">{name}</span>
         
         <div
-          onMouseDown={handleMouseDown}
-          onPointerDown={(e) => e.stopPropagation()}
+          onPointerDown={handlePointerDown}
           className={`relative w-14 h-14 cursor-ns-resize flex items-center justify-center rounded-full transition-transform active:scale-95 ${isDragging ? 'text-pink-400' : 'text-[#a882fa]'}`}
         >
           {/* Circular Track */}

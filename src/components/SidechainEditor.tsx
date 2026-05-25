@@ -117,14 +117,14 @@ export const SidechainEditor: React.FC = () => {
     const startYRef = useRef(0);
     const startValRef = useRef(0);
 
-    const handleMouseDown = (e: React.MouseEvent) => {
+    const handlePointerDown = (e: React.PointerEvent) => {
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(true);
       startYRef.current = e.clientY;
       startValRef.current = value;
 
-      const handleMouseMove = (moveEvent: MouseEvent) => {
+      const handlePointerMove = (moveEvent: PointerEvent) => {
         const deltaY = startYRef.current - moveEvent.clientY; // Up is positive increase
         const range = max - min;
         const sensitivity = range / 250; // Dragging 250px sweeps full range
@@ -132,14 +132,14 @@ export const SidechainEditor: React.FC = () => {
         onChange(Number(newVal.toFixed(3)));
       };
 
-      const handleMouseUp = () => {
+      const handlePointerUp = () => {
         setIsDragging(false);
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', handlePointerUp);
       };
 
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUp);
     };
 
     // Calculate circular arc percentage
@@ -156,8 +156,7 @@ export const SidechainEditor: React.FC = () => {
         <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider font-mono">{label}</span>
         
         <div
-          onMouseDown={handleMouseDown}
-          onPointerDown={(e) => e.stopPropagation()}
+          onPointerDown={handlePointerDown}
           className={`relative w-14 h-14 cursor-ns-resize flex items-center justify-center rounded-full transition-transform active:scale-95 ${isDragging ? 'text-pink-400' : 'text-cyan-400'}`}
         >
           {/* Circular Track */}

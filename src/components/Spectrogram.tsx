@@ -141,8 +141,7 @@ export const Spectrogram = memo(function Spectrogram({
     setAnalyzing(true);
     setError(null);
 
-    const workerUrl = new URL('../workers/spectrogram.worker.ts', import.meta.url).href;
-    const worker = new Worker(workerUrl, { type: 'module' });
+    const worker = new Worker(new URL('../workers/spectrogram.worker.ts', import.meta.url), { type: 'module' });
     workerRef.current = worker;
 
     // Slice buffer according to audioOffset and clip duration

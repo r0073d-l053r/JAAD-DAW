@@ -319,7 +319,7 @@ export function Mixer() {
               }}
             />
             {/* Volume meter reactive LED */}
-            <div className="absolute top-0 bottom-0 left-full ml-2 w-2.5 bg-[#09090e] rounded-full overflow-hidden border border-white/5 shadow-inner relative flex flex-col justify-between pointer-events-none">
+            <div className="absolute top-0 bottom-0 left-full ml-2 w-2.5 bg-[#09090e] rounded-full overflow-hidden border border-white/5 shadow-inner flex flex-col justify-between pointer-events-none">
                <div 
                     data-track-meter={track.id}
                     className="absolute bottom-0 w-full bg-gradient-to-t from-emerald-500 via-yellow-400 to-rose-500 filter drop-shadow-[0_0_3px_rgba(16,185,129,0.5)] transition-shadow duration-300" 
@@ -408,7 +408,7 @@ export function Mixer() {
               className="absolute w-48 h-12 -rotate-90 top-20 appearance-none bg-transparent outline-none accent-red-400"
             />
             {/* Left Master Meter */}
-            <div className="absolute top-1 bottom-1 left-1.5 w-2 bg-[#09090e] rounded-full overflow-hidden border border-white/5 shadow-inner relative flex flex-col justify-between pointer-events-none">
+            <div className="absolute top-1 bottom-1 left-1.5 w-2 bg-[#09090e] rounded-full overflow-hidden border border-white/5 shadow-inner flex flex-col justify-between pointer-events-none">
                <div 
                     data-master-meter="left"
                     className="absolute bottom-0 w-full bg-gradient-to-t from-emerald-500 via-yellow-400 to-rose-500 filter drop-shadow-[0_0_3px_rgba(244,63,94,0.5)]" 
@@ -423,7 +423,7 @@ export function Mixer() {
                </div>
             </div>
             {/* Right Master Meter */}
-            <div className="absolute top-1 bottom-1 right-1.5 w-2 bg-[#09090e] rounded-full overflow-hidden border border-white/5 shadow-inner relative flex flex-col justify-between pointer-events-none">
+            <div className="absolute top-1 bottom-1 right-1.5 w-2 bg-[#09090e] rounded-full overflow-hidden border border-white/5 shadow-inner flex flex-col justify-between pointer-events-none">
                <div 
                     data-master-meter="right"
                     className="absolute bottom-0 w-full bg-gradient-to-t from-emerald-500 via-yellow-400 to-rose-500 filter drop-shadow-[0_0_3px_rgba(244,63,94,0.5)]" 

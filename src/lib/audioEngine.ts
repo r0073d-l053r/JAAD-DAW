@@ -42,7 +42,7 @@ class AudioEngine {
       this.context = new window.AudioContext();
       this.masterGain = this.context.createGain();
       this.masterAnalyser = this.context.createAnalyser();
-      this.masterAnalyser.fftSize = 64;
+      this.masterAnalyser.fftSize = 1024;
       this.masterGain.connect(this.masterAnalyser);
       this.masterAnalyser.connect(this.context.destination);
       
@@ -212,7 +212,7 @@ class AudioEngine {
       const gain = this.context.createGain();
       const panner = this.context.createStereoPanner();
       const analyser = this.context.createAnalyser();
-      analyser.fftSize = 64;
+      analyser.fftSize = 1024;
       gain.connect(panner);
       gain.connect(analyser); // Capture post-fader level
       panner.connect(this.masterGain);
