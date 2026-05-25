@@ -10,7 +10,13 @@ const hoistedMocks = vi.hoisted(() => {
     models = {
       generateContent: mockGenerateContent,
     };
-    constructor(public apiKey: string) {}
+    config: { apiKey: string };
+    constructor(config: { apiKey: string }) {
+      this.config = config;
+    }
+    get apiKey() {
+      return this.config.apiKey;
+    }
   }
   return { MockGoogleGenAI, mockGenerateContent };
 });

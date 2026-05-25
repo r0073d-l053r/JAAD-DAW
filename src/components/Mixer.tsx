@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp, Clip, Track } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
@@ -20,6 +20,64 @@ export function Mixer() {
   const stateRef = useRef(state);
   stateRef.current = state;
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // High-performance, GPU-friendly visualizer loop
+  useEffect(() => {
+    let animId: number;
+
+    const tick = () => {
+      // 1. Process track stem meters
+      const trackMeters = document.querySelectorAll('[data-track-meter]');
+      trackMeters.forEach((el) => {
+        const trackId = el.getAttribute('data-track-meter');
+        if (!trackId) return;
+
+        const rms = audioEngine.getTrackLevel(trackId);
+        // Apply power scale to boost low/mid levels visually
+        const scaled = Math.min(100, Math.pow(rms, 0.6) * 100);
+
+        // Professional peak decay fallback
+        const currentVal = parseFloat((el as any).dataset.currentHeight || '0');
+        let nextVal = scaled;
+        if (scaled < currentVal) {
+          nextVal = currentVal - 2.5; // Smooth decay
+          if (nextVal < scaled) nextVal = scaled;
+        }
+        if (nextVal < 0) nextVal = 0;
+
+        (el as any).dataset.currentHeight = nextVal.toString();
+        (el as HTMLElement).style.height = `${nextVal}%`;
+      });
+
+      // 2. Process master stereo meters
+      const masterMeters = document.querySelectorAll('[data-master-meter]');
+      if (masterMeters.length > 0) {
+        const { left, right } = audioEngine.getMasterLevels();
+        
+        masterMeters.forEach((el) => {
+          const channel = el.getAttribute('data-master-meter');
+          const rms = channel === 'left' ? left : right;
+          const scaled = Math.min(100, Math.pow(rms, 0.6) * 100);
+
+          const currentVal = parseFloat((el as any).dataset.currentHeight || '0');
+          let nextVal = scaled;
+          if (scaled < currentVal) {
+            nextVal = currentVal - 2.5; // Smooth decay
+            if (nextVal < scaled) nextVal = scaled;
+          }
+          if (nextVal < 0) nextVal = 0;
+
+          (el as any).dataset.currentHeight = nextVal.toString();
+          (el as HTMLElement).style.height = `${nextVal}%`;
+        });
+      }
+
+      animId = requestAnimationFrame(tick);
+    };
+
+    animId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animId);
+  }, []);
 
   const handleFixMyMix = async () => {
     const suggestions = await getFixMyMixSuggestions(state.tracks);
@@ -260,10 +318,21 @@ export function Mixer() {
                  /* custom slider thumb style could be applied here */
               }}
             />
-            {/* Volume meter mock */}
-            <div className="absolute top-0 bottom-0 left-full ml-1 w-1 bg-[#222] rounded overflow-hidden">
-               <div className="absolute bottom-0 w-full bg-gradient-to-t from-green-500 via-yellow-500 to-red-500 opacity-80" 
-                    style={{ height: state.isPlaying && !track.muted ? `${Math.random() * 40 + track.volume * 60}%` : '0%' }} />
+            {/* Volume meter reactive LED */}
+            <div className="absolute top-0 bottom-0 left-full ml-2 w-2.5 bg-[#09090e] rounded-full overflow-hidden border border-white/5 shadow-inner relative flex flex-col justify-between pointer-events-none">
+               <div 
+                    data-track-meter={track.id}
+                    className="absolute bottom-0 w-full bg-gradient-to-t from-emerald-500 via-yellow-400 to-rose-500 filter drop-shadow-[0_0_3px_rgba(16,185,129,0.5)] transition-shadow duration-300" 
+                    style={{ height: '0%' }} 
+               />
+               {/* Tick Marks for professional dB scale */}
+               <div className="absolute inset-0 flex flex-col justify-between opacity-15 pointer-events-none px-0.5">
+                 <div className="h-[1px] w-full bg-white" />
+                 <div className="h-[1px] w-full bg-white" />
+                 <div className="h-[1px] w-full bg-white" />
+                 <div className="h-[1px] w-full bg-white" />
+                 <div className="h-[1px] w-full bg-white" />
+               </div>
             </div>
           </div>
           
@@ -288,6 +357,22 @@ export function Mixer() {
                 audioEngine.addTrackEffect(track.id, 'delay');
              }} className="w-full bg-[#111] border border-[#333] text-[10px] text-gray-400 p-1 rounded text-center cursor-pointer hover:bg-[#222]">
                + WebDelay
+             </div>
+             <div onClick={() => {
+                if (!audioEngine.cloudVstBridges.has(track.id)) {
+                  audioEngine.addCloudVstBridge(track.id);
+                }
+                dispatch({ type: 'SET_VST_EDITOR_TRACK', payload: track.id });
+             }} className={`w-full text-[10px] p-1 rounded text-center cursor-pointer border transition ${audioEngine.cloudVstBridges.has(track.id) ? 'bg-purple-950/40 text-purple-300 border-purple-500/30 hover:bg-purple-900/20' : 'bg-[#111] border-[#333] text-gray-400 hover:bg-[#222]'}`}>
+               ⚡ Cloud VST
+             </div>
+             <div onClick={() => {
+                if (!audioEngine.sidechainNodes.has(track.id)) {
+                  audioEngine.addTrackSidechain(track.id);
+                }
+                dispatch({ type: 'SET_SIDECHAIN_EDITOR_TRACK', payload: track.id });
+             }} className={`w-full text-[10px] p-1 rounded text-center cursor-pointer border transition ${audioEngine.sidechainNodes.has(track.id) ? 'bg-cyan-950/40 text-cyan-300 border-cyan-500/30 hover:bg-cyan-900/20' : 'bg-[#111] border-[#333] text-gray-400 hover:bg-[#222]'}`}>
+               🔗 Sidechain Duck
              </div>
           </div>
         </div>
@@ -322,13 +407,35 @@ export function Mixer() {
               onChange={(e) => dispatch({ type: 'SET_MASTER_VOLUME', payload: parseFloat(e.target.value) })}
               className="absolute w-48 h-12 -rotate-90 top-20 appearance-none bg-transparent outline-none accent-red-400"
             />
-            <div className="absolute top-1 bottom-1 right-1 w-2 bg-[#111] rounded overflow-hidden">
-               <div className="absolute bottom-0 w-full bg-gradient-to-t from-green-500 via-yellow-500 to-red-500 opacity-80" 
-                    style={{ height: state.isPlaying ? `${Math.random() * 20 + 70}%` : '0%' }} />
+            {/* Left Master Meter */}
+            <div className="absolute top-1 bottom-1 left-1.5 w-2 bg-[#09090e] rounded-full overflow-hidden border border-white/5 shadow-inner relative flex flex-col justify-between pointer-events-none">
+               <div 
+                    data-master-meter="left"
+                    className="absolute bottom-0 w-full bg-gradient-to-t from-emerald-500 via-yellow-400 to-rose-500 filter drop-shadow-[0_0_3px_rgba(244,63,94,0.5)]" 
+                    style={{ height: '0%' }} 
+               />
+               <div className="absolute inset-0 flex flex-col justify-between opacity-15 pointer-events-none px-0.5">
+                 <div className="h-[1px] w-full bg-white" />
+                 <div className="h-[1px] w-full bg-white" />
+                 <div className="h-[1px] w-full bg-white" />
+                 <div className="h-[1px] w-full bg-white" />
+                 <div className="h-[1px] w-full bg-white" />
+               </div>
             </div>
-            <div className="absolute top-1 bottom-1 left-1 w-2 bg-[#111] rounded overflow-hidden">
-               <div className="absolute bottom-0 w-full bg-gradient-to-t from-green-500 via-yellow-500 to-red-500 opacity-80" 
-                    style={{ height: state.isPlaying ? `${Math.random() * 20 + 70}%` : '0%' }} />
+            {/* Right Master Meter */}
+            <div className="absolute top-1 bottom-1 right-1.5 w-2 bg-[#09090e] rounded-full overflow-hidden border border-white/5 shadow-inner relative flex flex-col justify-between pointer-events-none">
+               <div 
+                    data-master-meter="right"
+                    className="absolute bottom-0 w-full bg-gradient-to-t from-emerald-500 via-yellow-400 to-rose-500 filter drop-shadow-[0_0_3px_rgba(244,63,94,0.5)]" 
+                    style={{ height: '0%' }} 
+               />
+               <div className="absolute inset-0 flex flex-col justify-between opacity-15 pointer-events-none px-0.5">
+                 <div className="h-[1px] w-full bg-white" />
+                 <div className="h-[1px] w-full bg-white" />
+                 <div className="h-[1px] w-full bg-white" />
+                 <div className="h-[1px] w-full bg-white" />
+                 <div className="h-[1px] w-full bg-white" />
+               </div>
             </div>
           </div>
       </div>

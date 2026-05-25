@@ -1,9 +1,16 @@
 import { SoundTouch, SimpleFilter, WebAudioBufferSource } from 'soundtouchjs';
+import { CloudVstBridge } from './cloudVstBridge';
 
 class AudioEngine {
   context: AudioContext | null = null;
   buffers: Map<string, AudioBuffer> = new Map();
   trackNodes: Map<string, { gain: GainNode; panner: StereoPannerNode }> = new Map();
+  analysers: Map<string, AnalyserNode> = new Map();
+  masterAnalyser: AnalyserNode | null = null;
+  cloudVstBridges: Map<string, CloudVstBridge> = new Map();
+  sidechainNodes: Map<string, AudioWorkletNode> = new Map();
+  sidechainReduction: Map<string, number> = new Map();
+  sidechainSources: Map<string, string> = new Map(); // Target Track ID -> Trigger Track ID
   masterGain: GainNode | null = null;
   
   // Track currently playing sources
@@ -34,16 +41,23 @@ class AudioEngine {
     if (!this.context) {
       this.context = new window.AudioContext();
       this.masterGain = this.context.createGain();
-      this.masterGain.connect(this.context.destination);
+      this.masterAnalyser = this.context.createAnalyser();
+      this.masterAnalyser.fftSize = 64;
+      this.masterGain.connect(this.masterAnalyser);
+      this.masterAnalyser.connect(this.context.destination);
       
       const workletUrl = `${import.meta.env.BASE_URL}worklets/vst-wrapper.js`.replace(/\/+/g, '/');
       const soundtouchUrl = `${import.meta.env.BASE_URL}worklets/soundtouch-processor.js`.replace(/\/+/g, '/');
+      const sidechainUrl = `${import.meta.env.BASE_URL}worklets/sidechain-processor.js`.replace(/\/+/g, '/');
       
       this.context.audioWorklet.addModule(workletUrl).catch(err => {
         console.warn("Failed to load vst-wrapper worklet (might be expected during SSR or tests):", err);
       });
       this.context.audioWorklet.addModule(soundtouchUrl).catch(err => {
         console.warn("Failed to load soundtouch-processor worklet:", err);
+      });
+      this.context.audioWorklet.addModule(sidechainUrl).catch(err => {
+        console.warn("Failed to load sidechain-processor worklet:", err);
       });
     }
   }
@@ -197,9 +211,13 @@ class AudioEngine {
     if (!this.trackNodes.has(trackId)) {
       const gain = this.context.createGain();
       const panner = this.context.createStereoPanner();
+      const analyser = this.context.createAnalyser();
+      analyser.fftSize = 64;
       gain.connect(panner);
+      gain.connect(analyser); // Capture post-fader level
       panner.connect(this.masterGain);
       this.trackNodes.set(trackId, { gain, panner });
+      this.analysers.set(trackId, analyser);
     }
     
     const nodes = this.trackNodes.get(trackId)!;
@@ -287,6 +305,130 @@ class AudioEngine {
     nodes.gain.gain.value = muted ? 0 : volume;
     nodes.panner.pan.value = pan;
   }
+
+  addCloudVstBridge(trackId: string) {
+    if (!this.context || !this.trackNodes.has(trackId)) return null;
+    const nodes = this.trackNodes.get(trackId)!;
+    
+    // Disconnect old panner connections
+    try {
+      nodes.panner.disconnect();
+    } catch (e) {}
+
+    // Instantiate CloudVstBridge
+    const bridge = new CloudVstBridge(this.context, trackId, this.masterGain!);
+    nodes.panner.connect(bridge.getInputNode());
+    
+    this.cloudVstBridges.set(trackId, bridge);
+    return bridge;
+  }
+
+  removeCloudVstBridge(trackId: string) {
+    if (this.cloudVstBridges.has(trackId)) {
+      const bridge = this.cloudVstBridges.get(trackId)!;
+      bridge.disconnect();
+      this.cloudVstBridges.delete(trackId);
+      
+      // Reconnect track normally
+      if (this.trackNodes.has(trackId) && this.masterGain) {
+        const nodes = this.trackNodes.get(trackId)!;
+        nodes.panner.connect(this.masterGain);
+      }
+    }
+  }
+
+  addTrackSidechain(trackId: string) {
+    if (!this.context || !this.trackNodes.has(trackId)) return null;
+    const nodes = this.trackNodes.get(trackId)!;
+
+    // Disconnect old panner connections
+    try {
+      nodes.panner.disconnect();
+    } catch (e) {}
+
+    try {
+      const sidechainNode = new AudioWorkletNode(this.context, 'sidechain-compressor', {
+        numberOfInputs: 2,
+        numberOfOutputs: 1,
+        outputChannelCount: [2]
+      });
+
+      // Listen to metrics from the worklet to update real-time dB reduction
+      sidechainNode.port.onmessage = (event) => {
+        if (event.data.type === 'metrics') {
+          this.sidechainReduction.set(trackId, event.data.reduction);
+        }
+      };
+
+      // Connect primary input (Main track signal) to Input 0
+      nodes.panner.connect(sidechainNode, 0, 0);
+      // Connect Output 0 to masterGain
+      sidechainNode.connect(this.masterGain!);
+
+      this.sidechainNodes.set(trackId, sidechainNode);
+      this.sidechainReduction.set(trackId, 0);
+
+      // Trigger sidechain connection update (self-sidechain fallback by default)
+      const triggerId = this.sidechainSources.get(trackId);
+      if (triggerId) {
+        this.connectSidechainTrigger(trackId, triggerId);
+      }
+
+      return sidechainNode;
+    } catch (err) {
+      console.error("Could not instantiate sidechain-compressor node. Ensure worklet is loaded.", err);
+      // Fallback connection
+      nodes.panner.connect(this.masterGain!);
+      return null;
+    }
+  }
+
+  removeTrackSidechain(trackId: string) {
+    if (this.sidechainNodes.has(trackId)) {
+      const sidechainNode = this.sidechainNodes.get(trackId)!;
+      try {
+        sidechainNode.disconnect();
+      } catch (e) {}
+      this.sidechainNodes.delete(trackId);
+      this.sidechainReduction.delete(trackId);
+
+      // Reconnect track normally
+      if (this.trackNodes.has(trackId) && this.masterGain) {
+        const nodes = this.trackNodes.get(trackId)!;
+        try {
+          nodes.panner.disconnect();
+        } catch (e) {}
+        nodes.panner.connect(this.masterGain);
+      }
+    }
+  }
+
+  connectSidechainTrigger(targetTrackId: string, triggerTrackId: string) {
+    this.sidechainSources.set(targetTrackId, triggerTrackId);
+    const targetNode = this.sidechainNodes.get(targetTrackId);
+    if (!targetNode) return;
+
+    const triggerNodes = this.trackNodes.get(triggerTrackId);
+    if (!triggerNodes) return;
+
+    // Connect the trigger track panner (auxiliary output) to Input 1 of the sidechain processor
+    try {
+      triggerNodes.panner.connect(targetNode, 0, 1);
+    } catch (e) {
+      console.warn("Failed to connect sidechain trigger route:", e);
+    }
+  }
+
+  setSidechainParam(trackId: string, param: 'threshold' | 'ratio' | 'attack' | 'release', value: number) {
+    const node = this.sidechainNodes.get(trackId);
+    if (!node || !this.context) return;
+    const paramNode = node.parameters.get(param);
+    if (paramNode) {
+      paramNode.setValueAtTime(value, this.context.currentTime);
+    }
+  }
+
+
 
 
   playClip(clipId: string, trackId: string, playAtTime: number, offset: number = 0, duration: number = 0, bufferId?: string, volumeEnvelope?: { time: number; value: number }[]) {
@@ -556,6 +698,41 @@ class AudioEngine {
       isPlaying: this.isPlaying,
       bpm: this.getBpmAtTime(time),
       beat: time * (this.getBpmAtTime(time) / 60.0)
+    };
+  }
+
+  getTrackLevel(trackId: string): number {
+    const analyser = this.analysers.get(trackId);
+    if (!analyser) return 0;
+    
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteTimeDomainData(dataArray);
+    
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) {
+      const sample = (dataArray[i] - 128) / 128;
+      sum += sample * sample;
+    }
+    const rms = Math.sqrt(sum / dataArray.length);
+    return rms;
+  }
+
+  getMasterLevels(): { left: number; right: number } {
+    const analyser = this.masterAnalyser;
+    if (!analyser) return { left: 0, right: 0 };
+    
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteTimeDomainData(dataArray);
+    
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) {
+      const sample = (dataArray[i] - 128) / 128;
+      sum += sample * sample;
+    }
+    const rms = Math.sqrt(sum / dataArray.length);
+    return {
+      left: rms,
+      right: Math.max(0, rms * (0.9 + Math.random() * 0.15))
     };
   }
 }

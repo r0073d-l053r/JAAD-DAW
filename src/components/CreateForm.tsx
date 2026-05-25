@@ -155,7 +155,7 @@ export function CreateForm() {
       if (!isValidKey) {
         throw new Error("Gemini API key is not configured or invalid. Please set VITE_GEMINI_API_KEY in your GitHub Secrets.");
       }
-      const ai = new GoogleGenAI(apiKey);
+      const ai = new GoogleGenAI({ apiKey });
       const prompt = `Generate a 30-second ${instrument} track. Style: ${styles || "any"}. Lyrics: ${lyrics || "none"}`;
 
       const response = await ai.models.generateContentStream({

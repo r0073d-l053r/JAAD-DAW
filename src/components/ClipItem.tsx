@@ -4,6 +4,7 @@ import { motion, useDragControls, useMotionValue } from "motion/react";
 import { Scissors, Trash2, Wand2 } from "lucide-react";
 import { useApp, Clip } from "../lib/store";
 import { Waveform } from "./Waveform";
+import { Spectrogram } from "./Spectrogram";
 import { audioEngine } from "../lib/audioEngine";
 import { useGemini } from "../lib/useGemini";
 
@@ -731,17 +732,28 @@ export function ClipItem({
         </div>
       )}
 
-      {/* Real Waveform */}
+      {/* Real Waveform / Spectrogram */}
       <div className="absolute inset-0 pointer-events-none">
-        <Waveform
-          clipId={clip.id}
-          bufferId={clip.bufferId}
-          color={track.color}
-          duration={clip.duration}
-          width={clip.duration * PIXELS_PER_SECOND}
-          height={laneId ? 32 : 94}
-          audioOffset={clip.audioOffset || 0}
-        />
+        {state.spectrogramEnabled ? (
+          <Spectrogram
+            clipId={clip.id}
+            bufferId={clip.bufferId}
+            duration={clip.duration}
+            width={clip.duration * PIXELS_PER_SECOND}
+            height={laneId ? 32 : 94}
+            audioOffset={clip.audioOffset || 0}
+          />
+        ) : (
+          <Waveform
+            clipId={clip.id}
+            bufferId={clip.bufferId}
+            color={track.color}
+            duration={clip.duration}
+            width={clip.duration * PIXELS_PER_SECOND}
+            height={laneId ? 32 : 94}
+            audioOffset={clip.audioOffset || 0}
+          />
+        )}
       </div>
 
       <div className="absolute top-5 left-2 text-[10px] text-white/70 font-mono hidden group-hover/clip:block truncate max-w-full mix-blend-difference z-10 pointer-events-none">

@@ -76,12 +76,22 @@ interface AppState {
   buffersVersion: number;
   hasManuallySaved: boolean;
   isDefaultName: boolean;
+  spectrogramEnabled: boolean;
+  videoUrl: string | null;
+  videoPanelOpen: boolean;
+  videoOffset: number;
+  videoVolume: number;
+  videoMuted: boolean;
+  vstEditorTrackId: string | null;
+  sidechainEditorTrackId: string | null;
 }
 
 type Action =
   | { type: "TOGGLE_PLAY" }
   | { type: "TOGGLE_RECORD" }
   | { type: "TOGGLE_METRONOME" }
+  | { type: "SET_VST_EDITOR_TRACK"; payload: string | null }
+  | { type: "SET_SIDECHAIN_EDITOR_TRACK"; payload: string | null }
   | { type: "SET_BPM"; payload: number }
   | { type: "SET_ORIGINAL_BPM"; payload: number }
   | { type: "SET_TIME"; payload: number }
@@ -168,7 +178,13 @@ type Action =
   | { type: "SYNC_STATE"; payload: Partial<AppState> }
   | { type: "INCREMENT_BUFFERS_VERSION" }
   | { type: "SET_HAS_MANUALLY_SAVED"; payload: boolean }
-  | { type: "ADD_CLIP_TO_NEW_LANE"; payload: { trackId: string; clipId: string } };
+  | { type: "ADD_CLIP_TO_NEW_LANE"; payload: { trackId: string; clipId: string } }
+  | { type: "TOGGLE_SPECTROGRAM" }
+  | { type: "TOGGLE_VIDEO_PANEL" }
+  | { type: "SET_VIDEO_URL"; payload: string | null }
+  | { type: "SET_VIDEO_OFFSET"; payload: number }
+  | { type: "SET_VIDEO_VOLUME"; payload: number }
+  | { type: "SET_VIDEO_MUTED"; payload: boolean };
 
 interface AppStateWithHistory extends AppState {
   past: Track[][];
@@ -214,6 +230,14 @@ const initialState: AppStateWithHistory = {
   buffersVersion: 0,
   hasManuallySaved: false,
   isDefaultName: true,
+  spectrogramEnabled: false,
+  videoUrl: null,
+  videoPanelOpen: false,
+  videoOffset: 0,
+  videoVolume: 0.8,
+  videoMuted: false,
+  vstEditorTrackId: null,
+  sidechainEditorTrackId: null,
 };
 
 function saveHistory(
@@ -349,6 +373,22 @@ function appReducer(
       };
     case "TOGGLE_SETTINGS":
       return { ...state, settingsOpen: !state.settingsOpen };
+    case "TOGGLE_SPECTROGRAM":
+      return { ...state, spectrogramEnabled: !state.spectrogramEnabled };
+    case "TOGGLE_VIDEO_PANEL":
+      return { ...state, videoPanelOpen: !state.videoPanelOpen };
+    case "SET_VIDEO_URL":
+      return { ...state, videoUrl: action.payload };
+    case "SET_VIDEO_OFFSET":
+      return { ...state, videoOffset: action.payload };
+    case "SET_VIDEO_VOLUME":
+      return { ...state, videoVolume: action.payload };
+    case "SET_VIDEO_MUTED":
+      return { ...state, videoMuted: action.payload };
+    case "SET_VST_EDITOR_TRACK":
+      return { ...state, vstEditorTrackId: action.payload };
+    case "SET_SIDECHAIN_EDITOR_TRACK":
+      return { ...state, sidechainEditorTrackId: action.payload };
     case "SET_TIME_SELECTION":
       return { ...state, timeSelection: action.payload };
     case "TOGGLE_SNAP":
@@ -937,11 +977,16 @@ function appReducer(
     }
     case "SYNC_STATE": {
       if (!action.payload) return state;
+      const rawTracks = action.payload.tracks || state.tracks || [];
+      const sanitizedTracks = rawTracks.map((track: any) => ({
+        ...track,
+        clips: track.clips || [],
+        lanes: track.lanes || []
+      }));
       return { 
         ...state, 
         ...action.payload,
-        // Ensure tracks is always an array to prevent .length crashes
-        tracks: action.payload.tracks || state.tracks || []
+        tracks: sanitizedTracks
       };
     }
     case "INCREMENT_BUFFERS_VERSION": {

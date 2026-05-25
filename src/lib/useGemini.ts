@@ -17,7 +17,7 @@ function getAI() {
                        
     if (!isInvalid) {
       console.log(`Gemini AI: Initializing with key (length: ${apiKey.length})`);
-      aiInstance = new GoogleGenAI(apiKey);
+      aiInstance = new GoogleGenAI({ apiKey });
       return aiInstance;
     } else {
       console.log("Gemini AI: No valid API key found. AI features disabled.");

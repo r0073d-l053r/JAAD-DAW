@@ -230,6 +230,20 @@ export function TrackList() {
                         <Wand2 size={12} />
                         <span>Remove FX</span>
                       </button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!audioEngine.sidechainNodes.has(track.id)) {
+                            audioEngine.addTrackSidechain(track.id);
+                          }
+                          dispatch({ type: 'SET_SIDECHAIN_EDITOR_TRACK', payload: track.id });
+                          setOpenMenuId(null);
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-white/10 text-cyan-400 flex items-center space-x-2 transition-colors font-medium"
+                      >
+                        <Sliders size={12} className="text-cyan-400" />
+                        <span>Setup Sidechain</span>
+                      </button>
                       <div className="h-px bg-white/10 my-1" />
                       <div className="px-3 py-2">
                         <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-2">Track Color</div>

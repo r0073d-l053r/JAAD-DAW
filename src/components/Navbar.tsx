@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Wand2, Users, FileAudio, Settings, Cloud, WifiOff, LayoutDashboard, Sliders } from './Icons';
-import { Magnet, Github, Linkedin, Globe } from 'lucide-react';
+import { Magnet, Github, Linkedin, Globe, Activity, Video } from 'lucide-react';
 import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { audioBufferToWav, createStemZip, downloadBlob, estimateWavSize, formatFileSize } from '../lib/exportUtils';
@@ -121,8 +121,12 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
         
         for (const track of state.tracks) {
           const assetIds = new Set<string>();
-          track.clips.forEach(c => assetIds.add(c.bufferId || c.id));
-          track.lanes?.forEach(l => l.clips.forEach(c => assetIds.add(c.bufferId || c.id)));
+          track.clips?.forEach(c => {
+            if (c) assetIds.add(c.bufferId || c.id);
+          });
+          track.lanes?.forEach(l => l.clips?.forEach(c => {
+            if (c) assetIds.add(c.bufferId || c.id);
+          }));
           if (track.isFrozen && track.frozenBufferId) {
             assetIds.add(track.frozenBufferId);
           }
@@ -219,8 +223,12 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
       for (const track of state.tracks) {
         // Collect all clip IDs (main list + lanes)
         const assetIds = new Set<string>();
-        track.clips.forEach(c => assetIds.add(c.bufferId || c.id));
-        track.lanes?.forEach(l => l.clips.forEach(c => assetIds.add(c.bufferId || c.id)));
+        track.clips?.forEach(c => {
+          if (c) assetIds.add(c.bufferId || c.id);
+        });
+        track.lanes?.forEach(l => l.clips?.forEach(c => {
+          if (c) assetIds.add(c.bufferId || c.id);
+        }));
         
         // Add frozen buffer if applicable
         if (track.isFrozen && track.frozenBufferId) {
@@ -403,6 +411,9 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
       { label: 'Toggle Mixer', shortcut: 'Tab', action: () => { dispatch({ type: 'SET_VIEW_MODE', payload: state.viewMode === 'timeline' ? 'mixer' : 'timeline' }); setOpenMenu(null); } },
       { label: 'Toggle Copilot', action: () => { dispatch({ type: 'TOGGLE_AI_PANEL' }); setOpenMenu(null); } },
       { divider: true, label: '' },
+      { label: 'Toggle Spectrogram View', action: () => { dispatch({ type: 'TOGGLE_SPECTROGRAM' }); setOpenMenu(null); } },
+      { label: 'Toggle Video Scoring Panel', action: () => { dispatch({ type: 'TOGGLE_VIDEO_PANEL' }); setOpenMenu(null); } },
+      { divider: true, label: '' },
       { label: 'Zoom In', shortcut: 'Ctrl++', action: () => { dispatch({ type: 'SET_ZOOM', payload: state.zoomLevel * 1.2 }); setOpenMenu(null); } },
       { label: 'Zoom Out', shortcut: 'Ctrl+-', action: () => { dispatch({ type: 'SET_ZOOM', payload: state.zoomLevel / 1.2 }); setOpenMenu(null); } },
       { label: 'Fit to Screen', action: () => { dispatch({ type: 'SET_ZOOM', payload: 20 }); setOpenMenu(null); } },
@@ -536,6 +547,22 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
           title="Snap to Grid"
         >
           <Magnet size={16} />
+        </button>
+
+        <button
+          onClick={() => dispatch({ type: 'TOGGLE_SPECTROGRAM' })}
+          className={`flex items-center justify-center p-2 rounded-lg transition-all border ${state.spectrogramEnabled ? 'bg-purple-500/20 text-purple-400 border-purple-500/50 shadow-[0_0_15px_rgba(168,130,250,0.4)]' : 'bg-white/5 text-zinc-400 border-white/10 hover:text-white/80 hover:bg-white/10'}`}
+          title="Toggle Spectrogram View"
+        >
+          <Activity size={16} />
+        </button>
+
+        <button
+          onClick={() => dispatch({ type: 'TOGGLE_VIDEO_PANEL' })}
+          className={`flex items-center justify-center p-2 rounded-lg transition-all border ${state.videoPanelOpen ? 'bg-pink-500/20 text-pink-400 border-pink-500/50 shadow-[0_0_15px_rgba(236,72,153,0.4)]' : 'bg-white/5 text-zinc-400 border-white/10 hover:text-white/80 hover:bg-white/10'}`}
+          title="Toggle Video Scoring Monitor"
+        >
+          <Video size={16} />
         </button>
 
         <LiquidGlassPanel cornerRadius={8} blurAmount={28} backgroundOpacity={0.25} contentClassName="flex p-1">

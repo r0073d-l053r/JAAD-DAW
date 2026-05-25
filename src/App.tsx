@@ -28,6 +28,11 @@ import { WebGLBackground } from './components/WebGLBackground';
 import { LiquidGlassPanel } from './components/LiquidGlass';
 import { detectBPMOffline } from './lib/essentiaBPM';
 import { Cloud, Loader2 } from 'lucide-react';
+import { VideoSyncPanel } from './components/VideoSyncPanel';
+import { VstBridgeEditor } from './components/VstBridgeEditor';
+import { SidechainEditor } from './components/SidechainEditor';
+
+
 
 // We extract the inner content to use the useApp hook
 function AppContent() {
@@ -79,8 +84,12 @@ function AppContent() {
               const assetIds = new Set<string>();
               const tracks = (projectData as any).tracks || [];
               for (const track of tracks) {
-                track.clips?.forEach((c: any) => assetIds.add(c.bufferId || c.id));
-                track.lanes?.forEach((l: any) => l.clips?.forEach((c: any) => assetIds.add(c.bufferId || c.id)));
+                track.clips?.forEach((c: any) => {
+                  if (c) assetIds.add(c.bufferId || c.id);
+                });
+                track.lanes?.forEach((l: any) => l.clips?.forEach((c: any) => {
+                  if (c) assetIds.add(c.bufferId || c.id);
+                }));
                 if (track.isFrozen && track.frozenBufferId) {
                   assetIds.add(track.frozenBufferId);
                 }
@@ -270,11 +279,15 @@ function AppContent() {
         const assetIds = new Set<string>();
         
         // 1. Clips in main list
-        track.clips.forEach(c => assetIds.add(c.bufferId || c.id));
+        track.clips?.forEach(c => {
+          if (c) assetIds.add(c.bufferId || c.id);
+        });
         
         // 2. Clips in lanes (recordings)
         track.lanes?.forEach(lane => {
-          lane.clips.forEach(c => assetIds.add(c.bufferId || c.id));
+          lane.clips?.forEach(c => {
+            if (c) assetIds.add(c.bufferId || c.id);
+          });
         });
         
         // 3. Frozen buffer
@@ -448,6 +461,9 @@ function AppContent() {
         <BPMSyncPopup />
         <SyncOverlay progress={syncProgress} />
         <WelcomeModal />
+        {state.videoPanelOpen && <VideoSyncPanel />}
+        {state.vstEditorTrackId && <VstBridgeEditor />}
+        {state.sidechainEditorTrackId && <SidechainEditor />}
 
         {/* Deep link loading overlay */}
         <AnimatePresence>

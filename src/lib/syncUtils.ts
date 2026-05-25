@@ -7,7 +7,7 @@ export const isGitHubPagesBuild = (): boolean => {
   if (typeof window === 'undefined') return false;
   
   // Exclude local development environments explicitly (so localhost/127.0.0.1 is never locked or shown the modal)
-  const hostname = window.location.hostname;
+  const hostname = window.location?.hostname || '';
   if (
     hostname === 'localhost' || 
     hostname === '127.0.0.1' || 
@@ -109,57 +109,83 @@ export const downloadProjectBundleCloud = async (
 ): Promise<Blob> => {
   if (!isFirebaseAvailable) throw new Error("Firebase is not initialized");
   const fileRef = ref(storage, `projects/${projectId}.jaad`);
-  const downloadUrl = await getDownloadURL(fileRef);
 
-  console.log(`Cloud Sync: Downloading project bundle ${projectId}...`);
-  const response = await fetch(downloadUrl);
-  if (!response.ok) {
-    throw new Error(`Failed to download project bundle: ${response.statusText}`);
-  }
-
-  const contentLength = response.headers.get('content-length');
-  const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
-  
-  if (!response.body) {
-    throw new Error("Response body is not readable");
-  }
-
-  const reader = response.body.getReader();
-  let receivedBytes = 0;
-  const chunks: Uint8Array[] = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
+  try {
+    const downloadUrl = await getDownloadURL(fileRef);
+    console.log(`Cloud Sync: Downloading project bundle ${projectId}...`);
+    const response = await fetch(downloadUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to download project bundle: ${response.statusText}`);
     }
-    chunks.push(value);
-    receivedBytes += value.length;
+
+    const contentLength = response.headers.get('content-length');
+    const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
     
-    if (totalBytes > 0 && onProgress) {
-      const progress = (receivedBytes / totalBytes) * 100;
-      onProgress(progress);
+    if (!response.body) {
+      throw new Error("Response body is not readable");
     }
-  }
 
-  const blob = new Blob(chunks as any[], { type: 'application/zip' });
-  console.log(`Cloud Sync: Finished downloading bundle ${projectId}. Total size: ${(receivedBytes / 1024 / 1024).toFixed(2)} MB`);
-  if (onProgress) onProgress(100);
-  return blob;
+    const reader = response.body.getReader();
+    let receivedBytes = 0;
+    const chunks: Uint8Array[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      chunks.push(value);
+      receivedBytes += value.length;
+      
+      if (totalBytes > 0 && onProgress) {
+        const progress = (receivedBytes / totalBytes) * 100;
+        onProgress(progress);
+      }
+    }
+
+    const blob = new Blob(chunks as any[], { type: 'application/zip' });
+    console.log(`Cloud Sync: Finished downloading bundle ${projectId}. Total size: ${(receivedBytes / 1024 / 1024).toFixed(2)} MB`);
+    if (onProgress) onProgress(100);
+    return blob;
+  } catch (err) {
+    console.warn(`Direct fetch for project bundle ${projectId} failed (likely due to CORS or network rules). Falling back to Firebase Storage getBlob...`, err);
+    if (onProgress) onProgress(30); // Show some progress indicator
+    const blob = await getBlob(fileRef);
+    if (onProgress) onProgress(100);
+    return blob;
+  }
 };
 
 export const uploadAssetCloud = async (assetId: string, blob: Blob, onProgress?: (progress: number) => void) => {
   if (!isFirebaseAvailable) return;
   const assetRef = ref(storage, `assets/${assetId}`);
   console.log(`Cloud Sync: Uploading asset ${assetId}...`);
-  await uploadBytes(assetRef, blob, {
-    customMetadata: {
-      assetId,
-      uploadedAt: new Date().toISOString()
+  
+  let attempts = 0;
+  const maxAttempts = 3;
+  let delay = 1000;
+  
+  while (attempts < maxAttempts) {
+    try {
+      await uploadBytes(assetRef, blob, {
+        customMetadata: {
+          assetId,
+          uploadedAt: new Date().toISOString()
+        }
+      });
+      console.log(`Cloud Sync: Successfully uploaded ${assetId} on attempt ${attempts + 1}`);
+      if (onProgress) onProgress(100);
+      return;
+    } catch (error) {
+      attempts++;
+      console.warn(`Cloud Sync: Upload attempt ${attempts} failed for ${assetId}:`, error);
+      if (attempts >= maxAttempts) {
+        throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, delay));
+      delay *= 2;
     }
-  });
-  console.log(`Cloud Sync: Successfully uploaded ${assetId}`);
-  if (onProgress) onProgress(100);
+  }
 };
 
 export const downloadAssetCloud = async (assetId: string) => {

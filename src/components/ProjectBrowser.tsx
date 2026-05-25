@@ -72,8 +72,12 @@ export function ProjectBrowser() {
         const assetIds = new Set<string>();
         const tracks = project.tracks || [];
         for (const track of tracks) {
-          track.clips?.forEach((c: any) => assetIds.add(c.bufferId || c.id));
-          track.lanes?.forEach((l: any) => l.clips?.forEach((c: any) => assetIds.add(c.bufferId || c.id)));
+          track.clips?.forEach((c: any) => {
+            if (c) assetIds.add(c.bufferId || c.id);
+          });
+          track.lanes?.forEach((l: any) => l.clips?.forEach((c: any) => {
+            if (c) assetIds.add(c.bufferId || c.id);
+          }));
           if (track.isFrozen && track.frozenBufferId) {
             assetIds.add(track.frozenBufferId);
           }
