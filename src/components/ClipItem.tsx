@@ -700,6 +700,15 @@ export function ClipItem({
             >
               Extract Stems
             </button>
+            <button
+              className="w-full text-left px-4 py-2 text-sm text-[#a882fa] hover:bg-white/10 transition-colors"
+              onClick={() => {
+                dispatch({ type: "SET_AUTHENTICITY_PROCESSOR_CLIP", payload: clip.id });
+                setClipContextMenu(null);
+              }}
+            >
+              AI Authenticity
+            </button>
             <div className="h-px bg-white/10 my-1 w-full" />
             <button
               className="w-full text-left px-4 py-2 text-sm text-primary hover:bg-white/10 transition-colors flex items-center gap-2"

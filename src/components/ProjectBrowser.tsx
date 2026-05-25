@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../lib/store';
-import { listProjects, deleteProjectCloud, downloadProjectBundleCloud, downloadAssetCloud, isGitHubPagesBuild, isDemoProject } from '../lib/syncUtils';
-import { X, FolderOpen, Clock, Music, Trash2, Cloud, Loader2, Lock } from 'lucide-react';
+import { listProjects, deleteProjectCloud, downloadProjectBundleCloud, downloadProjectBackupCloud, downloadAssetCloud, isGitHubPagesBuild, isDemoProject } from '../lib/syncUtils';
+import { X, FolderOpen, Clock, Music, Trash2, Cloud, Loader2, Lock, History } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiquidGlassPanel } from './LiquidGlass';
 import { saveAsset, deleteLocalProjectState, getAsset } from '../lib/assetManager';
@@ -14,6 +14,7 @@ export function ProjectBrowser() {
   const [openingProjectId, setOpeningProjectId] = useState<string | null>(null);
   const [openStatus, setOpenStatus] = useState<string>('');
   const [openProgress, setOpenProgress] = useState<number>(0);
+  const [expandedBackupsProjectId, setExpandedBackupsProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     if (state.isProjectBrowserOpen) {
@@ -59,6 +60,70 @@ export function ProjectBrowser() {
         console.error("Failed to delete project", err);
         alert("Failed to delete project.");
       }
+    }
+  };
+
+  const handleRestoreBackup = async (project: any, backupTimestamp: number) => {
+    if (!window.confirm(`Are you sure you want to restore the backup from ${new Date(backupTimestamp).toLocaleString()}? This will overwrite your current active project state.`)) return;
+
+    setOpeningProjectId(project.id);
+    setOpenStatus(`Downloading cloud snapshot...`);
+    setOpenProgress(0);
+    try {
+      const blob = await downloadProjectBackupCloud(project.id, backupTimestamp, (progress) => {
+        setOpenProgress(Math.max(0, Math.min(70, Math.round(progress * 0.7))));
+      });
+
+      setOpenStatus('Extracting snapshot assets...');
+      setOpenProgress(75);
+
+      const zip = await JSZip.loadAsync(blob);
+      const projectJson = await zip.file("project.json")?.async("string");
+      if (!projectJson) throw new Error("Invalid backup bundle: project.json missing");
+
+      const parsed = JSON.parse(projectJson);
+      
+      const assetsFolder = zip.folder("assets");
+      if (assetsFolder) {
+        const fileEntries: { relativePath: string; file: any }[] = [];
+        assetsFolder.forEach((relativePath, file) => {
+          if (relativePath.endsWith(".audio")) {
+            fileEntries.push({ relativePath, file });
+          }
+        });
+
+        const totalFiles = fileEntries.length;
+        if (totalFiles > 0) {
+          let processedFiles = 0;
+          const promises = fileEntries.map(async ({ relativePath, file }) => {
+            const id = relativePath.replace(".audio", "");
+            const audioBlob = await file.async("blob");
+            await saveAsset(id, audioBlob);
+            processedFiles++;
+            const extractProgress = 75 + Math.round((processedFiles / totalFiles) * 23);
+            setOpenProgress(extractProgress);
+          });
+          await Promise.all(promises);
+        }
+      }
+
+      setOpenProgress(100);
+      setOpenStatus('Restoring project...');
+      await new Promise(r => setTimeout(r, 600));
+
+      dispatch({ type: 'SET_PROJECT_ID', payload: project.id });
+      dispatch({ type: 'SYNC_STATE', payload: parsed });
+      dispatch({ type: 'SET_HAS_MANUALLY_SAVED', payload: true });
+      dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
+      localStorage.setItem('jaad_last_active_project_id', project.id);
+      dispatch({ type: 'TOGGLE_PROJECT_BROWSER' });
+    } catch (err: any) {
+      console.error("Failed to restore backup", err);
+      alert(`Failed to restore backup: ${err.message || err}`);
+    } finally {
+      setOpeningProjectId(null);
+      setOpenStatus('');
+      setOpenProgress(0);
     }
   };
 
@@ -275,11 +340,11 @@ export function ProjectBrowser() {
                       </div>
                     ) : (
                       projects.map((project) => (
-                        <div
-                          key={project.id}
-                          onClick={() => handleOpenProject(project)}
-                          className="w-full text-left p-4 bg-white/[0.04] hover:bg-white/[0.08] border border-white/5 hover:border-primary/30 rounded-xl transition-all group flex items-center justify-between cursor-pointer backdrop-blur-sm"
-                        >
+                        <div key={project.id} className="flex flex-col">
+                          <div
+                            onClick={() => handleOpenProject(project)}
+                            className="w-full text-left p-4 bg-white/[0.04] hover:bg-white/[0.08] border border-white/5 hover:border-primary/30 rounded-xl transition-all group flex items-center justify-between cursor-pointer backdrop-blur-sm"
+                          >
                           <div className="flex items-center space-x-4">
                             <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
                               <Music size={24} />
@@ -304,6 +369,15 @@ export function ProjectBrowser() {
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
+                            {project.backups && project.backups.length > 0 && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setExpandedBackupsProjectId(prev => prev === project.id ? null : project.id); }}
+                                className={`p-2 rounded-lg transition-all z-10 ${expandedBackupsProjectId === project.id ? 'bg-primary/20 text-primary' : 'text-zinc-500 hover:text-white hover:bg-white/10'}`}
+                                title="View Snapshots"
+                              >
+                                <History size={18} />
+                              </button>
+                            )}
                             {isGitHubPagesBuild() && isDemoProject(project.projectName) ? (
                               <div
                                 className="p-2 text-amber-400 bg-amber-500/10 rounded-lg border border-amber-500/20 z-10"
@@ -329,6 +403,36 @@ export function ProjectBrowser() {
                             </div>
                           </div>
                         </div>
+
+                        <AnimatePresence>
+                          {expandedBackupsProjectId === project.id && project.backups && project.backups.length > 0 && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="p-3 mt-2 mx-2 bg-black/40 border border-white/5 rounded-lg space-y-2">
+                                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest pl-2 mb-2">Cloud Snapshots (Backups)</div>
+                                {[...project.backups].reverse().map((timestamp: number, reverseIdx: number) => (
+                                  <div key={timestamp} className="flex items-center justify-between bg-white/[0.03] hover:bg-white/[0.06] p-2 rounded-md transition-colors">
+                                    <div className="flex items-center space-x-3 text-xs text-zinc-300">
+                                      <Clock size={12} className="text-primary" />
+                                      <span>Snapshot {project.backups.length - reverseIdx}: {new Date(timestamp).toLocaleString()}</span>
+                                    </div>
+                                    <button 
+                                      onClick={() => handleRestoreBackup(project, timestamp)}
+                                      className="text-[10px] uppercase font-bold tracking-wider px-3 py-1 bg-primary/20 text-primary hover:bg-primary hover:text-black rounded transition-all"
+                                    >
+                                      Restore
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                       ))
                     )}
                   </div>

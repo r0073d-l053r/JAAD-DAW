@@ -6,7 +6,7 @@ import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { audioBufferToWav, createStemZip, downloadBlob, estimateWavSize, formatFileSize } from '../lib/exportUtils';
 import { cleanUpStemsAsync } from '../lib/audioUtils';
-import { updateProjectCloud, uploadAssetCloud, uploadProjectBundleCloud, isGitHubPagesBuild, isDemoProject } from '../lib/syncUtils';
+import { updateProjectCloud, uploadAssetCloud, uploadProjectBundleCloud, getProjectCloud, uploadProjectBackupCloud, deleteProjectBackupCloud, isGitHubPagesBuild, isDemoProject } from '../lib/syncUtils';
 import { saveAsset, getAsset } from '../lib/assetManager';
 import JSZip from 'jszip';
 import { LiquidGlassPanel } from './LiquidGlass';
@@ -171,10 +171,34 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
         }
       }
 
-      // 3. Final metadata update in Firestore with hasBundle: true
+      // 3. Handle Cloud Snapshots (Backups)
+      const timestamp = Date.now();
+      let updatedBackups: number[] = [timestamp];
+      
+      try {
+        const existingProject = await getProjectCloud(targetId);
+        if (existingProject && existingProject.backups) {
+          updatedBackups = [...existingProject.backups, timestamp];
+        }
+        
+        // Prune if > 3
+        while (updatedBackups.length > 3) {
+          const oldest = updatedBackups.shift();
+          if (oldest) {
+            await deleteProjectBackupCloud(targetId, oldest);
+          }
+        }
+        
+        // Upload the new backup
+        await uploadProjectBackupCloud(targetId, zipBlob, timestamp);
+      } catch (e) {
+        console.warn("Failed to create backup snapshot, continuing with save...", e);
+      }
+
+      // 4. Final metadata update in Firestore with hasBundle: true
       setUploadProgress(99);
       setSyncProgress(99); 
-      await updateProjectCloud(targetId, targetName, state.tracks, state.bpm, state.originalBpm, state.masterVolume, true);
+      await updateProjectCloud(targetId, targetName, state.tracks, state.bpm, state.originalBpm, state.masterVolume, true, updatedBackups);
 
       setUploadProgress(100);
       setSyncProgress(100); 

@@ -80,6 +80,27 @@ If you want to use cloud saving, you'll need to create a Firebase project at the
 ### 🤖 AI Integration
 - **Auto-Tagging**: Use the "AI Auto-Tag" feature to have the DAW analyze and name your stems based on their content (Drums, Bass, Vocal, etc.).
 - **Smart Stems**: Intelligent cleanup and processing options available via the right-click menu.
+- **Authenticity Processor**: Ensure loops and stems are authentic with an intelligent scoring and AI variation system.
+
+---
+
+## 🔌 Headless VSTs (Carla Sidecar)
+
+J.A.A.D supports professional Windows VSTs (like Waves) via a robust headless Docker sidecar utilizing Carla and Wine.
+
+### Setting up the Sidecar
+1. Place your Windows VST plugins (`.dll` files) inside the `/vst` directory located in the project's root folder.
+2. Ensure you have Docker and Docker Compose installed on your system.
+3. Open a terminal in the project directory and run the following command to boot the DSP Sidecar:
+   ```bash
+   docker-compose up dsp -d
+   ```
+4. This will build and start an Ubuntu-based environment with Wine, KXStudio/Carla, and a Python WebSocket bridge that seamlessly connects the DAW frontend to your VSTs.
+
+### How to Use VSTs
+- Once the sidecar is running, J.A.A.D will detect it.
+- You can route your stems to specific VST effects, and the audio will be streamed to the container and processed in real-time.
+- Adjust parameters in the DAW UI to send OSC commands to Carla.
 
 ---
 

@@ -18,12 +18,14 @@ services:
       context: ./docker-dsp
     ports:
       - "8080:8080"
+    volumes:
+      - ./vst:/vst
     restart: unless-stopped
     container_name: jaad-dsp
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"const ws = require('ws'); const socket = new ws('ws://localhost:8080'); socket.on('open', () => process.exit(0)); socket.on('error', () => process.exit(1));\""]
+      test: ["CMD-SHELL", "python3 -c \"import websockets; import asyncio; asyncio.run(websockets.connect('ws://localhost:8080'))\" || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 5s
+      start_period: 15s
 

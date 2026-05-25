@@ -84,6 +84,7 @@ interface AppState {
   videoMuted: boolean;
   vstEditorTrackId: string | null;
   sidechainEditorTrackId: string | null;
+  authenticityProcessorClipId: string | null;
 }
 
 type Action =
@@ -92,6 +93,7 @@ type Action =
   | { type: "TOGGLE_METRONOME" }
   | { type: "SET_VST_EDITOR_TRACK"; payload: string | null }
   | { type: "SET_SIDECHAIN_EDITOR_TRACK"; payload: string | null }
+  | { type: "SET_AUTHENTICITY_PROCESSOR_CLIP"; payload: string | null }
   | { type: "SET_BPM"; payload: number }
   | { type: "SET_ORIGINAL_BPM"; payload: number }
   | { type: "SET_TIME"; payload: number }
@@ -238,6 +240,7 @@ const initialState: AppStateWithHistory = {
   videoMuted: false,
   vstEditorTrackId: null,
   sidechainEditorTrackId: null,
+  authenticityProcessorClipId: null,
 };
 
 function saveHistory(
@@ -389,6 +392,8 @@ function appReducer(
       return { ...state, vstEditorTrackId: action.payload };
     case "SET_SIDECHAIN_EDITOR_TRACK":
       return { ...state, sidechainEditorTrackId: action.payload };
+    case "SET_AUTHENTICITY_PROCESSOR_CLIP":
+      return { ...state, authenticityProcessorClipId: action.payload };
     case "SET_TIME_SELECTION":
       return { ...state, timeSelection: action.payload };
     case "TOGGLE_SNAP":

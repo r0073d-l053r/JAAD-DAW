@@ -31,6 +31,7 @@ import { Cloud, Loader2 } from 'lucide-react';
 import { VideoSyncPanel } from './components/VideoSyncPanel';
 import { VstBridgeEditor } from './components/VstBridgeEditor';
 import { SidechainEditor } from './components/SidechainEditor';
+import { AuthenticityProcessor } from './components/AuthenticityProcessor';
 
 
 
@@ -464,6 +465,7 @@ function AppContent() {
         {state.videoPanelOpen && <VideoSyncPanel />}
         {state.vstEditorTrackId && <VstBridgeEditor />}
         {state.sidechainEditorTrackId && <SidechainEditor />}
+        {state.authenticityProcessorClipId && <AuthenticityProcessor />}
 
         {/* Deep link loading overlay */}
         <AnimatePresence>
