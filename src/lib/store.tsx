@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, ReactNode } from "react";
 import { audioEngine } from "./audioEngine";
+import { findNearestZeroCrossing } from "./audioUtils";
 
 export interface Lane {
   id: string;
@@ -41,8 +42,16 @@ export interface TimeSelection {
   trackIds: string[];
 }
 
+export interface Marker {
+  id: string;
+  time: number;
+  label: string;
+  color: string;
+}
+
 interface AppState {
   tracks: Track[];
+  markers: Marker[];
   isPlaying: boolean;
   currentTime: number;
   bpm: number; // static fallback/initial tempo
@@ -96,7 +105,7 @@ interface AppState {
   } | null;
 }
 
-type Action =
+export type Action =
   | { type: "TOGGLE_PLAY" }
   | { type: "TOGGLE_RECORD" }
   | { type: "TOGGLE_METRONOME" }
@@ -212,17 +221,23 @@ type Action =
         duration: number;
       };
     }
-  | { type: "SET_ACTIVE_CONTEXT_MENU"; payload: AppState["activeContextMenu"] };
+  | { type: "SET_ACTIVE_CONTEXT_MENU"; payload: AppState["activeContextMenu"] }
+  | { type: "ADD_MARKER"; payload: { time: number; label?: string; color?: string } }
+  | { type: "REMOVE_MARKER"; payload: string }
+  | { type: "UPDATE_MARKER"; payload: { id: string; changes: Partial<Marker> } }
+  | { type: "GO_TO_NEXT_MARKER" }
+  | { type: "GO_TO_PREV_MARKER" };
 
-interface AppStateWithHistory extends AppState {
+export interface AppStateWithHistory extends AppState {
   past: Track[][];
   future: Track[][];
 }
 
 const initialTracks: Track[] = [];
 
-const initialState: AppStateWithHistory = {
+export const initialState: AppStateWithHistory = {
   tracks: initialTracks,
+  markers: [],
   past: [],
   future: [],
   isPlaying: false,
@@ -284,7 +299,7 @@ function saveHistory(
   };
 }
 
-function appReducer(
+export function appReducer(
   state: AppStateWithHistory,
   action: Action,
 ): AppStateWithHistory {
@@ -464,6 +479,40 @@ function appReducer(
     }
     case "SET_ACTIVE_CONTEXT_MENU":
       return { ...state, activeContextMenu: action.payload };
+    case "ADD_MARKER": {
+      const { time, label, color } = action.payload;
+      const markerId = "marker_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+      const newMarker: Marker = {
+        id: markerId,
+        time: Math.max(0, time),
+        label: label || `Marker ${state.markers.length + 1}`,
+        color: color || "#3b82f6", // Default premium blue
+      };
+      const updatedMarkers = [...state.markers, newMarker].sort((a, b) => a.time - b.time);
+      return { ...state, markers: updatedMarkers };
+    }
+    case "REMOVE_MARKER": {
+      return { ...state, markers: state.markers.filter((m) => m.id !== action.payload) };
+    }
+    case "UPDATE_MARKER": {
+      const { id, changes } = action.payload;
+      const updated = state.markers.map((m) => (m.id === id ? { ...m, ...changes } : m));
+      return { ...state, markers: updated.sort((a, b) => a.time - b.time) };
+    }
+    case "GO_TO_NEXT_MARKER": {
+      const next = state.markers.find((m) => m.time > state.currentTime + 0.01);
+      if (next) {
+        return { ...state, currentTime: next.time };
+      }
+      return state;
+    }
+    case "GO_TO_PREV_MARKER": {
+      const prev = [...state.markers].reverse().find((m) => m.time < state.currentTime - 0.01);
+      if (prev) {
+        return { ...state, currentTime: prev.time };
+      }
+      return state;
+    }
     case "SET_TIME_SELECTION":
       return { ...state, timeSelection: action.payload };
     case "TOGGLE_SNAP":
@@ -991,39 +1040,56 @@ function appReducer(
               return [c];
             }
 
+            // Snap selection boundaries to the nearest zero-crossing for this clip
+            const buffer = audioEngine.buffers.get(c.bufferId || c.id);
+            let snappedStart = startTime;
+            let snappedEnd = endTime;
+
+            if (buffer) {
+              const relStart = startTime - c.start + (c.audioOffset || 0);
+              const zeroCrossStart = findNearestZeroCrossing(buffer, relStart);
+              snappedStart = Math.max(c.start, Math.min(clipEnd, c.start - (c.audioOffset || 0) + zeroCrossStart));
+
+              const relEnd = endTime - c.start + (c.audioOffset || 0);
+              const zeroCrossEnd = findNearestZeroCrossing(buffer, relEnd);
+              snappedEnd = Math.max(c.start, Math.min(clipEnd, c.start - (c.audioOffset || 0) + zeroCrossEnd));
+            }
+
             const results = [];
             
             // Part before selection
-            if (c.start < startTime) {
+            if (c.start < snappedStart) {
               results.push({
                 ...c,
                 id: c.id + "_prefix_" + Math.random().toString(36).substr(2, 5),
                 bufferId: c.bufferId || c.id,
-                duration: startTime - c.start
+                duration: snappedStart - c.start
               });
             }
             
             // The selected part
-            const midStart = Math.max(c.start, startTime);
-            const midEnd = Math.min(clipEnd, endTime);
-            results.push({
-              ...c,
-              id: c.id + "_isolate_" + Math.random().toString(36).substr(2, 5),
-              bufferId: c.bufferId || c.id,
-              start: midStart,
-              duration: midEnd - midStart,
-              audioOffset: (c.audioOffset || 0) + (midStart - c.start),
-            });
+            const midStart = Math.max(c.start, snappedStart);
+            const midEnd = Math.min(clipEnd, snappedEnd);
+            if (midEnd > midStart) {
+              results.push({
+                ...c,
+                id: c.id + "_isolate_" + Math.random().toString(36).substr(2, 5),
+                bufferId: c.bufferId || c.id,
+                start: midStart,
+                duration: midEnd - midStart,
+                audioOffset: (c.audioOffset || 0) + (midStart - c.start),
+              });
+            }
             
             // Part after selection
-            if (clipEnd > endTime) {
+            if (clipEnd > snappedEnd) {
               results.push({
                 ...c,
                 id: c.id + "_suffix_" + Math.random().toString(36).substr(2, 5),
                 bufferId: c.bufferId || c.id,
-                start: endTime,
-                duration: clipEnd - endTime,
-                audioOffset: (c.audioOffset || 0) + (endTime - c.start)
+                start: snappedEnd,
+                duration: clipEnd - snappedEnd,
+                audioOffset: (c.audioOffset || 0) + (snappedEnd - c.start)
               });
             }
             
@@ -1066,15 +1132,29 @@ function appReducer(
             state.currentTime > clip.start &&
             state.currentTime < clip.start + clip.duration
           ) {
-            const duration1 = state.currentTime - clip.start;
+            // Retrieve buffer and shift cut time to nearest zero-crossing
+            const buffer = audioEngine.buffers.get(clip.bufferId || clip.id);
+            let splitTime = state.currentTime;
+
+            if (buffer) {
+              const relativeTime = splitTime - clip.start + (clip.audioOffset || 0);
+              const zeroCrossRelative = findNearestZeroCrossing(buffer, relativeTime);
+              splitTime = Math.max(clip.start, Math.min(clip.start + clip.duration, clip.start - (clip.audioOffset || 0) + zeroCrossRelative));
+            }
+
+            const duration1 = splitTime - clip.start;
             const duration2 = clip.duration - duration1;
+
+            if (duration1 <= 0) return [clip]; // Shift aligned before the clip start, don't split
+            if (duration2 <= 0) return [clip]; // Shift aligned past clip duration, don't split
+
             return [
               { ...clip, bufferId: clip.bufferId || clip.id, duration: duration1 },
               {
                 ...clip,
                 id: clip.id + "_split_" + Date.now(),
                 bufferId: clip.bufferId || clip.id,
-                start: state.currentTime,
+                start: splitTime,
                 duration: duration2,
                 audioOffset: (clip.audioOffset || 0) + duration1,
               },
@@ -1866,6 +1946,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } else if (e.key.toLowerCase() === "r" && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         dispatch({ type: "TOGGLE_RECORD" });
+      } else if (e.key.toLowerCase() === "m" && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        dispatch({ type: "ADD_MARKER", payload: { time: currentState.currentTime } });
+      } else if (e.key === "[" && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        dispatch({ type: "GO_TO_PREV_MARKER" });
+      } else if (e.key === "]" && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        dispatch({ type: "GO_TO_NEXT_MARKER" });
       } else if (e.key === "F9") {
         e.preventDefault();
         dispatch({ type: "TOGGLE_MIXER" });

@@ -86,6 +86,8 @@ export function Timeline() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const PIXELS_PER_SECOND = state.zoomLevel;
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [draggingMarkerId, setDraggingMarkerId] = useState<string | null>(null);
+  const [editingMarker, setEditingMarker] = useState<any | null>(null);
 
   // Ref to access latest state in async callbacks
   const stateRef = useRef(state);
@@ -556,6 +558,40 @@ export function Timeline() {
     };
   }, [isDraggingPlayhead, state.zoomLevel, state.bpm, state.snapToGrid, dispatch]);
 
+  useEffect(() => {
+    if (!draggingMarkerId) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const timeline = timelineRef.current;
+      if (!timeline) return;
+
+      const rect = timeline.getBoundingClientRect();
+      const clickX = e.clientX - rect.left + timeline.scrollLeft;
+      let newTime = clickX / PIXELS_PER_SECOND;
+
+      if (state.snapToGrid) {
+        const beatDuration = 60 / state.bpm;
+        newTime = Math.round(newTime / beatDuration) * beatDuration;
+      }
+
+      dispatch({
+        type: 'UPDATE_MARKER',
+        payload: { id: draggingMarkerId, changes: { time: Math.max(0, newTime) } }
+      });
+    };
+
+    const handleMouseUp = () => {
+      setDraggingMarkerId(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [draggingMarkerId, PIXELS_PER_SECOND, state.bpm, state.snapToGrid, dispatch]);
+
   return (
     <div 
       id="timeline"
@@ -664,6 +700,43 @@ export function Timeline() {
                   style={{ left: state.loopStart * PIXELS_PER_SECOND, width: (state.loopEnd - state.loopStart) * PIXELS_PER_SECOND }}
              />
           )}
+
+          {/* Interactive Marker Flags */}
+          {state.markers?.map((marker) => {
+            const x = marker.time * PIXELS_PER_SECOND;
+            return (
+              <div
+                key={marker.id}
+                className="absolute top-0 bottom-0 z-[80] group/marker cursor-ew-resize select-none"
+                style={{ left: `${x}px`, width: '14px', transform: 'translateX(-50%)' }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  if (e.button === 0) {
+                    setDraggingMarkerId(marker.id);
+                  }
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setEditingMarker(marker);
+                }}
+              >
+                {/* Visual marker flag */}
+                <div 
+                  className="w-3.5 h-3.5 absolute top-1 rounded-sm shadow-md transition-all group-hover/marker:scale-110 active:scale-95 cursor-ew-resize"
+                  style={{ 
+                    backgroundColor: marker.color,
+                    clipPath: 'polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%)'
+                  }}
+                  title="Drag to reposition, Double click to edit"
+                />
+                {/* Visual marker label */}
+                <span className="absolute left-4 top-1 text-[9px] font-bold text-white whitespace-nowrap bg-zinc-950/85 px-1 py-0.5 rounded border border-white/10 backdrop-blur-xs select-none pointer-events-none opacity-80 group-hover/marker:opacity-100 transition-opacity">
+                  {marker.label}
+                </span>
+              </div>
+            );
+          })}
+
           <Playhead PIXELS_PER_SECOND={PIXELS_PER_SECOND} startDraggingPlayhead={startDraggingPlayhead} mode="handle" />
         </div>
         <Playhead PIXELS_PER_SECOND={PIXELS_PER_SECOND} startDraggingPlayhead={startDraggingPlayhead} mode="line" />
@@ -677,6 +750,23 @@ export function Timeline() {
             backgroundSize: `${(60 / state.bpm) * PIXELS_PER_SECOND}px 100%`
           } : {}}
         >
+          {/* Visual marker guidelines */}
+          {state.markers?.map((marker) => {
+            const x = marker.time * PIXELS_PER_SECOND;
+            return (
+              <div
+                key={`line-${marker.id}`}
+                className="absolute top-0 bottom-0 pointer-events-none z-[40]"
+                style={{
+                  left: `${x}px`,
+                  width: '1px',
+                  borderLeft: `1px dashed ${marker.color}`,
+                  opacity: 0.25
+                }}
+              />
+            );
+          })}
+
           {/* Master Tempo Lane */}
           <div 
             className="h-16 shrink-0 border-b border-[#2a2b30]/50 relative group transition bg-zinc-900/30"
@@ -787,6 +877,81 @@ export function Timeline() {
           </button>
         </div>
       )}
+
+      {/* Marker Edit Modal */}
+      <AnimatePresence>
+        {editingMarker && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setEditingMarker(null)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              className="w-80 p-6 rounded-2xl bg-zinc-950/85 border border-white/10 shadow-2xl backdrop-blur-xl relative overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Decorative Liquid Glass light skew */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-white/[0.02] to-transparent pointer-events-none" />
+              
+              <h3 className="text-sm font-bold text-white tracking-wider mb-4 uppercase">Edit Cue Marker</h3>
+              
+              <div className="space-y-4 relative z-10">
+                <div>
+                  <label className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1">Label</label>
+                  <input
+                    type="text"
+                    value={editingMarker.label}
+                    onChange={(e) => setEditingMarker({ ...editingMarker, label: e.target.value })}
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-primary transition"
+                    placeholder="e.g., Chorus, Drop"
+                    autoFocus
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">Color</label>
+                  <div className="flex gap-2.5">
+                    {['#3b82f6', '#10b981', '#8b5cf6', '#ef4444', '#f59e0b', '#ec4899'].map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setEditingMarker({ ...editingMarker, color: c })}
+                        className={`w-6 h-6 rounded-full border-2 transition-all hover:scale-110 ${editingMarker.color === c ? 'border-white scale-110 shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'border-transparent'}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => {
+                      dispatch({ type: 'REMOVE_MARKER', payload: editingMarker.id });
+                      setEditingMarker(null);
+                    }}
+                    className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-semibold py-2 px-4 rounded-lg transition-colors duration-200"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => {
+                      dispatch({ type: 'UPDATE_MARKER', payload: { id: editingMarker.id, changes: { label: editingMarker.label, color: editingMarker.color } } });
+                      setEditingMarker(null);
+                    }}
+                    className="flex-1 bg-primary hover:bg-primary-hover text-white text-xs font-semibold py-2 px-4 rounded-lg shadow-lg hover:shadow-primary/30 transition-all duration-200"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
