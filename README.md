@@ -6,7 +6,7 @@
 ![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)
 ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white)
 
-### [Test JAAD!](https://r0073d-l053r.github.io/JAAD-DAW/)
+## [Test JAAD!](https://r0073d-l053r.github.io/JAAD-DAW/)
 
 Just Another AI DAW (JAAD) is a modern, web-browser-based Digital Audio Workstation built with React and the Web Audio API. It focuses on providing a fast, intuitive, and AI-enhanced experience for music production and audio editing directly in the browser—no installation required.
 
@@ -14,29 +14,22 @@ Just Another AI DAW (JAAD) is a modern, web-browser-based Digital Audio Workstat
 >
 > **🌐 Browser Compatibility:** This project is designed to perform at its best when using a **Google Chrome** browser. While other modern browsers may work, Chrome provides the most stable and performant environment for the Web Audio engine and high-fidelity animations.
 
-
 ## Screenshots
 
-<div align="center">
-  <h3>1. Sleek Empty Timeline Workspace</h3>
-  <img src="./assets/screenshot-1.png" alt="JAAD Interface - Empty Workspace" width="800"/>
-  <br/><br/>
-  
-  <h3>2. Multitrack Editor with Video Scoring Monitor</h3>
-  <img src="./assets/screenshot-2.png" alt="JAAD Interface - Multitrack Editor with Video" width="800"/>
-  <br/><br/>
+### 1. Sleek Empty Timeline Workspace
+![JAAD Interface - Empty Workspace](./assets/screenshot-1.png)
 
-  <h3>3. Multitrack Spectrogram Analysis</h3>
-  <img src="./assets/screenshot-3.jpg" alt="JAAD Interface - Spectrogram View" width="800"/>
-  <br/><br/>
+### 2. Multitrack Editor with Video Scoring Monitor
+![JAAD Interface - Multitrack Editor with Video](./assets/screenshot-2.png)
 
-  <h3>4. Generative AI Copilot & Vocal Styles</h3>
-  <img src="./assets/screenshot-4.png" alt="JAAD Interface - Vocal Style Dropdown" width="800"/>
-  <br/><br/>
+### 3. Multitrack Spectrogram Analysis
+![JAAD Interface - Spectrogram View](./assets/screenshot-3.jpg)
 
-  <h3>5. Syncing Project BPM Loading Overlay</h3>
-  <img src="./assets/screenshot-5.png" alt="JAAD Interface - Syncing BPM Loading Modal" width="800"/>
-</div>
+### 4. Generative AI Copilot & Vocal Styles
+![JAAD Interface - Vocal Style Dropdown](./assets/screenshot-4.png)
+
+### 5. Syncing Project BPM Loading Overlay
+![JAAD Interface - Syncing BPM Loading Modal](./assets/screenshot-5.png)
 
 ## Features
 
@@ -74,31 +67,38 @@ You need Node.js installed on your machine.
 ### Installation
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/r0073d-l053r/JAAD-DAW.git
    cd JAAD-DAW
    ```
+
    *(Note: Ensure you are in the `JAAD-DAW` directory before running the following commands.)*
 
 2. Set up your environment variables:
    Copy the example environment file and add your configuration (e.g. `GEMINI_API_KEY`).
+
    ```bash
    cp .env.example .env
    ```
 
 3. Install dependencies:
+
    ```bash
    npm install
    ```
 
 4. Build for production:
    *(Note: A production build is best to run the first time or after updates.)*
+
    ```bash
    npm run build
    ```
+
    The compiled files will be located in the `dist` directory.
 
 5. Start the development server:
+
    ```bash
    npm run dev
    ```
@@ -111,12 +111,15 @@ You can easily self-host JAAD using Docker and Docker Compose. This ensures a co
 
 1. Make sure you have your `.env` file configured with your `GEMINI_API_KEY`.
 2. Build and start the container in detached mode:
+
    ```bash
    docker-compose up -d --build
    ```
+
 3. Open your browser and navigate to `http://localhost:3000`.
 
 To stop the container, run:
+
 ```bash
 docker-compose down
 ```
@@ -124,7 +127,7 @@ docker-compose down
 ## Keyboard Shortcuts
 
 | Shortcut | Action |
-|----------|--------|
+| --- | --- |
 | `Space` | Play / Pause |
 | `R` | Toggle Record |
 | `S` | Split Clip at Playhead |
@@ -151,10 +154,10 @@ docker-compose down
 - [ ] **Multiplayer Audio Streaming** (Real-time voice and audio sharing via WebRTC)
 - [ ] **Mobile Touch-Optimized Layout** & Gesture Controls
 
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.  
+
 1. Fork the Project
 2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
 3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
