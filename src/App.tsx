@@ -32,6 +32,7 @@ import { VideoSyncPanel } from './components/VideoSyncPanel';
 import { VstBridgeEditor } from './components/VstBridgeEditor';
 import { SidechainEditor } from './components/SidechainEditor';
 import { AuthenticityProcessor } from './components/AuthenticityProcessor';
+import { LiveAnalyzers } from './components/LiveAnalyzers';
 
 
 
@@ -466,6 +467,8 @@ function AppContent() {
         {state.vstEditorTrackId && <VstBridgeEditor />}
         {state.sidechainEditorTrackId && <SidechainEditor />}
         {state.authenticityProcessorClipId && <AuthenticityProcessor />}
+        
+        <LiveAnalyzers />
 
         {/* Deep link loading overlay */}
         <AnimatePresence>

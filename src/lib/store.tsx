@@ -85,6 +85,14 @@ interface AppState {
   vstEditorTrackId: string | null;
   sidechainEditorTrackId: string | null;
   authenticityProcessorClipId: string | null;
+  showLiveAnalyzers: boolean;
+  activeContextMenu: {
+    type: "clip" | "selection";
+    clipId?: string;
+    trackId?: string;
+    x: number;
+    y: number;
+  } | null;
 }
 
 type Action =
@@ -140,6 +148,8 @@ type Action =
   | { type: "TOGGLE_LOOP" }
   | { type: "SET_LOOP_MARKERS"; payload: { start: number; end: number } }
   | { type: "SPLIT_CLIP" }
+  | { type: "REVERT_CLIP_TO_ORIGINAL"; payload: { trackId: string; laneId?: string; clipId: string } }
+  | { type: "REVERT_TRACK_TO_ORIGINAL"; payload: { trackId: string } }
   | { type: "UNDO" }
   | { type: "CLEAN_UP_STEMS" }
   | { type: "REDO" }
@@ -186,7 +196,9 @@ type Action =
   | { type: "SET_VIDEO_URL"; payload: string | null }
   | { type: "SET_VIDEO_OFFSET"; payload: number }
   | { type: "SET_VIDEO_VOLUME"; payload: number }
-  | { type: "SET_VIDEO_MUTED"; payload: boolean };
+  | { type: "SET_VIDEO_MUTED"; payload: boolean }
+  | { type: "TOGGLE_LIVE_ANALYZERS" }
+  | { type: "SET_ACTIVE_CONTEXT_MENU"; payload: AppState["activeContextMenu"] };
 
 interface AppStateWithHistory extends AppState {
   past: Track[][];
@@ -241,6 +253,8 @@ const initialState: AppStateWithHistory = {
   vstEditorTrackId: null,
   sidechainEditorTrackId: null,
   authenticityProcessorClipId: null,
+  showLiveAnalyzers: false,
+  activeContextMenu: null,
 };
 
 function saveHistory(
@@ -376,6 +390,8 @@ function appReducer(
       };
     case "TOGGLE_SETTINGS":
       return { ...state, settingsOpen: !state.settingsOpen };
+    case "TOGGLE_LIVE_ANALYZERS":
+      return { ...state, showLiveAnalyzers: !state.showLiveAnalyzers };
     case "TOGGLE_SPECTROGRAM":
       return { ...state, spectrogramEnabled: !state.spectrogramEnabled };
     case "TOGGLE_VIDEO_PANEL":
@@ -394,6 +410,8 @@ function appReducer(
       return { ...state, sidechainEditorTrackId: action.payload };
     case "SET_AUTHENTICITY_PROCESSOR_CLIP":
       return { ...state, authenticityProcessorClipId: action.payload };
+    case "SET_ACTIVE_CONTEXT_MENU":
+      return { ...state, activeContextMenu: action.payload };
     case "SET_TIME_SELECTION":
       return { ...state, timeSelection: action.payload };
     case "TOGGLE_SNAP":
@@ -665,6 +683,81 @@ function appReducer(
     }
     case "SELECT_MULTIPLE_CLIPS": {
       return { ...state, selectedClipIds: action.payload };
+    }
+    case "REVERT_CLIP_TO_ORIGINAL": {
+      const { trackId, laneId, clipId } = action.payload;
+      const newTracks = state.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const revertClip = (c: Clip) => {
+          if (c.id === clipId) {
+            const buffer = audioEngine.buffers.get(c.bufferId || c.id);
+            if (buffer) {
+              return {
+                ...c,
+                // Keep the current timeline bounds (start, duration, audioOffset remain unchanged)
+                volumeEnvelope: undefined,
+                audioData: undefined, // Remove AI processing/tagging
+                notes: undefined // Remove MIDI if any
+              };
+            }
+          }
+          return c;
+        };
+
+        if (laneId) {
+          return {
+            ...t,
+            lanes: t.lanes?.map((l) =>
+              l.id === laneId ? { ...l, clips: l.clips.map(revertClip) } : l
+            ),
+          };
+        }
+        return { ...t, clips: t.clips.map(revertClip) };
+      });
+      return saveHistory(state, newTracks);
+    }
+    case "REVERT_TRACK_TO_ORIGINAL": {
+      const { trackId } = action.payload;
+      const newTracks = state.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+
+        // Find all unique underlying audio buffers on this track
+        const uniqueBuffers = new Map<string, AudioBuffer>();
+        
+        t.clips.forEach(c => {
+          const bufId = c.bufferId || c.id;
+          const buf = audioEngine.buffers.get(bufId);
+          if (buf) uniqueBuffers.set(bufId, buf);
+        });
+
+        t.lanes?.forEach(l => {
+          l.clips.forEach(c => {
+            const bufId = c.bufferId || c.id;
+            const buf = audioEngine.buffers.get(bufId);
+            if (buf) uniqueBuffers.set(bufId, buf);
+          });
+        });
+
+        // Restore them as full-length clips from the start
+        const restoredClips: Clip[] = Array.from(uniqueBuffers.entries()).map(([bufId, buf], i) => ({
+          id: `${bufId}_restored_${Date.now()}_${i}`,
+          bufferId: bufId,
+          start: 0, // Assume they originally started at 0
+          duration: buf.duration,
+          audioOffset: 0,
+        }));
+
+        return {
+          ...t,
+          volume: 0.8,
+          pan: 0,
+          muted: false,
+          solo: false,
+          clips: restoredClips,
+          lanes: [], // Clear alternate lanes when restoring the track to original
+        };
+      });
+      return saveHistory(state, newTracks);
     }
     case "DELETE_CLIPS": {
       if (state.timeSelection) {

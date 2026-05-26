@@ -7,6 +7,7 @@ import { MoreHorizontal, Trash2, Download, Wand2 } from 'lucide-react';
 import { useGemini } from '../lib/useGemini';
 import { saveAsset } from '../lib/assetManager';
 import { uploadAssetCloud } from '../lib/syncUtils';
+import { audioBufferToWav } from '../lib/exportUtils';
 
 import { LiquidGlassPanel } from './LiquidGlass';
 import { detectBPMOffline } from '../lib/essentiaBPM';
@@ -179,17 +180,39 @@ export function Mixer() {
     }
   };
 
-  const handleDownload = (track: Track) => {
-    const clipNames = track.clips.map((c: Clip) => c.audioData || 'audio_clip').join('_');
-    const filename = `${track.name}_${clipNames || 'empty'}.wav`;
-    const blob = new Blob(['dummy audio data'], { type: 'audio/wav' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    setOpenMenuId(null);
+  const handleDownload = async (track: Track) => {
+    if (!track.clips || track.clips.length === 0) {
+      alert("This track has no audio clips to download.");
+      setOpenMenuId(null);
+      return;
+    }
+
+    try {
+      const clipNames = track.clips.map((c: Clip) => c.audioData || 'audio_clip').join('_');
+      const cleanTrackName = track.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const filename = `${cleanTrackName}_${clipNames || 'empty'}.wav`;
+
+      // Find max duration of track clips
+      const duration = Math.max(1, ...track.clips.map((c: Clip) => c.start + c.duration));
+
+      // Render track audio using offline context
+      const renderedBuffer = await audioEngine.renderTrack(track, duration);
+
+      // Convert buffer to real WAV file
+      const wavBlob = audioBufferToWav(renderedBuffer);
+
+      const url = URL.createObjectURL(wavBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      console.error("Failed to render and download track:", err);
+      alert("An error occurred while rendering the track audio.");
+    } finally {
+      setOpenMenuId(null);
+    }
   };
 
   return (

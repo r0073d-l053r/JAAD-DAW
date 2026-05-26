@@ -45,11 +45,7 @@ export function ClipItem({
     audioOffset: number;
   } | null>(null);
 
-  // Context Menu State
-  const [clipContextMenu, setClipContextMenu] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
+  // Context Menu State (Now handled globally in store.tsx)
   const { tagClip } = useGemini();
   const [isTagging, setIsTagging] = useState(false);
 
@@ -66,20 +62,20 @@ export function ClipItem({
       }
     }
     setIsTagging(false);
-    setClipContextMenu(null);
+    dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
   };
-  const [selectionContextMenu, setSelectionContextMenu] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
+
   const colorInputRef = useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     const handleClick = () => {
-      setClipContextMenu(null);
-      setSelectionContextMenu(null);
+      dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
     };
-    if (clipContextMenu || selectionContextMenu) {
+    
+    const isThisClipMenu = state.activeContextMenu?.type === "clip" && state.activeContextMenu?.clipId === clip.id;
+    const isThisSelectionMenu = state.activeContextMenu?.type === "selection" && state.activeContextMenu?.trackId === trackId;
+    
+    if (isThisClipMenu || isThisSelectionMenu) {
       window.addEventListener("click", handleClick);
       window.addEventListener("contextmenu", handleClick);
     }
@@ -87,7 +83,7 @@ export function ClipItem({
       window.removeEventListener("click", handleClick);
       window.removeEventListener("contextmenu", handleClick);
     };
-  }, [clipContextMenu, selectionContextMenu]);
+  }, [state.activeContextMenu?.clipId, state.activeContextMenu?.trackId, clip.id, trackId]);
 
   const handleClipContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -106,14 +102,26 @@ export function ClipItem({
         },
       });
     }
+    const menuHeight = 350; // More conservative height estimate for clip context menu
+    let y = e.clientY;
+    if (y + menuHeight > window.innerHeight) {
+      y = Math.max(20, window.innerHeight - menuHeight - 20); // Keep in bounds with 20px padding
+    }
     
-    setClipContextMenu({ x: e.clientX, y: e.clientY });
+    dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: { type: "clip", clipId: clip.id, x: e.clientX, y } });
   };
 
   const handleSelectionContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setSelectionContextMenu({ x: e.clientX, y: e.clientY });
+    
+    const menuHeight = 380; // Approximate height of selection context menu
+    let y = e.clientY;
+    if (y + menuHeight > window.innerHeight) {
+      y = Math.max(20, window.innerHeight - menuHeight - 20);
+    }
+    
+    dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: { type: "selection", trackId, x: e.clientX, y } });
   };
 
   const handleResizeStart = (e: React.PointerEvent, edge: "left" | "right") => {
@@ -364,13 +372,13 @@ export function ClipItem({
           <div className="absolute inset-0 bg-white/5 hover:bg-white/10 transition-colors" />
         )}
         {isFinishedSelection &&
-          selectionContextMenu &&
+          (state.activeContextMenu?.type === "selection" && state.activeContextMenu?.trackId === trackId) &&
           createPortal(
             <div
               className="fixed z-[99999] bg-[#1c1c1e] border border-white/10 rounded-lg shadow-2xl py-1 min-w-[160px]"
               style={{
-                top: selectionContextMenu.y,
-                left: selectionContextMenu.x,
+                top: state.activeContextMenu.y,
+                left: state.activeContextMenu.x,
               }}
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
@@ -381,7 +389,7 @@ export function ClipItem({
                 onClick={(e) => {
                   e.stopPropagation();
                   dispatch({ type: "SPLIT_CLIP" });
-                  setSelectionContextMenu(null);
+                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
                 }}
               >
                 Split
@@ -391,7 +399,7 @@ export function ClipItem({
                 onClick={(e) => {
                   e.stopPropagation();
                   dispatch({ type: "DELETE_CLIPS" });
-                  setSelectionContextMenu(null);
+                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
                 }}
               >
                 Delete section
@@ -401,7 +409,7 @@ export function ClipItem({
                 onClick={(e) => {
                   e.stopPropagation();
                   dispatch({ type: "CUT_CLIPS" });
-                  setSelectionContextMenu(null);
+                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
                 }}
               >
                 Cut
@@ -411,7 +419,7 @@ export function ClipItem({
                 onClick={(e) => {
                   e.stopPropagation();
                   dispatch({ type: "COPY_CLIPS" });
-                  setSelectionContextMenu(null);
+                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
                 }}
               >
                 Copy
@@ -421,7 +429,7 @@ export function ClipItem({
                 onClick={(e) => {
                   e.stopPropagation();
                   dispatch({ type: "DUPLICATE_CLIPS" });
-                  setSelectionContextMenu(null);
+                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
                 }}
               >
                 Duplicate
@@ -432,7 +440,7 @@ export function ClipItem({
                 onClick={(e) => {
                   e.stopPropagation();
                   alert("Remixing section (drag to create form)");
-                  setSelectionContextMenu(null);
+                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
                 }}
               >
                 Remix section
@@ -442,7 +450,7 @@ export function ClipItem({
                 onClick={(e) => {
                   e.stopPropagation();
                   alert("Healing edits on section");
-                  setSelectionContextMenu(null);
+                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
                 }}
               >
                 Heal Edits
@@ -452,7 +460,7 @@ export function ClipItem({
                 onClick={(e) => {
                   e.stopPropagation();
                   alert("Removing FX from section");
-                  setSelectionContextMenu(null);
+                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
                 }}
               >
                 Remove FX
@@ -462,7 +470,7 @@ export function ClipItem({
                 onClick={(e) => {
                   e.stopPropagation();
                   alert("Downloading section as .WAV");
-                  setSelectionContextMenu(null);
+                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
                 }}
               >
                 Download .WAV
@@ -612,11 +620,11 @@ export function ClipItem({
       }}
     >
       {/* Clip Context Menu */}
-      {clipContextMenu &&
+      {(state.activeContextMenu?.type === "clip" && state.activeContextMenu?.clipId === clip.id) &&
         createPortal(
           <div
             className="fixed z-[99999] bg-[#1c1c1e] border border-white/10 rounded-lg shadow-2xl py-1 w-32"
-            style={{ top: clipContextMenu.y, left: clipContextMenu.x }}
+            style={{ top: state.activeContextMenu.y, left: state.activeContextMenu.x }}
             onClick={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
             onPointerUp={(e) => e.stopPropagation()}
@@ -630,17 +638,29 @@ export function ClipItem({
                   payload: { clipId: clip.id, multi: false },
                 });
                 dispatch({ type: "DELETE_CLIPS" });
-                setClipContextMenu(null);
+                dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
               }}
             >
               Delete Stem
+            </button>
+            <button
+              className="w-full text-left px-4 py-2 text-sm text-orange-400 hover:bg-white/10 transition-colors"
+              onClick={() => {
+                dispatch({ 
+                  type: "REVERT_CLIP_TO_ORIGINAL", 
+                  payload: { trackId, laneId, clipId: clip.id } 
+                });
+                dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
+              }}
+            >
+              Revert to Original
             </button>
             {state.selectedClipIds.length > 1 && (
               <button
                 className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
                 onClick={() => {
                   dispatch({ type: "GROUP_CLIPS" });
-                  setClipContextMenu(null);
+                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
                 }}
               >
                 Group Clips
@@ -651,7 +671,7 @@ export function ClipItem({
                 className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
                 onClick={() => {
                   dispatch({ type: "UNGROUP_CLIPS" });
-                  setClipContextMenu(null);
+                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
                 }}
               >
                 Ungroup Clips
@@ -666,7 +686,7 @@ export function ClipItem({
                     type: "ADD_CLIP_TO_NEW_LANE", 
                     payload: { trackId, clipId: clip.id } 
                   });
-                  setClipContextMenu(null);
+                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
                 }}
               >
                 Add to Alternate Lane
@@ -686,7 +706,7 @@ export function ClipItem({
                     payload: { trackId, clipId: clip.id, changes: { volumeEnvelope: [{ time: 0, value: 1 }, { time: clip.duration, value: 1 }] } }
                   });
                 }
-                setClipContextMenu(null);
+                dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
               }}
             >
               {clip.volumeEnvelope ? "Remove Volume Envelope" : "Add Volume Envelope"}
@@ -695,7 +715,7 @@ export function ClipItem({
               className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
               onClick={() => {
                 alert("Extracting stems... (AI process would run here)");
-                setClipContextMenu(null);
+                dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
               }}
             >
               Extract Stems
@@ -704,7 +724,7 @@ export function ClipItem({
               className="w-full text-left px-4 py-2 text-sm text-[#a882fa] hover:bg-white/10 transition-colors"
               onClick={() => {
                 dispatch({ type: "SET_AUTHENTICITY_PROCESSOR_CLIP", payload: clip.id });
-                setClipContextMenu(null);
+                dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
               }}
             >
               AI Authenticity

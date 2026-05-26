@@ -43,6 +43,7 @@ class AudioEngine {
       this.masterGain = this.context.createGain();
       this.masterAnalyser = this.context.createAnalyser();
       this.masterAnalyser.fftSize = 1024;
+      this.masterAnalyser.smoothingTimeConstant = 0.85;
       this.masterGain.connect(this.masterAnalyser);
       this.masterAnalyser.connect(this.context.destination);
       
@@ -734,6 +735,12 @@ class AudioEngine {
       left: rms,
       right: Math.max(0, rms * (0.9 + Math.random() * 0.15))
     };
+  }
+
+  getMasterFrequencyData(dataArray: Uint8Array) {
+    if (this.masterAnalyser) {
+      this.masterAnalyser.getByteFrequencyData(dataArray);
+    }
   }
 }
 

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp, Track, Clip } from '../lib/store';
 import { Volume2, Sliders, Timer } from './Icons';
-import { MoreHorizontal, Trash2, Download, Scissors, Layers, Wand2, ArrowUp, ChevronDown, ChevronRight, Snowflake } from 'lucide-react';
+import { MoreHorizontal, Trash2, Download, Scissors, Layers, Wand2, ArrowUp, ChevronDown, ChevronRight, Snowflake, RotateCcw } from 'lucide-react';
 import { audioEngine } from '../lib/audioEngine';
 import { saveAsset } from '../lib/assetManager';
 import { uploadAssetCloud } from '../lib/syncUtils';
@@ -49,17 +49,39 @@ export function TrackList() {
     }
   };
 
-  const handleDownload = (track: Track) => {
-    const clipNames = track.clips.map((c: Clip) => c.audioData || 'audio_clip').join('_');
-    const filename = `${track.name}_${clipNames || 'empty'}.wav`;
-    const blob = new Blob(['dummy audio data'], { type: 'audio/wav' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    setOpenMenuId(null);
+  const handleDownload = async (track: Track) => {
+    if (!track.clips || track.clips.length === 0) {
+      alert("This track has no audio clips to download.");
+      setOpenMenuId(null);
+      return;
+    }
+
+    try {
+      const clipNames = track.clips.map((c: Clip) => c.audioData || 'audio_clip').join('_');
+      const cleanTrackName = track.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const filename = `${cleanTrackName}_${clipNames || 'empty'}.wav`;
+
+      // Find max duration of track clips
+      const duration = Math.max(1, ...track.clips.map((c: Clip) => c.start + c.duration));
+
+      // Render track audio using offline context
+      const renderedBuffer = await audioEngine.renderTrack(track, duration);
+
+      // Convert buffer to real WAV file
+      const wavBlob = audioBufferToWav(renderedBuffer);
+
+      const url = URL.createObjectURL(wavBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      console.error("Failed to render and download track:", err);
+      alert("An error occurred while rendering the track audio.");
+    } finally {
+      setOpenMenuId(null);
+    }
   };
 
   return (
@@ -92,6 +114,10 @@ export function TrackList() {
         <React.Fragment key={track.id}>
           <div 
             draggable
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setOpenMenuId(openMenuId === track.id ? null : track.id);
+            }}
           onDragStart={(e) => {
             e.dataTransfer.setData('text/plain', track.id);
             e.dataTransfer.effectAllowed = 'move';
@@ -229,6 +255,17 @@ export function TrackList() {
                       >
                         <Wand2 size={12} />
                         <span>Remove FX</span>
+                      </button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          dispatch({ type: 'REVERT_TRACK_TO_ORIGINAL', payload: { trackId: track.id } });
+                          setOpenMenuId(null);
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-white/10 text-orange-400 flex items-center space-x-2 transition-colors font-medium"
+                      >
+                        <RotateCcw size={12} className="text-orange-400" />
+                        <span>Revert to Original</span>
                       </button>
                       <button 
                         onClick={(e) => {

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Wand2, Users, FileAudio, Settings, Cloud, WifiOff, LayoutDashboard, Sliders } from './Icons';
-import { Magnet, Github, Linkedin, Globe, Activity, Video } from 'lucide-react';
+import { Magnet, Github, Linkedin, Globe, Activity, Video, BarChart2 } from 'lucide-react';
 import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { audioBufferToWav, createStemZip, downloadBlob, estimateWavSize, formatFileSize } from '../lib/exportUtils';
@@ -579,6 +579,14 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
           title="Toggle Spectrogram View"
         >
           <Activity size={16} />
+        </button>
+
+        <button
+          onClick={() => dispatch({ type: 'TOGGLE_LIVE_ANALYZERS' })}
+          className={`flex items-center justify-center p-2 rounded-lg transition-all border ${state.showLiveAnalyzers ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 text-zinc-400 border-white/10 hover:text-white/80 hover:bg-white/10'}`}
+          title="Toggle Live Analyzers"
+        >
+          <BarChart2 size={16} />
         </button>
 
         <button

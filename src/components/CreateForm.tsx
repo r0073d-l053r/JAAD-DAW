@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   Expand, 
   ChevronDown, 
@@ -18,7 +18,9 @@ import {
   Fan,
   Volume2,
   Type,
-  ChevronUp
+  ChevronUp,
+  PanelLeftClose,
+  PanelLeftOpen
 } from "lucide-react";
 import { useApp } from "../lib/store";
 import { GoogleGenAI } from "@google/genai";
@@ -123,8 +125,12 @@ export function CreateForm() {
   const [lyrics, setLyrics] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<"lyrics" | "advanced">("lyrics");
   const [model, setModel] = useState("V5");
+  
+  // Track whether user manually collapsed so we know whether to auto-restore
+  const manualCollapseRef = useRef(false);
   
   // Advanced Settings State
   const [weirdness, setWeirdness] = useState(50);
@@ -133,6 +139,36 @@ export function CreateForm() {
 
   const { state, dispatch } = useApp();
   const [isDragOver, setIsDragOver] = useState(false);
+
+  // Auto-collapse when live analyzers open, auto-restore when they close
+  useEffect(() => {
+    if (state.showLiveAnalyzers) {
+      // Analyzers just opened — auto-collapse if not already collapsed
+      if (!isCollapsed) {
+        manualCollapseRef.current = false; // mark as auto-collapsed
+        setIsCollapsed(true);
+        setIsExpanded(false);
+      }
+    } else {
+      // Analyzers just closed — restore only if it was auto-collapsed (not manual)
+      if (isCollapsed && !manualCollapseRef.current) {
+        setIsCollapsed(false);
+      }
+    }
+  }, [state.showLiveAnalyzers]);
+
+  const toggleCollapse = () => {
+    if (isCollapsed) {
+      // Uncollapsing
+      manualCollapseRef.current = false;
+      setIsCollapsed(false);
+    } else {
+      // Collapsing manually
+      manualCollapseRef.current = true;
+      setIsCollapsed(true);
+      setIsExpanded(false);
+    }
+  };
 
   const handleGenerate = async () => {
     try {
@@ -265,10 +301,37 @@ export function CreateForm() {
   };
 
   return (
-    <motion.div
-      layout
-      className={`fixed bottom-20 left-1/2 -translate-x-1/2 z-[150] transition-all duration-500`}
-    >
+    <AnimatePresence mode="wait">
+      {isCollapsed ? (
+        /* ───── Collapsed Pill ───── */
+        <motion.div
+          key="collapsed-pill"
+          initial={{ x: -100, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: -100, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+          className="fixed bottom-24 left-4 z-[150]"
+        >
+          <button
+            onClick={toggleCollapse}
+            className="group flex items-center gap-2.5 px-4 py-2.5 rounded-full border border-white/15 bg-black/40 backdrop-blur-xl shadow-[0_0_30px_rgba(175,82,222,0.15)] hover:shadow-[0_0_40px_rgba(175,82,222,0.4)] hover:border-primary/40 transition-all duration-300"
+          >
+            <Sparkles size={16} className="text-primary animate-pulse drop-shadow-[0_0_6px_rgba(175,82,222,0.8)]" />
+            <span className="text-xs font-black text-white/80 tracking-wider uppercase group-hover:text-white transition-colors">Create</span>
+            <PanelLeftOpen size={14} className="text-white/40 group-hover:text-white/70 transition-colors" />
+          </button>
+        </motion.div>
+      ) : (
+        /* ───── Full Create Form ───── */
+        <motion.div
+          key="full-form"
+          layout
+          initial={{ y: 80, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 80, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 28 }}
+          className={`fixed bottom-20 left-1/2 -translate-x-1/2 z-[150] transition-all duration-500`}
+        >
       <LiquidGlassPanel
         cornerRadius={isExpanded ? 32 : 9999}
         overLight={true}
@@ -281,6 +344,15 @@ export function CreateForm() {
       >
         {/* Header Section */}
         <div className={`flex items-center space-x-4 p-2 transition-all ${isExpanded ? 'px-6 pt-6' : 'px-6 py-2'}`}>
+          {/* Collapse Button */}
+          <button 
+            onClick={toggleCollapse}
+            className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/5 rounded-full transition-all group"
+            title="Collapse to side"
+          >
+            <PanelLeftClose size={18} className="group-hover:scale-110 transition-transform" />
+          </button>
+
           <button 
             onClick={() => setIsExpanded(!isExpanded)}
             className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/5 rounded-full transition-all group"
@@ -583,5 +655,7 @@ export function CreateForm() {
         </AnimatePresence>
       </LiquidGlassPanel>
     </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

@@ -86,5 +86,6 @@ export function downloadBlob(blob: Blob, filename: string) {
   a.href = url;
   a.download = filename;
   a.click();
-  URL.revokeObjectURL(url);
+  // Delay revocation to ensure modern browsers complete streaming the download before release
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
