@@ -49,6 +49,7 @@ export const Waveform = memo(function Waveform({ clipId, bufferId, color, durati
       const normalPath = new Path2D();
       const clippingPath = new Path2D();
 
+      let hasClipping = false;
       for (let i = 0; i < displayWidth; i++) {
         let min = 1.0;
         let max = -1.0;
@@ -70,6 +71,7 @@ export const Waveform = memo(function Waveform({ clipId, bufferId, color, durati
         const y2 = amp * (1 + max);
         
         if (max > 0.99 || min < -0.99) {
+          hasClipping = true;
           clippingPath.moveTo(x, y1);
           clippingPath.lineTo(x, y2 === y1 ? y1 + 1 : y2);
         } else {
@@ -81,8 +83,10 @@ export const Waveform = memo(function Waveform({ clipId, bufferId, color, durati
       ctx.strokeStyle = color;
       ctx.stroke(normalPath);
       
-      ctx.strokeStyle = '#ef4444'; // Red warning color for clipping peaks
-      ctx.stroke(clippingPath);
+      if (hasClipping) {
+        ctx.strokeStyle = '#ef4444'; // Red warning color for clipping peaks
+        ctx.stroke(clippingPath);
+      }
     } else {
       // Draw placeholder line
       ctx.clearRect(0, 0, canvas.width, canvas.height);

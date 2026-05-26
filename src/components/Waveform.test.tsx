@@ -3,6 +3,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, act } from '@testing-library/react';
 import { Waveform } from './Waveform';
 import { audioEngine } from '../lib/audioEngine';
+ 
+// Mock Path2D for jsdom environment
+class MockPath2D {
+  moveTo = vi.fn();
+  lineTo = vi.fn();
+}
+global.Path2D = MockPath2D as any;
 
 // Mock useApp hook
 vi.mock('../lib/store', () => ({
@@ -61,8 +68,8 @@ describe('Waveform', () => {
   });
 
   it('draws authentic waveforms when buffer is loaded', async () => {
-    // 1. Setup mock AudioBuffer containing dynamic sound wave points
-    const mockChannelData = new Float32Array([0.5, -0.5, 0.8, -0.8, 0.0, 1.0]);
+    // 1. Setup mock AudioBuffer containing dynamic sound wave points (no clipping)
+    const mockChannelData = new Float32Array([0.5, -0.5, 0.8, -0.8, 0.0, 0.9]);
     const mockBuffer = {
       sampleRate: 44100,
       duration: 1.0,
@@ -88,6 +95,34 @@ describe('Waveform', () => {
     expect(mockContext.strokeStyle).toBe('#ff2d55');
     expect(mockContext.lineTo).toHaveBeenCalled();
     expect(mockContext.stroke).toHaveBeenCalled();
+  });
+
+  it('draws warning red peaks when clipping is detected (amplitude > 0.99)', async () => {
+    // 1. Setup mock AudioBuffer containing a clipping peak (1.0)
+    const mockChannelData = new Float32Array([0.5, -0.5, 1.0, -0.8, 0.0, 0.5]);
+    const mockBuffer = {
+      sampleRate: 44100,
+      duration: 1.0,
+      length: mockChannelData.length,
+      getChannelData: vi.fn().mockReturnValue(mockChannelData),
+    } as unknown as AudioBuffer;
+
+    audioEngine.buffers.set('clipping_clip', mockBuffer);
+
+    // 2. Render waveform
+    render(
+      <Waveform
+        clipId="clipping_clip"
+        color="#ff2d55"
+        duration={1.0}
+        width={100}
+        height={50}
+      />
+    );
+
+    expect(mockContext.clearRect).toHaveBeenCalled();
+    // StrokeStyle ends as the warning red because clipping was drawn
+    expect(mockContext.strokeStyle).toBe('#ef4444');
   });
 
   it('waits and schedules checks for delayed buffer loads', () => {
