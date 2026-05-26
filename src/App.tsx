@@ -33,6 +33,7 @@ import { VstBridgeEditor } from './components/VstBridgeEditor';
 import { SidechainEditor } from './components/SidechainEditor';
 import { AuthenticityProcessor } from './components/AuthenticityProcessor';
 import { LiveAnalyzers } from './components/LiveAnalyzers';
+import { StemSeparator } from './components/StemSeparator';
 
 
 
@@ -467,6 +468,7 @@ function AppContent() {
         {state.vstEditorTrackId && <VstBridgeEditor />}
         {state.sidechainEditorTrackId && <SidechainEditor />}
         {state.authenticityProcessorClipId && <AuthenticityProcessor />}
+        {state.stemSeparatorClipId && <StemSeparator />}
         
         <LiveAnalyzers />
 

@@ -85,6 +85,7 @@ interface AppState {
   vstEditorTrackId: string | null;
   sidechainEditorTrackId: string | null;
   authenticityProcessorClipId: string | null;
+  stemSeparatorClipId: string | null;
   showLiveAnalyzers: boolean;
   activeContextMenu: {
     type: "clip" | "selection";
@@ -198,6 +199,19 @@ type Action =
   | { type: "SET_VIDEO_VOLUME"; payload: number }
   | { type: "SET_VIDEO_MUTED"; payload: boolean }
   | { type: "TOGGLE_LIVE_ANALYZERS" }
+  | { type: "SET_STEM_SEPARATOR_CLIP"; payload: string | null }
+  | {
+      type: "ADD_GENERATED_ALTERNATIVES";
+      payload: {
+        trackId: string;
+        clipId1: string;
+        clipId2: string;
+        filename1: string;
+        filename2: string;
+        start: number;
+        duration: number;
+      };
+    }
   | { type: "SET_ACTIVE_CONTEXT_MENU"; payload: AppState["activeContextMenu"] };
 
 interface AppStateWithHistory extends AppState {
@@ -253,6 +267,7 @@ const initialState: AppStateWithHistory = {
   vstEditorTrackId: null,
   sidechainEditorTrackId: null,
   authenticityProcessorClipId: null,
+  stemSeparatorClipId: null,
   showLiveAnalyzers: false,
   activeContextMenu: null,
 };
@@ -410,6 +425,43 @@ function appReducer(
       return { ...state, sidechainEditorTrackId: action.payload };
     case "SET_AUTHENTICITY_PROCESSOR_CLIP":
       return { ...state, authenticityProcessorClipId: action.payload };
+    case "SET_STEM_SEPARATOR_CLIP":
+      return { ...state, stemSeparatorClipId: action.payload };
+    case "ADD_GENERATED_ALTERNATIVES": {
+      const { trackId, clipId1, clipId2, filename1, filename2, start, duration } = action.payload;
+      const newTracks = state.tracks.map((t) => {
+        if (t.id === trackId) {
+          const lane1: Lane = {
+            id: `lane_${Date.now()}_a_${Math.random().toString(36).substring(2, 7)}`,
+            name: `Option A (Alt)`,
+            clips: [{
+              id: clipId1,
+              start,
+              duration,
+              audioData: filename1
+            }]
+          };
+          const lane2: Lane = {
+            id: `lane_${Date.now()}_b_${Math.random().toString(36).substring(2, 7)}`,
+            name: `Option B (Alt)`,
+            clips: [{
+              id: clipId2,
+              start,
+              duration,
+              audioData: filename2
+            }]
+          };
+          const existingLanes = t.lanes || [];
+          return {
+            ...t,
+            lanes: [lane1, lane2, ...existingLanes],
+            showLanes: true
+          };
+        }
+        return t;
+      });
+      return saveHistory(state, newTracks);
+    }
     case "SET_ACTIVE_CONTEXT_MENU":
       return { ...state, activeContextMenu: action.payload };
     case "SET_TIME_SELECTION":

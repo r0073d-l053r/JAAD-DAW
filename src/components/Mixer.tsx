@@ -46,6 +46,15 @@ export function Mixer() {
         }
         if (nextVal < 0) nextVal = 0;
 
+        // Peak distortion signaling
+        if (rms > 0.95) {
+          (el as HTMLElement).style.backgroundColor = '#ef4444'; // Red clipping
+          (el as HTMLElement).style.boxShadow = '0 0 12px #ef4444';
+        } else {
+          (el as HTMLElement).style.backgroundColor = '';
+          (el as HTMLElement).style.boxShadow = '';
+        }
+
         (el as any).dataset.currentHeight = nextVal.toString();
         (el as HTMLElement).style.height = `${nextVal}%`;
       });
@@ -67,6 +76,15 @@ export function Mixer() {
             if (nextVal < scaled) nextVal = scaled;
           }
           if (nextVal < 0) nextVal = 0;
+
+          // Peak distortion signaling
+          if (rms > 0.95) {
+            (el as HTMLElement).style.backgroundColor = '#ef4444'; // Red clipping
+            (el as HTMLElement).style.boxShadow = '0 0 12px #ef4444';
+          } else {
+            (el as HTMLElement).style.backgroundColor = '';
+            (el as HTMLElement).style.boxShadow = '';
+          }
 
           (el as any).dataset.currentHeight = nextVal.toString();
           (el as HTMLElement).style.height = `${nextVal}%`;

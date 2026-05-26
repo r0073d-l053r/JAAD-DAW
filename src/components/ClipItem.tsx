@@ -714,7 +714,7 @@ export function ClipItem({
             <button
               className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
               onClick={() => {
-                alert("Extracting stems... (AI process would run here)");
+                dispatch({ type: "SET_STEM_SEPARATOR_CLIP", payload: clip.id });
                 dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
               }}
             >

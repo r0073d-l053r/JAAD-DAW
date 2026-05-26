@@ -3,12 +3,15 @@ import { GoogleGenAI } from '@google/genai';
 import { audioEngine } from './audioEngine';
 
 let aiInstance: GoogleGenAI | null = null;
+let lastUsedKey: string | null = null;
 
 function getAI() {
-  if (aiInstance) return aiInstance;
-  
   try {
-    const apiKey = (import.meta.env.VITE_GEMINI_API_KEY || "").trim();
+    let apiKey = localStorage.getItem("user_gemini_api_key");
+    if (!apiKey) {
+      apiKey = (import.meta.env.VITE_GEMINI_API_KEY || "").trim();
+    }
+
     const isInvalid = !apiKey || 
                       apiKey.length < 10 || 
                       apiKey === "your_gemini_api_key" || 
@@ -16,7 +19,11 @@ function getAI() {
                       apiKey === "null";
                        
     if (!isInvalid) {
+      if (aiInstance && lastUsedKey === apiKey) {
+        return aiInstance;
+      }
       console.log(`Gemini AI: Initializing with key (length: ${apiKey.length})`);
+      lastUsedKey = apiKey;
       aiInstance = new GoogleGenAI({ apiKey });
       return aiInstance;
     } else {

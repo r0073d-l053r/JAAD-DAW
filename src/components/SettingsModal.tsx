@@ -80,6 +80,28 @@ export function SettingsModal() {
   const [aiModel, setAiModel] = useState('Gemini 2.5 Pro (Default)');
   const [appearance, setAppearance] = useState('Midnight (Default)');
 
+  const [apiKeyVal, setApiKeyVal] = useState(() => {
+    const saved = localStorage.getItem("user_gemini_api_key");
+    return saved ? `••••••••${saved.slice(-4)}` : "";
+  });
+  const [isKeySaved, setIsKeySaved] = useState(() => !!localStorage.getItem("user_gemini_api_key"));
+
+  const handleSaveKey = (val: string) => {
+    const trimmed = val.trim();
+    if (trimmed === "") {
+      localStorage.removeItem("user_gemini_api_key");
+      setApiKeyVal("");
+      setIsKeySaved(false);
+      return;
+    }
+    if (trimmed.startsWith("••••")) {
+      return;
+    }
+    localStorage.setItem("user_gemini_api_key", trimmed);
+    setApiKeyVal(`••••••••${trimmed.slice(-4)}`);
+    setIsKeySaved(true);
+  };
+
   if (!state.settingsOpen) return null;
 
   return (
@@ -234,6 +256,32 @@ export function SettingsModal() {
                         onChange={setAiModel}
                       />
                     </div>
+
+                    <div className="space-y-3 pt-6 border-t border-white/5">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Custom Gemini API Key</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="Paste your Gemini API Key here..."
+                          value={apiKeyVal}
+                          onChange={(e) => setApiKeyVal(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleSaveKey(apiKeyVal);
+                              (e.target as HTMLInputElement).blur();
+                            }
+                          }}
+                          onBlur={() => handleSaveKey(apiKeyVal)}
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-zinc-700 outline-none focus:border-primary/50 transition-all font-mono"
+                        />
+                      </div>
+                      <p className="text-[11px] text-zinc-500 leading-relaxed">
+                        {isKeySaved 
+                          ? "Custom Key loaded! Showing last 4 digits. Press Enter to modify or clear." 
+                          : "Paste your custom paid Gemini API Key and press Enter to save locally."}
+                      </p>
+                    </div>
+
                     <div className="space-y-4 pt-6 border-t border-white/5">
                       <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Cloud Sync Storage</label>
                       <div className="flex items-center space-x-3 text-sm text-gray-300 bg-white/[0.03] p-4 rounded-xl border border-white/5">

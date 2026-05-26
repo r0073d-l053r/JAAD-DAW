@@ -130,10 +130,14 @@ export function AICopilot() {
             </button>
             <button 
               onClick={async () => {
-                 setIsGeneratingLocal(true);
-                 await new Promise(r => setTimeout(r, 2000));
-                 setIsGeneratingLocal(false);
-                 setHistory(prev => [...prev, { role: 'assistant', content: "I've separated the stems. (Mock)" }]);
+                  const track = state.tracks.find(t => t.clips.some(c => state.selectedClipIds.includes(c.id))) || state.tracks.find(t => t.clips.length > 0);
+                  if (!track || track.clips.length === 0) {
+                      setHistory(prev => [...prev, { role: 'assistant', content: "Please select an audio clip or import audio first." }]);
+                      return;
+                  }
+                  const clip = track.clips[0];
+                  dispatch({ type: "SET_STEM_SEPARATOR_CLIP", payload: clip.id });
+                  setHistory(prev => [...prev, { role: 'assistant', content: `Opening the AI Stem Separation Studio for "${clip.audioData || 'Audio Clip'}". Select which instruments you want to extract!` }]);
               }}
               className="bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.08] rounded-lg p-2 flex flex-col items-center justify-center gap-1 transition backdrop-blur-sm"
             >
