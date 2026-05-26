@@ -10,6 +10,18 @@
  *  
  * ***AI Backend:*** * Google Gemini + essentia.js*  
 ![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnEAAAACCAYAAAA3pIp+AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAANElEQVR4nO3OUQmAABBAsSdYxKYXx1gmEBOIFfwTYUuwZWa2ag8AgL841uquzq8nAAC8dj05WgYLQTzjnAAAAABJRU5ErkJggg==)  
+**v0.15.4 — May 26, 2026**  
+**🔊 ***"Aesthetic Precision"***  
+Introduced highly requested audio visualization and quality-of-life DAW features inspired by professional editing suites.
+
+***✨ New Features & Polish***  
+| | |  
+|-|-|  
+| **Feature** | **Description** |   
+| **Peak & Distortion Signaling** | Added precision clipping detection. Both the Waveform canvas renderer and the real-time Mixer LED meters now flash red when audio amplitude approaches clipping levels (>0.95 RMS), alerting users to potentially harsh distortion. |
+| **Custom Gemini API Security** | Refined the "Bring Your Own Key" UI. Added a dedicated "Clear Key" button in Settings and clarified privacy terminology. Keys are stored strictly within the browser's Local Storage and transmit directly to Google APIs without intermediate proxies. |
+
+![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnEAAAACCAYAAAA3pIp+AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAANElEQVR4nO3OUQmAABBAsSdYxKYXx1gmEBOIFfwTYUuwZWa2ag8AgL841uquzq8nAAC8dj05WgYLQTzjnAAAAABJRU5ErkJggg==)  
 **v0.15.3 — May 25, 2026**  
 **🐳 ***"The Headless Host"***  
 Introduced a high-performance, containerized DSP sidecar to offload heavy VST processing from the browser thread. This architecture allows users to natively host commercial Windows VST plugins (like Waves) on Linux via Wine and Carla.

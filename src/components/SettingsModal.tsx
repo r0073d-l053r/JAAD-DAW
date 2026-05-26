@@ -259,25 +259,35 @@ export function SettingsModal() {
 
                     <div className="space-y-3 pt-6 border-t border-white/5">
                       <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Custom Gemini API Key</label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          placeholder="Paste your Gemini API Key here..."
-                          value={apiKeyVal}
-                          onChange={(e) => setApiKeyVal(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              handleSaveKey(apiKeyVal);
-                              (e.target as HTMLInputElement).blur();
-                            }
-                          }}
-                          onBlur={() => handleSaveKey(apiKeyVal)}
-                          className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-zinc-700 outline-none focus:border-primary/50 transition-all font-mono"
-                        />
+                      <div className="flex space-x-2">
+                        <div className="relative flex-1">
+                          <input
+                            type="text"
+                            placeholder="Paste your Gemini API Key here..."
+                            value={apiKeyVal}
+                            onChange={(e) => setApiKeyVal(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleSaveKey(apiKeyVal);
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            onBlur={() => handleSaveKey(apiKeyVal)}
+                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-zinc-700 outline-none focus:border-primary/50 transition-all font-mono"
+                          />
+                        </div>
+                        {isKeySaved && (
+                          <button
+                            onClick={() => handleSaveKey("")}
+                            className="px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-sm font-medium transition-colors flex-shrink-0"
+                          >
+                            Clear Key
+                          </button>
+                        )}
                       </div>
                       <p className="text-[11px] text-zinc-500 leading-relaxed">
                         {isKeySaved 
-                          ? "Custom Key loaded! Showing last 4 digits. Press Enter to modify or clear." 
+                          ? "Custom Key loaded! Showing last 4 digits. Your key is stored ONLY in your browser's Local Storage and is never sent anywhere except directly to Google's API." 
                           : "Paste your custom paid Gemini API Key and press Enter to save locally."}
                       </p>
                     </div>
