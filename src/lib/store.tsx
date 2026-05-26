@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, ReactNode } from "react";
 import { audioEngine } from "./audioEngine";
-import { findNearestZeroCrossing } from "./audioUtils";
+import { findNearestZeroCrossing, reverseAudioBuffer, invertAudioBuffer, normalizeAudioBuffer, silenceAudioBufferRange } from "./audioUtils";
 
 export interface Lane {
   id: string;
@@ -22,6 +22,7 @@ export interface Track {
   showLanes: boolean;
   isFrozen?: boolean;
   frozenBufferId?: string;
+  deHummerEnabled?: boolean;
 }
 
 export interface Clip {
@@ -226,7 +227,13 @@ export type Action =
   | { type: "REMOVE_MARKER"; payload: string }
   | { type: "UPDATE_MARKER"; payload: { id: string; changes: Partial<Marker> } }
   | { type: "GO_TO_NEXT_MARKER" }
-  | { type: "GO_TO_PREV_MARKER" };
+  | { type: "GO_TO_PREV_MARKER" }
+  | { type: "REVERSE_CLIP"; payload: { trackId: string; laneId?: string; clipId: string } }
+  | { type: "INVERT_CLIP"; payload: { trackId: string; laneId?: string; clipId: string } }
+  | { type: "NORMALIZE_CLIP"; payload: { trackId: string; laneId?: string; clipId: string } }
+  | { type: "SILENCE_CLIP_SELECTION"; payload: { trackId: string; laneId?: string; clipId: string; start: number; duration: number } }
+  | { type: "TOGGLE_DEHUMMER"; payload: { trackId: string } };
+
 
 export interface AppStateWithHistory extends AppState {
   past: Track[][];
@@ -304,6 +311,140 @@ export function appReducer(
   action: Action,
 ): AppStateWithHistory {
   switch (action.type) {
+    case "REVERSE_CLIP": {
+      const { trackId, laneId, clipId } = action.payload;
+      const newTracks = state.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        
+        const mapClips = (clips: Clip[]) => clips.map((clip) => {
+          if (clip.id !== clipId) return clip;
+          const origBufferId = clip.bufferId || clip.id;
+          const buffer = audioEngine.buffers.get(origBufferId);
+          if (!buffer) return clip;
+          
+          const newBuffer = reverseAudioBuffer(buffer);
+          const newBufferId = `${clip.id}_rev_${Math.random().toString(36).substr(2, 5)}`;
+          audioEngine.buffers.set(newBufferId, newBuffer);
+          
+          return { ...clip, bufferId: newBufferId };
+        });
+
+        if (laneId && t.lanes) {
+          return {
+            ...t,
+            lanes: t.lanes.map((l) => (l.id === laneId ? { ...l, clips: mapClips(l.clips) } : l)),
+          };
+        }
+        return { ...t, clips: mapClips(t.clips) };
+      });
+      return {
+        ...saveHistory(state, newTracks),
+        buffersVersion: state.buffersVersion + 1,
+      };
+    }
+    case "INVERT_CLIP": {
+      const { trackId, laneId, clipId } = action.payload;
+      const newTracks = state.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        
+        const mapClips = (clips: Clip[]) => clips.map((clip) => {
+          if (clip.id !== clipId) return clip;
+          const origBufferId = clip.bufferId || clip.id;
+          const buffer = audioEngine.buffers.get(origBufferId);
+          if (!buffer) return clip;
+          
+          const newBuffer = invertAudioBuffer(buffer);
+          const newBufferId = `${clip.id}_inv_${Math.random().toString(36).substr(2, 5)}`;
+          audioEngine.buffers.set(newBufferId, newBuffer);
+          
+          return { ...clip, bufferId: newBufferId };
+        });
+
+        if (laneId && t.lanes) {
+          return {
+            ...t,
+            lanes: t.lanes.map((l) => (l.id === laneId ? { ...l, clips: mapClips(l.clips) } : l)),
+          };
+        }
+        return { ...t, clips: mapClips(t.clips) };
+      });
+      return {
+        ...saveHistory(state, newTracks),
+        buffersVersion: state.buffersVersion + 1,
+      };
+    }
+    case "NORMALIZE_CLIP": {
+      const { trackId, laneId, clipId } = action.payload;
+      const newTracks = state.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        
+        const mapClips = (clips: Clip[]) => clips.map((clip) => {
+          if (clip.id !== clipId) return clip;
+          const origBufferId = clip.bufferId || clip.id;
+          const buffer = audioEngine.buffers.get(origBufferId);
+          if (!buffer) return clip;
+          
+          const newBuffer = normalizeAudioBuffer(buffer);
+          const newBufferId = `${clip.id}_norm_${Math.random().toString(36).substr(2, 5)}`;
+          audioEngine.buffers.set(newBufferId, newBuffer);
+          
+          return { ...clip, bufferId: newBufferId };
+        });
+
+        if (laneId && t.lanes) {
+          return {
+            ...t,
+            lanes: t.lanes.map((l) => (l.id === laneId ? { ...l, clips: mapClips(l.clips) } : l)),
+          };
+        }
+        return { ...t, clips: mapClips(t.clips) };
+      });
+      return {
+        ...saveHistory(state, newTracks),
+        buffersVersion: state.buffersVersion + 1,
+      };
+    }
+    case "SILENCE_CLIP_SELECTION": {
+      const { trackId, laneId, clipId, start, duration } = action.payload;
+      const newTracks = state.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        
+        const mapClips = (clips: Clip[]) => clips.map((clip) => {
+          if (clip.id !== clipId) return clip;
+          const origBufferId = clip.bufferId || clip.id;
+          const buffer = audioEngine.buffers.get(origBufferId);
+          if (!buffer) return clip;
+          
+          // Calculate offset relative to the raw audio buffer start
+          const offsetStart = start - clip.start + (clip.audioOffset || 0);
+          const newBuffer = silenceAudioBufferRange(buffer, offsetStart, duration);
+          const newBufferId = `${clip.id}_silence_${Math.random().toString(36).substr(2, 5)}`;
+          audioEngine.buffers.set(newBufferId, newBuffer);
+          
+          return { ...clip, bufferId: newBufferId };
+        });
+
+        if (laneId && t.lanes) {
+          return {
+            ...t,
+            lanes: t.lanes.map((l) => (l.id === laneId ? { ...l, clips: mapClips(l.clips) } : l)),
+          };
+        }
+        return { ...t, clips: mapClips(t.clips) };
+      });
+      return {
+        ...saveHistory(state, newTracks),
+        buffersVersion: state.buffersVersion + 1,
+      };
+    }
+    case "TOGGLE_DEHUMMER": {
+      const { trackId } = action.payload;
+      const newTracks = state.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        return { ...t, deHummerEnabled: !t.deHummerEnabled };
+      });
+      return saveHistory(state, newTracks);
+    }
     case "TOGGLE_PLAY":
       if (!state.isPlaying) {
         // Starting playback

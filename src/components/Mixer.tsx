@@ -385,6 +385,11 @@ export function Mixer() {
           <div className="w-full px-2 space-y-1">
              <div className="text-[10px] text-gray-500 font-bold mb-1">FX SLOTS</div>
              <div onClick={() => {
+                dispatch({ type: 'TOGGLE_DEHUMMER', payload: { trackId: track.id } });
+             }} className={`w-full text-[10px] p-1 rounded text-center cursor-pointer border transition ${track.deHummerEnabled ? 'bg-amber-950/40 text-amber-300 border-amber-500/30 hover:bg-amber-900/20' : 'bg-[#111] border-[#333] text-gray-400 hover:bg-[#222]'}`}>
+               🧹 De-Hummer (60Hz)
+             </div>
+             <div onClick={() => {
                 audioEngine.addTrackEffect(track.id, 'eq');
              }} className="w-full bg-[#111] border border-[#333] text-[10px] text-gray-400 p-1 rounded text-center cursor-pointer hover:bg-[#222]">
                + WebEQ

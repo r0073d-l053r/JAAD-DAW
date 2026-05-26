@@ -102,26 +102,42 @@ export function ClipItem({
         },
       });
     }
-    const menuHeight = 350; // More conservative height estimate for clip context menu
+    
+    // Safe width and height estimates to prevent overflow/clipping
+    const menuWidth = 192; // w-48 is 192px
+    const menuHeight = 520; // safe max height for the clip context menu with all actions (including optional buttons)
+    
+    let x = e.clientX;
+    if (x + menuWidth > window.innerWidth) {
+      x = Math.max(10, window.innerWidth - menuWidth - 10);
+    }
+    
     let y = e.clientY;
     if (y + menuHeight > window.innerHeight) {
       y = Math.max(20, window.innerHeight - menuHeight - 20); // Keep in bounds with 20px padding
     }
     
-    dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: { type: "clip", clipId: clip.id, x: e.clientX, y } });
+    dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: { type: "clip", clipId: clip.id, x, y } });
   };
 
   const handleSelectionContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
-    const menuHeight = 380; // Approximate height of selection context menu
+    const menuWidth = 180; // min-w-[180px] -> 180px width
+    const menuHeight = 440; // Approximate height of selection context menu
+    
+    let x = e.clientX;
+    if (x + menuWidth > window.innerWidth) {
+      x = Math.max(10, window.innerWidth - menuWidth - 10);
+    }
+    
     let y = e.clientY;
     if (y + menuHeight > window.innerHeight) {
       y = Math.max(20, window.innerHeight - menuHeight - 20);
     }
     
-    dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: { type: "selection", trackId, x: e.clientX, y } });
+    dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: { type: "selection", trackId, x, y } });
   };
 
   const handleResizeStart = (e: React.PointerEvent, edge: "left" | "right") => {
@@ -375,7 +391,7 @@ export function ClipItem({
           (state.activeContextMenu?.type === "selection" && state.activeContextMenu?.trackId === trackId) &&
           createPortal(
             <div
-              className="fixed z-[99999] bg-[#1c1c1e] border border-white/10 rounded-lg shadow-2xl py-1 min-w-[160px]"
+              className="fixed z-[99999] bg-[#1c1c1e] border border-white/10 rounded-lg shadow-2xl py-1 min-w-[180px]"
               style={{
                 top: state.activeContextMenu.y,
                 left: state.activeContextMenu.x,
@@ -623,7 +639,7 @@ export function ClipItem({
       {(state.activeContextMenu?.type === "clip" && state.activeContextMenu?.clipId === clip.id) &&
         createPortal(
           <div
-            className="fixed z-[99999] bg-[#1c1c1e] border border-white/10 rounded-lg shadow-2xl py-1 w-32"
+            className="fixed z-[99999] bg-[#1c1c1e] border border-white/10 rounded-lg shadow-2xl py-1 w-48"
             style={{ top: state.activeContextMenu.y, left: state.activeContextMenu.x }}
             onClick={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
@@ -729,6 +745,63 @@ export function ClipItem({
             >
               AI Authenticity
             </button>
+            <div className="h-px bg-white/10 my-1 w-full" />
+            <button
+              className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
+              onClick={() => {
+                dispatch({ type: "REVERSE_CLIP", payload: { trackId, laneId, clipId: clip.id } });
+                dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
+              }}
+            >
+              Reverse Audio
+            </button>
+            <button
+              className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
+              onClick={() => {
+                dispatch({ type: "INVERT_CLIP", payload: { trackId, laneId, clipId: clip.id } });
+                dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
+              }}
+            >
+              Invert Polarity
+            </button>
+            <button
+              className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
+              onClick={() => {
+                dispatch({ type: "NORMALIZE_CLIP", payload: { trackId, laneId, clipId: clip.id } });
+                dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
+              }}
+            >
+              Normalize (-0.1dB)
+            </button>
+            {(() => {
+              const hasOverlap = state.timeSelection && 
+                (state.timeSelection.startTime < clip.start + clip.duration) &&
+                (state.timeSelection.endTime > clip.start);
+              if (!hasOverlap) return null;
+              
+              return (
+                <button
+                  className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
+                  onClick={() => {
+                    const selStart = Math.max(clip.start, state.timeSelection!.startTime);
+                    const selEnd = Math.min(clip.start + clip.duration, state.timeSelection!.endTime);
+                    dispatch({
+                      type: "SILENCE_CLIP_SELECTION",
+                      payload: {
+                        trackId,
+                        laneId,
+                        clipId: clip.id,
+                        start: selStart,
+                        duration: selEnd - selStart
+                      }
+                    });
+                    dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
+                  }}
+                >
+                  Silence Selection
+                </button>
+              );
+            })()}
             <div className="h-px bg-white/10 my-1 w-full" />
             <button
               className="w-full text-left px-4 py-2 text-sm text-primary hover:bg-white/10 transition-colors flex items-center gap-2"

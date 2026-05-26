@@ -169,17 +169,19 @@ export function applySpectralExtension(
   data: Float32Array, sampleRate: number, intensity: number, cutoffHz: number,
   frameSize = 2048, hopSize = frameSize / 2
 ): Float32Array {
-  const output = new Float32Array(data.length);
-  data.forEach((v, i) => output[i] = v);
+  if (cutoffHz >= sampleRate / 2 - 500 || intensity <= 0) {
+    const out = new Float32Array(data.length);
+    for (let i = 0; i < data.length; i++) out[i] = data[i];
+    return out;
+  }
 
-  if (cutoffHz >= sampleRate / 2 - 500 || intensity <= 0) return output;
-
-  // Harmonic exciter: rectify + filter to generate harmonics above cutoff
   const rand = seededRandom(42);
   const rolloffStart = cutoffHz;
   const nyquist = sampleRate / 2;
 
-  // Process in overlapping frames
+  const outBuf = new Float64Array(data.length);
+  const weightBuf = new Float64Array(data.length);
+
   for (let pos = 0; pos + frameSize <= data.length; pos += hopSize) {
     const real = new Float64Array(frameSize);
     const imag = new Float64Array(frameSize);
@@ -190,29 +192,36 @@ export function applySpectralExtension(
     simplFFT(real, imag);
 
     const numBins = frameSize / 2;
-    // Generate harmonics above cutoff from content below
     for (let b = 0; b < numBins; b++) {
       const freq = (b / numBins) * nyquist;
       if (freq > rolloffStart) {
-        // Find a source bin at half frequency
         const srcBin = Math.floor(b / 2);
         const mag = Math.sqrt(real[srcBin] * real[srcBin] + imag[srcBin] * imag[srcBin]);
-        const phase = rand() * 2 * Math.PI; // randomized phase for natural sound
-        // Apply natural roll-off: -6dB/octave above cutoff
+        const phase = rand() * 2 * Math.PI;
         const octavesAbove = Math.log2(freq / rolloffStart);
-        const gain = intensity * 0.3 * Math.pow(0.5, octavesAbove);
-        real[b] += mag * gain * Math.cos(phase);
-        imag[b] += mag * gain * Math.sin(phase);
+        // Tame harmonic extension gain to prevent artificial boost/harshness
+        const gain = intensity * 0.12 * Math.pow(0.5, octavesAbove);
+        real[b] = mag * gain * Math.cos(phase);
+        imag[b] = mag * gain * Math.sin(phase);
       }
     }
 
     simplIFFT(real, imag);
-    // Overlap-add
     for (let i = 0; i < frameSize; i++) {
       const w = 0.5 * (1 - Math.cos(2 * Math.PI * i / (frameSize - 1)));
-      if (pos + i < output.length) {
-        output[pos + i] += real[i] * w * 0.5; // 0.5 for overlap normalization
+      if (pos + i < outBuf.length) {
+        outBuf[pos + i] += real[i] * w;
+        weightBuf[pos + i] += w * w;
       }
+    }
+  }
+
+  const output = new Float32Array(data.length);
+  for (let i = 0; i < data.length; i++) {
+    if (weightBuf[i] > 1e-4) {
+      output[i] = outBuf[i] / weightBuf[i];
+    } else {
+      output[i] = data[i];
     }
   }
   return output;
@@ -319,12 +328,13 @@ export function applyPhaseEntropy(
   data: Float32Array, sampleRate: number, intensity: number,
   frameSize = 2048, hopSize = frameSize / 2
 ): Float32Array {
-  const output = new Float32Array(data.length);
-  if (intensity <= 0) { data.forEach((v, i) => output[i] = v); return output; }
+  if (intensity <= 0) {
+    const out = new Float32Array(data.length);
+    for (let i = 0; i < data.length; i++) out[i] = data[i];
+    return out;
+  }
 
   const rand = seededRandom(415 + Math.floor(intensity * 100));
-
-  // Gaussian noise helper using Box-Muller transform
   const gaussianRand = () => {
     const u = 1 - rand();
     const v = 1 - rand();
@@ -332,6 +342,8 @@ export function applyPhaseEntropy(
   };
 
   const nyquist = sampleRate / 2;
+  const outBuf = new Float64Array(data.length);
+  const weightBuf = new Float64Array(data.length);
 
   for (let pos = 0; pos + frameSize <= data.length; pos += hopSize) {
     const real = new Float64Array(frameSize);
@@ -343,23 +355,15 @@ export function applyPhaseEntropy(
     simplFFT(real, imag);
 
     const numBins = frameSize / 2;
-    let phaseAcc = 0;
-
     for (let b = 1; b < numBins; b++) {
       const freq = (b / numBins) * nyquist;
-      // Only perturb bins above 200Hz to preserve low-end phase focus
       if (freq > 200) {
         const mag = Math.sqrt(real[b] * real[b] + imag[b] * imag[b]);
         if (mag > 1e-8) {
           let phase = Math.atan2(imag[b], real[b]);
-          
-          // Phase perturbation: Gaussian random walk across bins for smoothness
-          const maxPerturb = intensity * 0.5; 
-          phaseAcc += gaussianRand() * maxPerturb * 0.2;
-          phaseAcc = Math.max(-maxPerturb, Math.min(maxPerturb, phaseAcc));
-          
-          phase += phaseAcc;
-          
+          // Independent per-bin perturbation (NOT cumulative walk)
+          const maxPerturb = intensity * 0.75;
+          phase += gaussianRand() * maxPerturb;
           real[b] = mag * Math.cos(phase);
           imag[b] = mag * Math.sin(phase);
         }
@@ -369,9 +373,19 @@ export function applyPhaseEntropy(
     simplIFFT(real, imag);
     for (let i = 0; i < frameSize; i++) {
       const w = 0.5 * (1 - Math.cos(2 * Math.PI * i / (frameSize - 1)));
-      if (pos + i < output.length) {
-        output[pos + i] += real[i] * w * 0.5;
+      if (pos + i < outBuf.length) {
+        outBuf[pos + i] += real[i] * w;
+        weightBuf[pos + i] += w * w;
       }
+    }
+  }
+
+  const output = new Float32Array(data.length);
+  for (let i = 0; i < data.length; i++) {
+    if (weightBuf[i] > 1e-4) {
+      output[i] = outBuf[i] / weightBuf[i];
+    } else {
+      output[i] = data[i];
     }
   }
   return output;
@@ -432,11 +446,17 @@ export function applySpectralMasking(
   data: Float32Array, sampleRate: number, intensity: number,
   frameSize = 2048, hopSize = frameSize / 2
 ): Float32Array {
-  const output = new Float32Array(data.length);
-  if (intensity <= 0) { data.forEach((v, i) => output[i] = v); return output; }
+  if (intensity <= 0) {
+    const out = new Float32Array(data.length);
+    for (let i = 0; i < data.length; i++) out[i] = data[i];
+    return out;
+  }
 
   const nyquist = sampleRate / 2;
   const rand = seededRandom(1234 + Math.floor(intensity * 100));
+
+  const outBuf = new Float64Array(data.length);
+  const weightBuf = new Float64Array(data.length);
 
   for (let pos = 0; pos + frameSize <= data.length; pos += hopSize) {
     const real = new Float64Array(frameSize);
@@ -468,25 +488,25 @@ export function applySpectralMasking(
       const median = localBins[halfWin];
 
       const ratio = magnitude[b] / (median + 1e-8);
-      if (ratio > 1.3) {
-        const targetMag = median * 1.15;
+      if (ratio > 1.5) {
+        const targetMag = median * 1.2;
         const diff = magnitude[b] - targetMag;
-        magnitude[b] = magnitude[b] - diff * intensity * 0.8;
+        magnitude[b] = magnitude[b] - diff * intensity * 0.4;
       }
     }
 
-    // Micro-jitter to break CNN pattern structures
-    const jitterAmount = intensity * 0.15;
+    // Subtle micro-jitter to break CNN pattern structures
+    const jitterAmount = intensity * 0.05;
     const jitteredMagnitude = new Float64Array(magnitude);
     for (let b = 2; b < numBins - 2; b++) {
-      if (rand() < 0.2) {
+      if (rand() < 0.1) {
         const neighbor = rand() < 0.5 ? b - 1 : b + 1;
         jitteredMagnitude[b] = magnitude[b] * (1 - jitterAmount) + magnitude[neighbor] * jitterAmount;
       }
     }
 
-    // Spectral tilt modulation
-    const tiltDb = (rand() - 0.5) * intensity * 1.5;
+    // Subtle spectral tilt modulation
+    const tiltDb = (rand() - 0.5) * intensity * 0.5;
     for (let b = 0; b < numBins; b++) {
       const freq = (b / numBins) * nyquist;
       const factor = freq / nyquist;
@@ -503,9 +523,19 @@ export function applySpectralMasking(
     simplIFFT(real, imag);
     for (let i = 0; i < frameSize; i++) {
       const w = 0.5 * (1 - Math.cos(2 * Math.PI * i / (frameSize - 1)));
-      if (pos + i < output.length) {
-        output[pos + i] += real[i] * w * 0.5;
+      if (pos + i < outBuf.length) {
+        outBuf[pos + i] += real[i] * w;
+        weightBuf[pos + i] += w * w;
       }
+    }
+  }
+
+  const output = new Float32Array(data.length);
+  for (let i = 0; i < data.length; i++) {
+    if (weightBuf[i] > 1e-4) {
+      output[i] = outBuf[i] / weightBuf[i];
+    } else {
+      output[i] = data[i];
     }
   }
   return output;
@@ -517,8 +547,11 @@ export function applyMFCCShaping(
   data: Float32Array, sampleRate: number, strength: number,
   frameSize = 2048, hopSize = frameSize / 2
 ): Float32Array {
-  const output = new Float32Array(data.length);
-  if (strength <= 0) { data.forEach((v, i) => output[i] = v); return output; }
+  if (strength <= 0) {
+    const out = new Float32Array(data.length);
+    for (let i = 0; i < data.length; i++) out[i] = data[i];
+    return out;
+  }
 
   const nyquist = sampleRate / 2;
   const numMelBands = 13;
@@ -548,6 +581,9 @@ export function applyMFCCShaping(
 
   const targetMFCCDelta = [0, 0.05, 0.08, -0.05, -0.08, 0.04, -0.03, 0.05, -0.04, 0.02, -0.02, 0.03, -0.01];
 
+  const outBuf = new Float64Array(data.length);
+  const weightBuf = new Float64Array(data.length);
+
   for (let pos = 0; pos + frameSize <= data.length; pos += hopSize) {
     const real = new Float64Array(frameSize);
     const imag = new Float64Array(frameSize);
@@ -565,27 +601,14 @@ export function applyMFCCShaping(
       phase[b] = Math.atan2(imag[b], real[b]);
     }
 
-    const melEnergies = new Float64Array(numMelBands);
-    for (let m = 0; m < numMelBands; m++) {
-      let energy = 0;
-      for (let b = melBins[m]; b <= melBins[m + 2]; b++) {
-        energy += magnitude[b] * filterbankWeights(b, m);
-      }
-      melEnergies[m] = Math.max(1e-8, energy);
-    }
-
-    for (let m = 0; m < numMelBands; m++) {
-      const delta = targetMFCCDelta[m] * strength * 0.4;
-      melEnergies[m] *= Math.pow(10, delta);
-    }
-
+    // Subtle MFCC shaping with reduced delta scaling
     for (let b = 0; b < numBins; b++) {
       let gain = 1.0;
       let totalWeight = 0;
       for (let m = 0; m < numMelBands; m++) {
         const w = filterbankWeights(b, m);
         if (w > 0) {
-          const targetCorrection = Math.pow(10, targetMFCCDelta[m] * strength * 0.45);
+          const targetCorrection = Math.pow(10, targetMFCCDelta[m] * strength * 0.15);
           gain += (targetCorrection - 1.0) * w;
           totalWeight += w;
         }
@@ -603,9 +626,19 @@ export function applyMFCCShaping(
     simplIFFT(real, imag);
     for (let i = 0; i < frameSize; i++) {
       const w = 0.5 * (1 - Math.cos(2 * Math.PI * i / (frameSize - 1)));
-      if (pos + i < output.length) {
-        output[pos + i] += real[i] * w * 0.5;
+      if (pos + i < outBuf.length) {
+        outBuf[pos + i] += real[i] * w;
+        weightBuf[pos + i] += w * w;
       }
+    }
+  }
+
+  const output = new Float32Array(data.length);
+  for (let i = 0; i < data.length; i++) {
+    if (weightBuf[i] > 1e-4) {
+      output[i] = outBuf[i] / weightBuf[i];
+    } else {
+      output[i] = data[i];
     }
   }
   return output;
@@ -619,13 +652,14 @@ export function applySpectralSmoothing(
 ): Float32Array {
   if (cutoffHz >= sampleRate / 2 - 500 || slope <= 0) {
     const out = new Float32Array(data.length);
-    data.forEach((v, i) => out[i] = v);
+    for (let i = 0; i < data.length; i++) out[i] = data[i];
     return out;
   }
 
-  const output = new Float32Array(data.length);
+  const outBuf = new Float64Array(data.length);
+  const weightBuf = new Float64Array(data.length);
   const nyquist = sampleRate / 2;
-  const transitionBw = 500 + slope * 2500; // 500Hz to 3kHz bandwidth
+  const transitionBw = 500 + slope * 2500;
 
   for (let pos = 0; pos + frameSize <= data.length; pos += hopSize) {
     const real = new Float64Array(frameSize);
@@ -640,9 +674,8 @@ export function applySpectralSmoothing(
     for (let b = 0; b < numBins; b++) {
       const freq = (b / numBins) * nyquist;
       if (freq > cutoffHz - transitionBw / 2) {
-        // Smooth transition instead of brick wall
         const t = Math.min(1, Math.max(0, (freq - (cutoffHz - transitionBw / 2)) / transitionBw));
-        const gain = 1 - t * t * (3 - 2 * t); // smoothstep
+        const gain = 1 - t * t * (3 - 2 * t);
         real[b] *= gain;
         imag[b] *= gain;
       }
@@ -651,9 +684,19 @@ export function applySpectralSmoothing(
     simplIFFT(real, imag);
     for (let i = 0; i < frameSize; i++) {
       const w = 0.5 * (1 - Math.cos(2 * Math.PI * i / (frameSize - 1)));
-      if (pos + i < output.length) {
-        output[pos + i] += real[i] * w * (2.0 / 3.0);
+      if (pos + i < outBuf.length) {
+        outBuf[pos + i] += real[i] * w;
+        weightBuf[pos + i] += w * w;
       }
+    }
+  }
+
+  const output = new Float32Array(data.length);
+  for (let i = 0; i < data.length; i++) {
+    if (weightBuf[i] > 1e-4) {
+      output[i] = outBuf[i] / weightBuf[i];
+    } else {
+      output[i] = data[i];
     }
   }
   return output;
@@ -667,8 +710,8 @@ export function applyHarmonicSaturation(
   const output = new Float32Array(data.length);
   if (drive <= 0) { data.forEach((v, i) => output[i] = v); return output; }
 
-  const gain = 1 + drive * 4; // 1x to 5x input gain
-  const mix = drive * 0.5;    // wet/dry based on drive
+  const gain = 1 + drive * 3; // 1x to 4x input gain
+  const mix = drive * 0.3;    // wet/dry based on drive (reduced to preserve audio)
 
   for (let i = 0; i < data.length; i++) {
     const x = data[i] * gain;
@@ -680,7 +723,9 @@ export function applyHarmonicSaturation(
     const evenHarm = (1 / (1 + Math.exp(-x * 2))) - 0.5;
 
     const saturated = oddHarm * odd + evenHarm * even * 2;
-    const normalized = saturated / (odd + even + 0.001); // prevent div by 0
+    // Normalize by (odd + even) to achieve unity gain scaling of saturated output,
+    // and divide by gain to bring it back to the original level range in linear region
+    const normalized = (saturated / (odd + even + 1e-9)) / gain;
 
     output[i] = data[i] * (1 - mix) + normalized * mix;
   }

@@ -193,3 +193,137 @@ async function processClipAsync(
   
   return result;
 }
+
+export function copyAudioBuffer(buffer: AudioBuffer): AudioBuffer {
+  const newBuffer = new AudioBuffer({
+    length: buffer.length,
+    numberOfChannels: buffer.numberOfChannels,
+    sampleRate: buffer.sampleRate
+  });
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    newBuffer.getChannelData(c).set(buffer.getChannelData(c));
+  }
+  return newBuffer;
+}
+
+export function reverseAudioBuffer(buffer: AudioBuffer): AudioBuffer {
+  const newBuffer = new AudioBuffer({
+    length: buffer.length,
+    numberOfChannels: buffer.numberOfChannels,
+    sampleRate: buffer.sampleRate
+  });
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const srcData = buffer.getChannelData(c);
+    const dstData = newBuffer.getChannelData(c);
+    for (let i = 0; i < buffer.length; i++) {
+      dstData[i] = srcData[buffer.length - 1 - i];
+    }
+  }
+  return newBuffer;
+}
+
+export function invertAudioBuffer(buffer: AudioBuffer): AudioBuffer {
+  const newBuffer = new AudioBuffer({
+    length: buffer.length,
+    numberOfChannels: buffer.numberOfChannels,
+    sampleRate: buffer.sampleRate
+  });
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const srcData = buffer.getChannelData(c);
+    const dstData = newBuffer.getChannelData(c);
+    for (let i = 0; i < buffer.length; i++) {
+      dstData[i] = -srcData[i];
+    }
+  }
+  return newBuffer;
+}
+
+export function normalizeAudioBuffer(buffer: AudioBuffer, targetDb: number = -0.1): AudioBuffer {
+  const targetGain = Math.pow(10, targetDb / 20);
+  let maxVal = 0;
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < data.length; i++) {
+      const val = Math.abs(data[i]);
+      if (val > maxVal) maxVal = val;
+    }
+  }
+
+  const newBuffer = new AudioBuffer({
+    length: buffer.length,
+    numberOfChannels: buffer.numberOfChannels,
+    sampleRate: buffer.sampleRate
+  });
+
+  if (maxVal === 0) {
+    return newBuffer;
+  }
+
+  const multiplier = targetGain / maxVal;
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const srcData = buffer.getChannelData(c);
+    const dstData = newBuffer.getChannelData(c);
+    for (let i = 0; i < srcData.length; i++) {
+      dstData[i] = srcData[i] * multiplier;
+    }
+  }
+  return newBuffer;
+}
+
+export function silenceAudioBufferRange(
+  buffer: AudioBuffer,
+  startSec: number,
+  durationSec: number
+): AudioBuffer {
+  const newBuffer = new AudioBuffer({
+    length: buffer.length,
+    numberOfChannels: buffer.numberOfChannels,
+    sampleRate: buffer.sampleRate
+  });
+
+  const sampleRate = buffer.sampleRate;
+  const startSample = Math.max(0, Math.round(startSec * sampleRate));
+  const endSample = Math.min(buffer.length, Math.round((startSec + durationSec) * sampleRate));
+
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const srcData = buffer.getChannelData(c);
+    const dstData = newBuffer.getChannelData(c);
+    
+    // Copy the entire buffer first
+    dstData.set(srcData);
+    
+    // Mute the specific segment
+    for (let i = startSample; i < endSample; i++) {
+      dstData[i] = 0;
+    }
+  }
+  return newBuffer;
+}
+
+export function applyDeHummerNode(
+  audioCtx: AudioContext,
+  destinationNode: AudioNode,
+  fundamental: number = 60
+): AudioNode {
+  const notch1 = audioCtx.createBiquadFilter();
+  notch1.type = "notch";
+  notch1.frequency.value = fundamental;
+  notch1.Q.value = 30;
+
+  const notch2 = audioCtx.createBiquadFilter();
+  notch2.type = "notch";
+  notch2.frequency.value = fundamental * 2;
+  notch2.Q.value = 30;
+
+  const notch3 = audioCtx.createBiquadFilter();
+  notch3.type = "notch";
+  notch3.frequency.value = fundamental * 3;
+  notch3.Q.value = 30;
+
+  notch1.connect(notch2);
+  notch2.connect(notch3);
+  notch3.connect(destinationNode);
+
+  return notch1;
+}
+

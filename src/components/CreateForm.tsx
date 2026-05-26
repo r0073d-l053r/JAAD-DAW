@@ -156,10 +156,6 @@ export function CreateForm() {
   // Context-Aware Highlight Auto-Detection
   useEffect(() => {
     if (state.timeSelection && state.timeSelection.trackIds.length > 0) {
-      // Auto expand creation drawer
-      setIsCollapsed(false);
-      setIsExpanded(true);
-
       const targetTrackId = state.timeSelection.trackIds[0];
       const targetTrack = state.tracks.find((t) => t.id === targetTrackId);
       if (targetTrack) {

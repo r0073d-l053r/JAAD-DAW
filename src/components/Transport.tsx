@@ -127,7 +127,7 @@ export function Transport() {
                let offset = state.currentTime;
                let remaining = trackDuration - state.currentTime;
                
-               audioEngine.playClip(`frozen_${track.id}`, track.id, startContextTime, offset, remaining, track.frozenBufferId);
+               audioEngine.playClip(`frozen_${track.id}`, track.id, startContextTime, offset, remaining, track.frozenBufferId, undefined, track.deHummerEnabled);
                return;
              }
           }
@@ -148,7 +148,7 @@ export function Transport() {
               remainingDuration -= overlap;
             }
             
-            audioEngine.playClip(clip.id, track.id, clipStartContextTime, offset, remainingDuration, clip.bufferId, clip.volumeEnvelope);
+            audioEngine.playClip(clip.id, track.id, clipStartContextTime, offset, remainingDuration, clip.bufferId, clip.volumeEnvelope, track.deHummerEnabled);
           }
         });
       });

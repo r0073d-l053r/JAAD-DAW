@@ -1,5 +1,6 @@
 import { SoundTouch, SimpleFilter, WebAudioBufferSource } from 'soundtouchjs';
 import { CloudVstBridge } from './cloudVstBridge';
+import { applyDeHummerNode } from './audioUtils';
 
 class AudioEngine {
   context: AudioContext | null = null;
@@ -432,7 +433,16 @@ class AudioEngine {
 
 
 
-  playClip(clipId: string, trackId: string, playAtTime: number, offset: number = 0, duration: number = 0, bufferId?: string, volumeEnvelope?: { time: number; value: number }[]) {
+  playClip(
+    clipId: string,
+    trackId: string,
+    playAtTime: number,
+    offset: number = 0,
+    duration: number = 0,
+    bufferId?: string,
+    volumeEnvelope?: { time: number; value: number }[],
+    deHummerEnabled?: boolean
+  ) {
     const effectiveBufferId = bufferId || clipId;
     if (!this.context || !this.buffers.has(effectiveBufferId)) return;
     
@@ -456,6 +466,10 @@ class AudioEngine {
       source.buffer = buffer;
       
       let targetNode: AudioNode = nodes.gain;
+      if (deHummerEnabled) {
+        targetNode = applyDeHummerNode(this.context, targetNode);
+      }
+
       if (volumeEnvelope && volumeEnvelope.length > 0) {
         const envGain = this.context.createGain();
         const clipStartContextTime = targetTime - startOffset;
@@ -466,7 +480,7 @@ class AudioEngine {
             envGain.gain.linearRampToValueAtTime(Math.max(0.0001, pt.value), pointTime);
           }
         }
-        envGain.connect(nodes.gain);
+        envGain.connect(targetNode);
         targetNode = envGain;
       }
       
@@ -483,6 +497,10 @@ class AudioEngine {
     const sampleRate = this.context!.sampleRate;
 
     let targetNode: AudioNode = nodes.gain;
+    if (deHummerEnabled) {
+      targetNode = applyDeHummerNode(this.context, targetNode);
+    }
+
     if (volumeEnvelope && volumeEnvelope.length > 0) {
       const envGain = this.context.createGain();
       const clipStartContextTime = targetTime - startOffset;
@@ -493,7 +511,7 @@ class AudioEngine {
           envGain.gain.linearRampToValueAtTime(Math.max(0.0001, pt.value), pointTime);
         }
       }
-      envGain.connect(nodes.gain);
+      envGain.connect(targetNode);
       targetNode = envGain;
     }
 

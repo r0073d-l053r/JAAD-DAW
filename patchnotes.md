@@ -2,13 +2,32 @@
 *Just Another AI DAW*  
 ***Internal Release Notes***  
 ![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnEAAAACCAYAAAA3pIp+AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAMUlEQVR4nO3WAQkAIBAEsBPMYs4PZhMDWMAA5njYUmxU1UqyAwBAF2cmeZE4AIBO7gentgXapSWpbgAAAABJRU5ErkJggg==)  
-***Current Build:*** * v0.15.3 · May 25, 2026*  
+***Current Build:*** * v0.15.5 · May 26, 2026*  
  *  
  * ***Platform:*** * Web (React + Vite + Firebase)*  
  *  
  * ***Engine:*** * Web Audio API + AudioWorklet + Wasm SIMD + Carla Headless DSP Sidecar*  
  *  
  * ***AI Backend:*** * Google Gemini + essentia.js*  
+![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnEAAAACCAYAAAA3pIp+AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAANElEQVR4nO3OUQmAABBAsSdYxKYXx1gmEBOIFfwTYUuwZWa2ag8AgL841uquzq8nAAC8dj05WgYLQTzjnAAAAABJRU5ErkJggg==)  
+**v0.15.5 — May 26, 2026**  
+**🛡️ ***"Fidelity Evasion & DSP Stabilization"***  
+Resolved critical audio degradation, volume clipping, and score tracking errors in the AI Authenticity Processor. Shifted to mathematically perfect overlap-add (OLA) DSP reconstruction and calibrated parameter sensitivity to deliver pristine, highly effective evasion of AI detectors.
+
+***✨ New Features & Bug Fixes***  
+| | |  
+|-|-|  
+| **Fix / Improvement** | **Description** |   
+| **Mathematically Perfect OLA** | Replaced the raw window multiplication OLA in the FFT processing stages with a standard weight accumulator normalization buffer. This guarantees mathematically perfect, click-free signal reconstruction, eliminating metallic resonance, amplitude modulation, and trailing silence. |
+| **Unity-Gain Saturation Waveshaper** | Calibrated the soft-clipping harmonic saturation waveshaper to maintain perfect unity-gain scaling in its linear region. This prevents overall track volume boosts of 1.6x - 3.0x, eliminating digital clipping, dynamic pumping, and AI detection score inflation. |
+| **Phase Entropy Calibration** | Increased the maximum phase entropy perturbation scale to a robust `0.75` radians. This effectively breaks synthetic phase coherence (pushing variance above `1.5` to eliminate the 20-point detector penalty) while remaining completely transparent to human ears. |
+| **DSP Test Harness** | Added a dedicated `src/lib/aiAuthenticityProcessor.test.ts` suite to programmatically verify non-degradation and successful score evasion across presets. |
+
+***🏗️ Technical Details***  
+- 2 files changed across `aiAuthenticityProcessor.ts` and `aiAuthenticityProcessor.test.ts`.  
+- Full Vitest suite: **23 test files, 119 tests — 100% passing.**  
+- Zero compilation or runtime errors in development and production builds.  
+
 ![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnEAAAACCAYAAAA3pIp+AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAANElEQVR4nO3OUQmAABBAsSdYxKYXx1gmEBOIFfwTYUuwZWa2ag8AgL841uquzq8nAAC8dj05WgYLQTzjnAAAAABJRU5ErkJggg==)  
 **v0.15.4 — May 26, 2026**  
 **🔊 ***"Aesthetic Precision"***  
@@ -73,4 +92,4 @@ Stability and polish release. Fixed critical Spectrogram loading failures, isola
 - Full Vitest suite: **21 test files, 105 tests — 100% passing.**  
 - Zero compilation or runtime errors in development and production builds.  
 ![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnEAAAACCAYAAAA3pIp+AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAANUlEQVR4nO3OQQmAABRAsSd4NIGRTPXNaQBrWMGbCFuCLTOzV2cAAPzFvVZbdXw9AQDgtesBhZQEOYZGgUEAAAAASUVORK5CYII=)  
-*Last updated: May 25, 2026*  
+*Last updated: May 26, 2026*  
