@@ -18,19 +18,24 @@ Just Another AI DAW (JAAD) is a modern, web-browser-based Digital Audio Workstat
 ## Screenshots
 
 <div align="center">
-  <img src="./assets/screenshot-3.png" alt="JAAD Interface - Empty State" width="800"/>
-</div>
+  <h3>1. Sleek Empty Timeline Workspace</h3>
+  <img src="./assets/screenshot-1.png" alt="JAAD Interface - Empty Workspace" width="800"/>
+  <br/><br/>
+  
+  <h3>2. Multitrack Editor with Video Scoring Monitor</h3>
+  <img src="./assets/screenshot-2.png" alt="JAAD Interface - Multitrack Editor with Video" width="800"/>
+  <br/><br/>
 
-<br/>
+  <h3>3. Multitrack Spectrogram Analysis</h3>
+  <img src="./assets/screenshot-3.jpg" alt="JAAD Interface - Spectrogram View" width="800"/>
+  <br/><br/>
 
-<div align="center">
-  <img src="./assets/screenshot-1.png" alt="JAAD Interface - AI Copilot" width="800"/>
-</div>
+  <h3>4. Generative AI Copilot & Vocal Styles</h3>
+  <img src="./assets/screenshot-4.png" alt="JAAD Interface - Vocal Style Dropdown" width="800"/>
+  <br/><br/>
 
-<br/>
-
-<div align="center">
-  <img src="./assets/screenshot-2.png" alt="JAAD Interface - Timeline View" width="800"/>
+  <h3>5. Syncing Project BPM Loading Overlay</h3>
+  <img src="./assets/screenshot-5.png" alt="JAAD Interface - Syncing BPM Loading Modal" width="800"/>
 </div>
 
 ## Features
