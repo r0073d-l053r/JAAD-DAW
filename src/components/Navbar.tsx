@@ -56,8 +56,9 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
     try {
       const duration = getProjectDuration();
       const buffer = await audioEngine.renderMixdown(state.tracks, duration);
-      const blob = audioBufferToWav(buffer);
-      downloadBlob(blob, 'project_mixdown.wav');
+      const safeProjectName = (state.projectName || 'project').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const blob = audioBufferToWav(buffer, state.projectName);
+      downloadBlob(blob, `${safeProjectName}_mixdown.wav`);
     } catch (error) {
       console.error('Export failed:', error);
       alert('Export failed. Check console for details.');
@@ -334,8 +335,9 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
           buffer: await audioEngine.renderTrack(t, duration)
         }))
       );
-      const zipBlob = await createStemZip(trackBuffers);
-      downloadBlob(zipBlob, 'project_stems.zip');
+      const safeProjectName = (state.projectName || 'project').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const zipBlob = await createStemZip(trackBuffers, state.projectName);
+      downloadBlob(zipBlob, `${safeProjectName}_stems.zip`);
     } catch (error) {
       console.error('Export failed:', error);
     } finally {
