@@ -134,10 +134,10 @@ export function WelcomeModal({ isOpen: manualIsOpen }: WelcomeModalProps) {
                       </div>
                       <h3 className="text-sm font-bold text-white">Interactive Quickstart Guide</h3>
                       <ul className="space-y-1.5 text-xs text-zinc-400 list-disc list-inside">
-                        <li>Drag & drop your own audio files anywhere onto the grid.</li>
-                        <li>Click the <span className="text-secondary font-medium">Create</span> tab to generate AI stems.</li>
+                        <li>Drag & drop audio files anywhere onto the grid.</li>
+                        <li>Click <span className="text-secondary font-medium">Create</span> to generate AI stems and MIDI patterns.</li>
                         <li>Toggle Metronome & Auto-BPM sync to lock your timeline beats.</li>
-                        <li>Double-click waveforms to slice, trim, and adjust gain.</li>
+                        <li>Export `.jaad` bundles or generate <span className="text-secondary font-medium">Share Links</span>.</li>
                       </ul>
                     </div>
 

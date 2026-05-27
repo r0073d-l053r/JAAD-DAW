@@ -1,4 +1,4 @@
-import LiquidGlass from 'liquid-glass-react'
+import LiquidGlass from '../src/index'
 
 function App() {
   return (

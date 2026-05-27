@@ -237,6 +237,14 @@ export function LearnModal({ isOpen, onClose }: { isOpen: boolean, onClose: () =
                 <p className="text-xs text-zinc-500 mt-1">Use <span className="text-white font-bold">WAV Mixdown</span> for a finished song, or <span className="text-white font-bold">Export Stems</span> to get a ZIP archive for professional mastering in traditional DAWs like Ableton or Logic.</p>
               </div>
             </div>
+
+            <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 flex gap-4">
+              <Share2 className="text-blue-500 shrink-0" size={24} />
+              <div>
+                <h5 className="text-white font-bold text-sm">Deep Link Sharing</h5>
+                <p className="text-xs text-zinc-500 mt-1">Generate a unique project URL (`?project=PROJECT_ID`) to easily share your progress. Includes one-click Discord integration!</p>
+              </div>
+            </div>
           </div>
         </div>
       )
@@ -274,7 +282,7 @@ export function LearnModal({ isOpen, onClose }: { isOpen: boolean, onClose: () =
               </div>
               <div className="text-left">
                 <h2 className="text-3xl font-black text-white tracking-tighter uppercase leading-none">LEARN</h2>
-                <p className="text-[10px] text-primary font-bold tracking-[0.4em] uppercase mt-2">QUICKSTART J.A.A.D. USER GUIDE • v2.4.0</p>
+                <p className="text-[10px] text-primary font-bold tracking-[0.4em] uppercase mt-2">QUICKSTART J.A.A.D. USER GUIDE • v1.2.0</p>
               </div>
             </div>
 

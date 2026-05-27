@@ -3,6 +3,18 @@ import { doc, onSnapshot, setDoc, getDocs, getDoc, collection, deleteDoc } from 
 import { ref, uploadBytes, getBlob, getMetadata, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Track } from './store';
 
+export interface CloudProjectMetadata {
+  id: string;
+  projectName: string;
+  tracks: Track[];
+  bpm: number;
+  originalBpm: number;
+  masterVolume: number;
+  lastUpdated: number;
+  hasBundle?: boolean;
+  backups?: number[];
+}
+
 export const isGitHubPagesBuild = (): boolean => {
   if (typeof window === 'undefined') return false;
   
@@ -388,7 +400,7 @@ export const updateProjectCloud = async (projectId: string, projectName: string,
   await setDoc(docRef, payload, { merge: true });
 };
 
-export const getProjectCloud = async (projectId: string) => {
+export const getProjectCloud = async (projectId: string): Promise<CloudProjectMetadata | null> => {
   if (!isFirebaseAvailable) return null;
   const docRef = doc(db, 'projects', projectId);
   const docSnap = await getDoc(docRef);
@@ -396,7 +408,7 @@ export const getProjectCloud = async (projectId: string) => {
     return {
       id: docSnap.id,
       ...docSnap.data()
-    };
+    } as CloudProjectMetadata;
   }
   return null;
 };

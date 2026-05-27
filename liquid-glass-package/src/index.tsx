@@ -1,4 +1,4 @@
-import { type CSSProperties, forwardRef, useCallback, useEffect, useId, useRef, useState } from "react"
+import React, { type CSSProperties, forwardRef, useCallback, useEffect, useId, useRef, useState } from "react"
 import { WebGLDisplacementGenerator, glslShaders } from "./shader-utils"
 import { displacementMap, polarDisplacementMap, prominentDisplacementMap } from "./utils"
 

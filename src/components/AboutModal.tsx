@@ -41,7 +41,7 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
                     <Sparkles size={40} className="text-white group-hover:scale-110 transition-transform duration-500" />
                  </div>
                  <h2 className="text-3xl font-black text-white tracking-tighter uppercase">JAAD</h2>
-                 <p className="text-[10px] text-primary font-bold tracking-[0.4em] uppercase mt-1">v1.1.0 • Built with Passion</p>
+                 <p className="text-[10px] text-primary font-bold tracking-[0.4em] uppercase mt-1">v1.2.0 • Built with Passion</p>
               </div>
 
              <button 
@@ -70,7 +70,7 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
                   <h4 className="text-[10px] font-black uppercase tracking-[0.3em]">The Tech</h4>
                </div>
                <p className="text-zinc-400 leading-relaxed text-sm">
-                  Leveraging modern Web Audio APIs, Essentia.js for algorithmic rhythm analysis, and Gemini-powered creative assistance, this project represents the intersection of high-fidelity DSP and next-gen AI. It is designed for creators who demand zero friction between inspiration and implementation.
+                  Leveraging modern Web Audio APIs (AudioWorklets), Essentia.js for algorithmic rhythm analysis, Gemini-powered creative assistance, and IndexedDB for robust local-first caching, this project represents the intersection of high-fidelity DSP and next-gen AI. It is designed for creators who demand zero friction between inspiration and implementation.
                </p>
             </div>
 

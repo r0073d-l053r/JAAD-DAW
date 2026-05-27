@@ -62,12 +62,19 @@ If you want to use cloud saving, you'll need to create a Firebase project at the
 ## ✨ Core Features
 
 ### 🎧 High-Fidelity Audio Engine
-- **Pitch-Preserving Time-Stretch**: Uses `SoundTouch.js` for professional-grade tempo changes without changing the pitch.
+- **AudioWorklet Playback Engine**: Uses a robust `soundtouch-processor` AudioWorklet for non-unity playback rates, eliminating audio glitches and improving performance.
+- **Pitch-Preserving Time-Stretch**: Professional-grade tempo changes without changing the pitch.
 - **Native Fallback**: Automatically switches to high-performance native `AudioBufferSourceNodes` when at 1.0x speed to eliminate latency and phasing.
 - **Sample-Accurate Sync**: Perfectly aligned playback across dozens of tracks.
 
+### ☁️ Cloud Sync & Sharing
+- **Cloud Project Browser**: Browse, load, and fork projects directly from Firebase.
+- **Portable .jaad Bundles**: Export your entire project (including all audio assets) as a `.jaad` zip bundle and import it anywhere.
+- **Deep Link Sharing**: Generate unique URLs (`?project=PROJECT_ID`) to share your project. Includes one-click Discord integration!
+- **Offline Persistence**: Local IndexedDB caching ensures your audio assets survive browser refreshes and offline states.
+
 ### ⏱️ Intelligent BPM Engine
-- **Auto-Detect BPM**: Powered by `Essentia.js`, the DAW analyzes uploaded files to find their original tempo automatically.
+- **Hybrid BPM Detection Engine**: Powered by `Essentia.js` for fast offline tempo analysis with an automatic Gemini AI fallback.
 - **Resampling Pipeline**: High-quality offline resampling ensures accurate analysis regardless of source sample rate (44.1k, 48k, etc.).
 
 ### 🎹 Workflow & Editing
