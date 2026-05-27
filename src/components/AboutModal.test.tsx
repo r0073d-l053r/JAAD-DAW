@@ -31,7 +31,7 @@ describe('AboutModal', () => {
     render(<AboutModal {...defaultProps} />);
     
     expect(screen.queryByText('JAAD')).not.toBeNull();
-    expect(screen.queryByText('v1.1.0 • Built with Passion')).not.toBeNull();
+    expect(screen.queryByText('v1.2.0 • Built with Passion')).not.toBeNull();
     expect(screen.queryByText('The Vision')).not.toBeNull();
     expect(screen.queryByText('The Tech')).not.toBeNull();
     expect(screen.queryByText('Connect with the Creator')).not.toBeNull();
