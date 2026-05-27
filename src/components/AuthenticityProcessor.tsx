@@ -141,6 +141,14 @@ export const AuthenticityProcessor: React.FC = () => {
   const [previewBufferId, setPreviewBufferId] = useState<string | null>(null);
   const [activePreset, setActivePreset] = useState<string | null>('Studio Master');
   const [showBefore, setShowBefore] = useState(true);
+  const [telemetry, setTelemetry] = useState<{
+    totalMs: number;
+    parallelChannelMs: number;
+    stereoMs: number;
+    normalizeMs: number;
+    gpuAccelerated: boolean;
+    channelTimings?: { left: Record<string, number>; right: Record<string, number> };
+  } | null>(null);
   const workerRef = useRef<Worker | null>(null);
 
   // Firestore Presets
@@ -343,7 +351,10 @@ export const AuthenticityProcessor: React.FC = () => {
             reject(e.data.error);
             return;
           }
-          const { channels: outChannels, aiScore } = e.data;
+          const { channels: outChannels, aiScore, perf } = e.data;
+          if (perf) {
+            setTelemetry(perf);
+          }
           const newBuffer = audioEngine.context!.createBuffer(
             outChannels.length, outChannels[0].length, b.sampleRate
           );
@@ -436,7 +447,14 @@ export const AuthenticityProcessor: React.FC = () => {
               </svg>
             </div>
             <div>
-              <h2 className="text-sm font-bold text-white tracking-tight">AI Authenticity Processor</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-white tracking-tight">AI Authenticity Processor</h2>
+                {telemetry && (
+                  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider font-mono ${telemetry.gpuAccelerated ? 'bg-[#38bdf8]/20 text-[#38bdf8] border border-[#38bdf8]/30' : 'bg-amber-500/20 text-amber-500 border border-amber-500/30'}`}>
+                    {telemetry.gpuAccelerated ? '⚡ WebGPU Active' : '💻 Multi-Core CPU'}
+                  </span>
+                )}
+              </div>
               <p className="text-[10px] text-zinc-500 font-mono">
                 Detected cutoff: <span className="text-[#a882fa]">{detectedCutoff > 20000 ? 'None' : `${detectedCutoff} Hz`}</span>
                 {' · '}Clip: <span className="text-zinc-400">{clip.audioData || clipId}</span>
@@ -653,6 +671,42 @@ export const AuthenticityProcessor: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Telemetry and Hardware Diagnostics */}
+        {telemetry && (
+          <div className="mx-6 mb-2 p-3 bg-black/40 border border-white/5 rounded-xl flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest font-mono">⚡ Hardware & Pipeline Telemetry</span>
+              <span className="text-[9px] text-[#38bdf8] font-mono">
+                Total Latency: <strong>{telemetry.totalMs.toFixed(1)}ms</strong>
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              <div className="bg-white/[0.02] p-2 rounded border border-white/5 flex flex-col">
+                <span className="text-[8px] text-zinc-500 font-mono">Channel Processing</span>
+                <span className="text-xs font-bold text-zinc-300 font-mono">{telemetry.parallelChannelMs.toFixed(1)}ms</span>
+                <span className="text-[7px] text-[#38bdf8] font-mono">Parallel Workers</span>
+              </div>
+              <div className="bg-white/[0.02] p-2 rounded border border-white/5 flex flex-col">
+                <span className="text-[8px] text-zinc-500 font-mono">Stereo Processing</span>
+                <span className="text-xs font-bold text-zinc-300 font-mono">{telemetry.stereoMs.toFixed(1)}ms</span>
+                <span className="text-[7px] text-[#22c55e] font-mono">Width & Correlation</span>
+              </div>
+              <div className="bg-white/[0.02] p-2 rounded border border-white/5 flex flex-col">
+                <span className="text-[8px] text-zinc-500 font-mono">Auto-Gain Norm</span>
+                <span className="text-xs font-bold text-zinc-300 font-mono">{telemetry.normalizeMs.toFixed(1)}ms</span>
+                <span className="text-[7px] text-pink-500 font-mono">Anti-Clipping Gating</span>
+              </div>
+              <div className="bg-white/[0.02] p-2 rounded border border-white/5 flex flex-col">
+                <span className="text-[8px] text-zinc-500 font-mono">FFT Acceleration</span>
+                <span className="text-xs font-bold text-[#38bdf8] font-mono">
+                  {telemetry.gpuAccelerated ? 'WebGPU Shader' : 'Optimized CPU'}
+                </span>
+                <span className="text-[7px] text-zinc-500 font-mono">Radix-2 Cooley-Tukey</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Processing overlay */}
         {processing && (
