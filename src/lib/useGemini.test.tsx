@@ -69,6 +69,43 @@ describe('useGemini', () => {
     expect(result.current.error).toContain('API key is not configured');
   });
 
+  it('fails safely if API key is completely missing', async () => {
+    const originalGetItem = Storage.prototype.getItem;
+    Storage.prototype.getItem = vi.fn().mockReturnValue(null);
+    import.meta.env.VITE_GEMINI_API_KEY = '';
+
+    const { result } = renderHook(() => useGemini());
+
+    let bpm: number | null = null;
+    await act(async () => {
+      bpm = await result.current.detectBPM(mockAudioBuffer);
+    });
+
+    expect(bpm).toBeNull();
+    expect(result.current.error).toContain('API key is not configured');
+
+    Storage.prototype.getItem = originalGetItem;
+  });
+
+  it('handles exceptions during API key retrieval', async () => {
+    const originalGetItem = Storage.prototype.getItem;
+    Storage.prototype.getItem = vi.fn().mockImplementation(() => {
+      throw new Error('localStorage error');
+    });
+
+    const { result } = renderHook(() => useGemini());
+
+    let bpm: number | null = null;
+    await act(async () => {
+      bpm = await result.current.detectBPM(mockAudioBuffer);
+    });
+
+    expect(bpm).toBeNull();
+    expect(result.current.error).toContain('API key is not configured');
+
+    Storage.prototype.getItem = originalGetItem;
+  });
+
   it('detects BPM by encoding audio buffers and calling models.generateContent', async () => {
     hoistedMocks.mockGenerateContent.mockResolvedValue({
       text: '135',
