@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useReducer, ReactNode } from "react";
 import { audioEngine } from "./audioEngine";
-import { findNearestZeroCrossing, reverseAudioBuffer, invertAudioBuffer, normalizeAudioBuffer, silenceAudioBufferRange } from "./audioUtils";
+import {
+  findNearestZeroCrossing,
+  reverseAudioBuffer,
+  invertAudioBuffer,
+  normalizeAudioBuffer,
+  silenceAudioBufferRange,
+} from "./audioUtils";
 
 export interface Lane {
   id: string;
@@ -159,14 +165,20 @@ export type Action =
   | { type: "TOGGLE_LOOP" }
   | { type: "SET_LOOP_MARKERS"; payload: { start: number; end: number } }
   | { type: "SPLIT_CLIP" }
-  | { type: "REVERT_CLIP_TO_ORIGINAL"; payload: { trackId: string; laneId?: string; clipId: string } }
+  | {
+      type: "REVERT_CLIP_TO_ORIGINAL";
+      payload: { trackId: string; laneId?: string; clipId: string };
+    }
   | { type: "REVERT_TRACK_TO_ORIGINAL"; payload: { trackId: string } }
   | { type: "UNDO" }
   | { type: "CLEAN_UP_STEMS" }
   | { type: "REDO" }
   | { type: "RESET_PROJECT" }
   | { type: "LOAD_PROJECT"; payload: AppStateWithHistory }
-  | { type: "FINALIZE_CLIP_OVERLAPS"; payload: { trackId: string; laneId?: string; clipId: string } }
+  | {
+      type: "FINALIZE_CLIP_OVERLAPS";
+      payload: { trackId: string; laneId?: string; clipId: string };
+    }
   | { type: "SELECT_ALL_CLIPS" }
   | { type: "CUT_CLIPS" }
   | { type: "RESTORE_SELECTION" }
@@ -201,7 +213,10 @@ export type Action =
   | { type: "SYNC_STATE"; payload: Partial<AppState> }
   | { type: "INCREMENT_BUFFERS_VERSION" }
   | { type: "SET_HAS_MANUALLY_SAVED"; payload: boolean }
-  | { type: "ADD_CLIP_TO_NEW_LANE"; payload: { trackId: string; clipId: string } }
+  | {
+      type: "ADD_CLIP_TO_NEW_LANE";
+      payload: { trackId: string; clipId: string };
+    }
   | { type: "TOGGLE_SPECTROGRAM" }
   | { type: "TOGGLE_VIDEO_PANEL" }
   | { type: "SET_VIDEO_URL"; payload: string | null }
@@ -223,17 +238,37 @@ export type Action =
       };
     }
   | { type: "SET_ACTIVE_CONTEXT_MENU"; payload: AppState["activeContextMenu"] }
-  | { type: "ADD_MARKER"; payload: { time: number; label?: string; color?: string } }
+  | {
+      type: "ADD_MARKER";
+      payload: { time: number; label?: string; color?: string };
+    }
   | { type: "REMOVE_MARKER"; payload: string }
   | { type: "UPDATE_MARKER"; payload: { id: string; changes: Partial<Marker> } }
   | { type: "GO_TO_NEXT_MARKER" }
   | { type: "GO_TO_PREV_MARKER" }
-  | { type: "REVERSE_CLIP"; payload: { trackId: string; laneId?: string; clipId: string } }
-  | { type: "INVERT_CLIP"; payload: { trackId: string; laneId?: string; clipId: string } }
-  | { type: "NORMALIZE_CLIP"; payload: { trackId: string; laneId?: string; clipId: string } }
-  | { type: "SILENCE_CLIP_SELECTION"; payload: { trackId: string; laneId?: string; clipId: string; start: number; duration: number } }
+  | {
+      type: "REVERSE_CLIP";
+      payload: { trackId: string; laneId?: string; clipId: string };
+    }
+  | {
+      type: "INVERT_CLIP";
+      payload: { trackId: string; laneId?: string; clipId: string };
+    }
+  | {
+      type: "NORMALIZE_CLIP";
+      payload: { trackId: string; laneId?: string; clipId: string };
+    }
+  | {
+      type: "SILENCE_CLIP_SELECTION";
+      payload: {
+        trackId: string;
+        laneId?: string;
+        clipId: string;
+        start: number;
+        duration: number;
+      };
+    }
   | { type: "TOGGLE_DEHUMMER"; payload: { trackId: string } };
-
 
 export interface AppStateWithHistory extends AppState {
   past: Track[][];
@@ -315,24 +350,27 @@ export function appReducer(
       const { trackId, laneId, clipId } = action.payload;
       const newTracks = state.tracks.map((t) => {
         if (t.id !== trackId) return t;
-        
-        const mapClips = (clips: Clip[]) => clips.map((clip) => {
-          if (clip.id !== clipId) return clip;
-          const origBufferId = clip.bufferId || clip.id;
-          const buffer = audioEngine.buffers.get(origBufferId);
-          if (!buffer) return clip;
-          
-          const newBuffer = reverseAudioBuffer(buffer);
-          const newBufferId = `${clip.id}_rev_${Math.random().toString(36).substr(2, 5)}`;
-          audioEngine.buffers.set(newBufferId, newBuffer);
-          
-          return { ...clip, bufferId: newBufferId };
-        });
+
+        const mapClips = (clips: Clip[]) =>
+          clips.map((clip) => {
+            if (clip.id !== clipId) return clip;
+            const origBufferId = clip.bufferId || clip.id;
+            const buffer = audioEngine.buffers.get(origBufferId);
+            if (!buffer) return clip;
+
+            const newBuffer = reverseAudioBuffer(buffer);
+            const newBufferId = `${clip.id}_rev_${Math.random().toString(36).substr(2, 5)}`;
+            audioEngine.buffers.set(newBufferId, newBuffer);
+
+            return { ...clip, bufferId: newBufferId };
+          });
 
         if (laneId && t.lanes) {
           return {
             ...t,
-            lanes: t.lanes.map((l) => (l.id === laneId ? { ...l, clips: mapClips(l.clips) } : l)),
+            lanes: t.lanes.map((l) =>
+              l.id === laneId ? { ...l, clips: mapClips(l.clips) } : l,
+            ),
           };
         }
         return { ...t, clips: mapClips(t.clips) };
@@ -346,24 +384,27 @@ export function appReducer(
       const { trackId, laneId, clipId } = action.payload;
       const newTracks = state.tracks.map((t) => {
         if (t.id !== trackId) return t;
-        
-        const mapClips = (clips: Clip[]) => clips.map((clip) => {
-          if (clip.id !== clipId) return clip;
-          const origBufferId = clip.bufferId || clip.id;
-          const buffer = audioEngine.buffers.get(origBufferId);
-          if (!buffer) return clip;
-          
-          const newBuffer = invertAudioBuffer(buffer);
-          const newBufferId = `${clip.id}_inv_${Math.random().toString(36).substr(2, 5)}`;
-          audioEngine.buffers.set(newBufferId, newBuffer);
-          
-          return { ...clip, bufferId: newBufferId };
-        });
+
+        const mapClips = (clips: Clip[]) =>
+          clips.map((clip) => {
+            if (clip.id !== clipId) return clip;
+            const origBufferId = clip.bufferId || clip.id;
+            const buffer = audioEngine.buffers.get(origBufferId);
+            if (!buffer) return clip;
+
+            const newBuffer = invertAudioBuffer(buffer);
+            const newBufferId = `${clip.id}_inv_${Math.random().toString(36).substr(2, 5)}`;
+            audioEngine.buffers.set(newBufferId, newBuffer);
+
+            return { ...clip, bufferId: newBufferId };
+          });
 
         if (laneId && t.lanes) {
           return {
             ...t,
-            lanes: t.lanes.map((l) => (l.id === laneId ? { ...l, clips: mapClips(l.clips) } : l)),
+            lanes: t.lanes.map((l) =>
+              l.id === laneId ? { ...l, clips: mapClips(l.clips) } : l,
+            ),
           };
         }
         return { ...t, clips: mapClips(t.clips) };
@@ -377,24 +418,27 @@ export function appReducer(
       const { trackId, laneId, clipId } = action.payload;
       const newTracks = state.tracks.map((t) => {
         if (t.id !== trackId) return t;
-        
-        const mapClips = (clips: Clip[]) => clips.map((clip) => {
-          if (clip.id !== clipId) return clip;
-          const origBufferId = clip.bufferId || clip.id;
-          const buffer = audioEngine.buffers.get(origBufferId);
-          if (!buffer) return clip;
-          
-          const newBuffer = normalizeAudioBuffer(buffer);
-          const newBufferId = `${clip.id}_norm_${Math.random().toString(36).substr(2, 5)}`;
-          audioEngine.buffers.set(newBufferId, newBuffer);
-          
-          return { ...clip, bufferId: newBufferId };
-        });
+
+        const mapClips = (clips: Clip[]) =>
+          clips.map((clip) => {
+            if (clip.id !== clipId) return clip;
+            const origBufferId = clip.bufferId || clip.id;
+            const buffer = audioEngine.buffers.get(origBufferId);
+            if (!buffer) return clip;
+
+            const newBuffer = normalizeAudioBuffer(buffer);
+            const newBufferId = `${clip.id}_norm_${Math.random().toString(36).substr(2, 5)}`;
+            audioEngine.buffers.set(newBufferId, newBuffer);
+
+            return { ...clip, bufferId: newBufferId };
+          });
 
         if (laneId && t.lanes) {
           return {
             ...t,
-            lanes: t.lanes.map((l) => (l.id === laneId ? { ...l, clips: mapClips(l.clips) } : l)),
+            lanes: t.lanes.map((l) =>
+              l.id === laneId ? { ...l, clips: mapClips(l.clips) } : l,
+            ),
           };
         }
         return { ...t, clips: mapClips(t.clips) };
@@ -408,26 +452,33 @@ export function appReducer(
       const { trackId, laneId, clipId, start, duration } = action.payload;
       const newTracks = state.tracks.map((t) => {
         if (t.id !== trackId) return t;
-        
-        const mapClips = (clips: Clip[]) => clips.map((clip) => {
-          if (clip.id !== clipId) return clip;
-          const origBufferId = clip.bufferId || clip.id;
-          const buffer = audioEngine.buffers.get(origBufferId);
-          if (!buffer) return clip;
-          
-          // Calculate offset relative to the raw audio buffer start
-          const offsetStart = start - clip.start + (clip.audioOffset || 0);
-          const newBuffer = silenceAudioBufferRange(buffer, offsetStart, duration);
-          const newBufferId = `${clip.id}_silence_${Math.random().toString(36).substr(2, 5)}`;
-          audioEngine.buffers.set(newBufferId, newBuffer);
-          
-          return { ...clip, bufferId: newBufferId };
-        });
+
+        const mapClips = (clips: Clip[]) =>
+          clips.map((clip) => {
+            if (clip.id !== clipId) return clip;
+            const origBufferId = clip.bufferId || clip.id;
+            const buffer = audioEngine.buffers.get(origBufferId);
+            if (!buffer) return clip;
+
+            // Calculate offset relative to the raw audio buffer start
+            const offsetStart = start - clip.start + (clip.audioOffset || 0);
+            const newBuffer = silenceAudioBufferRange(
+              buffer,
+              offsetStart,
+              duration,
+            );
+            const newBufferId = `${clip.id}_silence_${Math.random().toString(36).substr(2, 5)}`;
+            audioEngine.buffers.set(newBufferId, newBuffer);
+
+            return { ...clip, bufferId: newBufferId };
+          });
 
         if (laneId && t.lanes) {
           return {
             ...t,
-            lanes: t.lanes.map((l) => (l.id === laneId ? { ...l, clips: mapClips(l.clips) } : l)),
+            lanes: t.lanes.map((l) =>
+              l.id === laneId ? { ...l, clips: mapClips(l.clips) } : l,
+            ),
           };
         }
         return { ...t, clips: mapClips(t.clips) };
@@ -469,7 +520,11 @@ export function appReducer(
       return { ...state, tempoAutomation: action.payload };
     case "SET_TIME": {
       // Ensure we don't accidentally update time during transit states
-      return { ...state, currentTime: action.payload, playStartPosition: action.payload };
+      return {
+        ...state,
+        currentTime: action.payload,
+        playStartPosition: action.payload,
+      };
     }
     case "SET_MASTER_VOLUME": {
       audioEngine.setMasterVolume(action.payload);
@@ -491,11 +546,17 @@ export function appReducer(
             const updatedTrack = { ...t, ...changes };
             // If the name changed, propagate it to all clips (stems) on this track
             if (changes.name) {
-              updatedTrack.clips = t.clips.map(c => ({ ...c, audioData: changes.name }));
+              updatedTrack.clips = t.clips.map((c) => ({
+                ...c,
+                audioData: changes.name,
+              }));
               if (updatedTrack.lanes) {
-                updatedTrack.lanes = updatedTrack.lanes.map(l => ({
+                updatedTrack.lanes = updatedTrack.lanes.map((l) => ({
                   ...l,
-                  clips: l.clips.map(c => ({ ...c, audioData: changes.name }))
+                  clips: l.clips.map((c) => ({
+                    ...c,
+                    audioData: changes.name,
+                  })),
                 }));
               }
             }
@@ -509,14 +570,18 @@ export function appReducer(
       return {
         ...state,
         tracks: state.tracks.map((t) =>
-          t.id === action.payload.trackId ? { ...t, isFrozen: true, frozenBufferId: action.payload.bufferId } : t,
+          t.id === action.payload.trackId
+            ? { ...t, isFrozen: true, frozenBufferId: action.payload.bufferId }
+            : t,
         ),
       };
     case "UNFREEZE_TRACK":
       return {
         ...state,
         tracks: state.tracks.map((t) =>
-          t.id === action.payload ? { ...t, isFrozen: false, frozenBufferId: undefined } : t,
+          t.id === action.payload
+            ? { ...t, isFrozen: false, frozenBufferId: undefined }
+            : t,
         ),
       };
     case "REORDER_TRACKS": {
@@ -544,7 +609,10 @@ export function appReducer(
     case "TOGGLE_AI_PANEL":
       return { ...state, aiPanelOpen: !state.aiPanelOpen };
     case "TOGGLE_BACKGROUND_ANIMATION":
-      return { ...state, disableBackgroundAnimation: !state.disableBackgroundAnimation };
+      return {
+        ...state,
+        disableBackgroundAnimation: !state.disableBackgroundAnimation,
+      };
     case "SET_OFFLINE":
       return { ...state, isOffline: action.payload };
     case "SET_VIEW_MODE":
@@ -584,34 +652,46 @@ export function appReducer(
     case "SET_STEM_SEPARATOR_CLIP":
       return { ...state, stemSeparatorClipId: action.payload };
     case "ADD_GENERATED_ALTERNATIVES": {
-      const { trackId, clipId1, clipId2, filename1, filename2, start, duration } = action.payload;
+      const {
+        trackId,
+        clipId1,
+        clipId2,
+        filename1,
+        filename2,
+        start,
+        duration,
+      } = action.payload;
       const newTracks = state.tracks.map((t) => {
         if (t.id === trackId) {
           const lane1: Lane = {
             id: `lane_${Date.now()}_a_${Math.random().toString(36).substring(2, 7)}`,
             name: `Option A (Alt)`,
-            clips: [{
-              id: clipId1,
-              start,
-              duration,
-              audioData: filename1
-            }]
+            clips: [
+              {
+                id: clipId1,
+                start,
+                duration,
+                audioData: filename1,
+              },
+            ],
           };
           const lane2: Lane = {
             id: `lane_${Date.now()}_b_${Math.random().toString(36).substring(2, 7)}`,
             name: `Option B (Alt)`,
-            clips: [{
-              id: clipId2,
-              start,
-              duration,
-              audioData: filename2
-            }]
+            clips: [
+              {
+                id: clipId2,
+                start,
+                duration,
+                audioData: filename2,
+              },
+            ],
           };
           const existingLanes = t.lanes || [];
           return {
             ...t,
             lanes: [lane1, lane2, ...existingLanes],
-            showLanes: true
+            showLanes: true,
           };
         }
         return t;
@@ -622,22 +702,30 @@ export function appReducer(
       return { ...state, activeContextMenu: action.payload };
     case "ADD_MARKER": {
       const { time, label, color } = action.payload;
-      const markerId = "marker_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+      const markerId =
+        "marker_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
       const newMarker: Marker = {
         id: markerId,
         time: Math.max(0, time),
         label: label || `Marker ${state.markers.length + 1}`,
         color: color || "#3b82f6", // Default premium blue
       };
-      const updatedMarkers = [...state.markers, newMarker].sort((a, b) => a.time - b.time);
+      const updatedMarkers = [...state.markers, newMarker].sort(
+        (a, b) => a.time - b.time,
+      );
       return { ...state, markers: updatedMarkers };
     }
     case "REMOVE_MARKER": {
-      return { ...state, markers: state.markers.filter((m) => m.id !== action.payload) };
+      return {
+        ...state,
+        markers: state.markers.filter((m) => m.id !== action.payload),
+      };
     }
     case "UPDATE_MARKER": {
       const { id, changes } = action.payload;
-      const updated = state.markers.map((m) => (m.id === id ? { ...m, ...changes } : m));
+      const updated = state.markers.map((m) =>
+        m.id === id ? { ...m, ...changes } : m,
+      );
       return { ...state, markers: updated.sort((a, b) => a.time - b.time) };
     }
     case "GO_TO_NEXT_MARKER": {
@@ -648,7 +736,9 @@ export function appReducer(
       return state;
     }
     case "GO_TO_PREV_MARKER": {
-      const prev = [...state.markers].reverse().find((m) => m.time < state.currentTime - 0.01);
+      const prev = [...state.markers]
+        .reverse()
+        .find((m) => m.time < state.currentTime - 0.01);
       if (prev) {
         return { ...state, currentTime: prev.time };
       }
@@ -675,7 +765,8 @@ export function appReducer(
       return saveHistory(state, newTracks);
     }
     case "MOVE_AND_OVERWRITE_CLIP": {
-      const { sourceTrackId, sourceLaneId, clipId, targetTrackId, newStart } = action.payload;
+      const { sourceTrackId, sourceLaneId, clipId, targetTrackId, newStart } =
+        action.payload;
 
       let movedClip: Clip | undefined;
       const tracksWithoutMoved = state.tracks.map((t) => {
@@ -687,7 +778,10 @@ export function appReducer(
                 if (l.id === sourceLaneId) {
                   const c = l.clips.find((clip) => clip.id === clipId);
                   if (c) movedClip = { ...c, start: newStart };
-                  return { ...l, clips: l.clips.filter((clip) => clip.id !== clipId) };
+                  return {
+                    ...l,
+                    clips: l.clips.filter((clip) => clip.id !== clipId),
+                  };
                 }
                 return l;
               }),
@@ -695,7 +789,10 @@ export function appReducer(
           } else {
             const c = t.clips.find((clip) => clip.id === clipId);
             if (c) movedClip = { ...c, start: newStart };
-            return { ...t, clips: t.clips.filter((clip) => clip.id !== clipId) };
+            return {
+              ...t,
+              clips: t.clips.filter((clip) => clip.id !== clipId),
+            };
           }
         }
         return t;
@@ -710,35 +807,45 @@ export function appReducer(
         if (t.id === targetTrackId) {
           const draggedBufferId = movedClip!.bufferId || movedClip!.id;
           let currentMovedClip = movedClip!;
-          
+
           const sameBufferOverlaps = t.clips.filter((c) => {
             const hasSameBuffer = (c.bufferId || c.id) === draggedBufferId;
-            const overlaps = c.start < currentMovedClip.start + currentMovedClip.duration && c.start + c.duration > currentMovedClip.start;
+            const overlaps =
+              c.start < currentMovedClip.start + currentMovedClip.duration &&
+              c.start + c.duration > currentMovedClip.start;
             return hasSameBuffer && overlaps;
           });
 
           if (sameBufferOverlaps.length > 0) {
             const allToCombine = [...sameBufferOverlaps, currentMovedClip];
-            const minStart = Math.min(...allToCombine.map(c => c.start));
-            const maxEnd = Math.max(...allToCombine.map(c => c.start + c.duration));
-            
+            const minStart = Math.min(...allToCombine.map((c) => c.start));
+            const maxEnd = Math.max(
+              ...allToCombine.map((c) => c.start + c.duration),
+            );
+
             const refClip = sameBufferOverlaps[0];
             const originalStart = refClip.start - (refClip.audioOffset || 0);
-            
+
             const actualStart = Math.max(minStart, originalStart);
             const actualDuration = maxEnd - actualStart;
 
             currentMovedClip = {
-               ...currentMovedClip,
-               id: "joined_drag_" + Date.now() + "_" + Math.random().toString(36).substr(2,4),
-               bufferId: refClip.bufferId || refClip.id,
-               start: actualStart,
-               duration: Math.max(0, actualDuration),
-               audioOffset: actualStart - originalStart,
+              ...currentMovedClip,
+              id:
+                "joined_drag_" +
+                Date.now() +
+                "_" +
+                Math.random().toString(36).substr(2, 4),
+              bufferId: refClip.bufferId || refClip.id,
+              start: actualStart,
+              duration: Math.max(0, actualDuration),
+              audioOffset: actualStart - originalStart,
             };
           }
 
-          const remainingClips = t.clips.filter((c) => !sameBufferOverlaps.includes(c));
+          const remainingClips = t.clips.filter(
+            (c) => !sameBufferOverlaps.includes(c),
+          );
 
           const newStartT = currentMovedClip.start;
           const newEndT = currentMovedClip.start + currentMovedClip.duration;
@@ -806,30 +913,24 @@ export function appReducer(
       let newSelection = state.selectedClipIds;
 
       let targetGroupId: string | undefined;
-      for (const t of state.tracks) {
-        let found = false;
+      search_loop: for (const t of state.tracks) {
         for (const c of t.clips) {
           if (c.id === clipId) {
             targetGroupId = c.groupId;
-            found = true;
-            break;
+            break search_loop;
           }
         }
-        if (found) break;
 
         if (t.lanes) {
           for (const l of t.lanes) {
             for (const c of l.clips) {
               if (c.id === clipId) {
                 targetGroupId = c.groupId;
-                found = true;
-                break;
+                break search_loop;
               }
             }
-            if (found) break;
           }
         }
-        if (found) break;
       }
 
       let idsToToggle = [clipId];
@@ -868,15 +969,20 @@ export function appReducer(
     }
     case "GROUP_CLIPS": {
       if (state.selectedClipIds.length < 2) return state;
-      const groupId = "group_" + Date.now() + Math.random().toString(36).substr(2, 5);
+      const groupId =
+        "group_" + Date.now() + Math.random().toString(36).substr(2, 5);
       const selectedSet = new Set(state.selectedClipIds);
-      const newTracks = state.tracks.map(t => ({
+      const newTracks = state.tracks.map((t) => ({
         ...t,
-        clips: t.clips.map(c => selectedSet.has(c.id) ? { ...c, groupId } : c),
-        lanes: t.lanes?.map(l => ({
+        clips: t.clips.map((c) =>
+          selectedSet.has(c.id) ? { ...c, groupId } : c,
+        ),
+        lanes: t.lanes?.map((l) => ({
           ...l,
-          clips: l.clips.map(c => selectedSet.has(c.id) ? { ...c, groupId } : c)
-        }))
+          clips: l.clips.map((c) =>
+            selectedSet.has(c.id) ? { ...c, groupId } : c,
+          ),
+        })),
       }));
       return saveHistory(state, newTracks);
     }
@@ -886,25 +992,35 @@ export function appReducer(
       const selectedSet = new Set(state.selectedClipIds);
       for (const t of state.tracks) {
         for (const c of t.clips) {
-          if (selectedSet.has(c.id) && c.groupId) groupIdsToRemove.add(c.groupId);
+          if (selectedSet.has(c.id) && c.groupId)
+            groupIdsToRemove.add(c.groupId);
         }
         if (t.lanes) {
           for (const l of t.lanes) {
             for (const c of l.clips) {
-              if (selectedSet.has(c.id) && c.groupId) groupIdsToRemove.add(c.groupId);
+              if (selectedSet.has(c.id) && c.groupId)
+                groupIdsToRemove.add(c.groupId);
             }
           }
         }
       }
       if (groupIdsToRemove.size === 0) return state;
 
-      const newTracks = state.tracks.map(t => ({
+      const newTracks = state.tracks.map((t) => ({
         ...t,
-        clips: t.clips.map(c => c.groupId && groupIdsToRemove.has(c.groupId) ? { ...c, groupId: undefined } : c),
-        lanes: t.lanes?.map(l => ({
+        clips: t.clips.map((c) =>
+          c.groupId && groupIdsToRemove.has(c.groupId)
+            ? { ...c, groupId: undefined }
+            : c,
+        ),
+        lanes: t.lanes?.map((l) => ({
           ...l,
-          clips: l.clips.map(c => c.groupId && groupIdsToRemove.has(c.groupId) ? { ...c, groupId: undefined } : c)
-        }))
+          clips: l.clips.map((c) =>
+            c.groupId && groupIdsToRemove.has(c.groupId)
+              ? { ...c, groupId: undefined }
+              : c,
+          ),
+        })),
       }));
       return saveHistory(state, newTracks);
     }
@@ -913,13 +1029,21 @@ export function appReducer(
       if (selectedSet.size === 0) return state;
       const { timeDelta } = action.payload as { timeDelta: number };
 
-      const newTracks = state.tracks.map(t => ({
+      const newTracks = state.tracks.map((t) => ({
         ...t,
-        clips: t.clips.map(c => selectedSet.has(c.id) ? { ...c, start: Math.max(0, c.start + timeDelta) } : c),
-        lanes: t.lanes?.map(l => ({
+        clips: t.clips.map((c) =>
+          selectedSet.has(c.id)
+            ? { ...c, start: Math.max(0, c.start + timeDelta) }
+            : c,
+        ),
+        lanes: t.lanes?.map((l) => ({
           ...l,
-          clips: l.clips.map(c => selectedSet.has(c.id) ? { ...c, start: Math.max(0, c.start + timeDelta) } : c)
-        }))
+          clips: l.clips.map((c) =>
+            selectedSet.has(c.id)
+              ? { ...c, start: Math.max(0, c.start + timeDelta) }
+              : c,
+          ),
+        })),
       }));
       return saveHistory(state, newTracks);
     }
@@ -939,7 +1063,7 @@ export function appReducer(
                 // Keep the current timeline bounds (start, duration, audioOffset remain unchanged)
                 volumeEnvelope: undefined,
                 audioData: undefined, // Remove AI processing/tagging
-                notes: undefined // Remove MIDI if any
+                notes: undefined, // Remove MIDI if any
               };
             }
           }
@@ -950,7 +1074,7 @@ export function appReducer(
           return {
             ...t,
             lanes: t.lanes?.map((l) =>
-              l.id === laneId ? { ...l, clips: l.clips.map(revertClip) } : l
+              l.id === laneId ? { ...l, clips: l.clips.map(revertClip) } : l,
             ),
           };
         }
@@ -965,15 +1089,15 @@ export function appReducer(
 
         // Find all unique underlying audio buffers on this track
         const uniqueBuffers = new Map<string, AudioBuffer>();
-        
-        t.clips.forEach(c => {
+
+        t.clips.forEach((c) => {
           const bufId = c.bufferId || c.id;
           const buf = audioEngine.buffers.get(bufId);
           if (buf) uniqueBuffers.set(bufId, buf);
         });
 
-        t.lanes?.forEach(l => {
-          l.clips.forEach(c => {
+        t.lanes?.forEach((l) => {
+          l.clips.forEach((c) => {
             const bufId = c.bufferId || c.id;
             const buf = audioEngine.buffers.get(bufId);
             if (buf) uniqueBuffers.set(bufId, buf);
@@ -981,13 +1105,15 @@ export function appReducer(
         });
 
         // Restore them as full-length clips from the start
-        const restoredClips: Clip[] = Array.from(uniqueBuffers.entries()).map(([bufId, buf], i) => ({
-          id: `${bufId}_restored_${Date.now()}_${i}`,
-          bufferId: bufId,
-          start: 0, // Assume they originally started at 0
-          duration: buf.duration,
-          audioOffset: 0,
-        }));
+        const restoredClips: Clip[] = Array.from(uniqueBuffers.entries()).map(
+          ([bufId, buf], i) => ({
+            id: `${bufId}_restored_${Date.now()}_${i}`,
+            bufferId: bufId,
+            start: 0, // Assume they originally started at 0
+            duration: buf.duration,
+            audioOffset: 0,
+          }),
+        );
 
         return {
           ...t,
@@ -1006,27 +1132,27 @@ export function appReducer(
         const { startTime, endTime, trackIds } = state.timeSelection;
         const newTracks = state.tracks.map((t) => {
           if (trackIds.length > 0 && !trackIds.includes(t.id)) return t;
-          
+
           const newClips = t.clips.flatMap((c) => {
             const clipEnd = c.start + c.duration;
-            
+
             // If clip is completely outside selection
             if (clipEnd <= startTime || c.start >= endTime) {
               return [c];
             }
 
             const results = [];
-            
+
             // Part before selection
             if (c.start < startTime) {
               results.push({
                 ...c,
                 id: c.id + "_prefix_" + Math.random().toString(36).substr(2, 5),
                 bufferId: c.bufferId || c.id,
-                duration: startTime - c.start
+                duration: startTime - c.start,
               });
             }
-            
+
             // Part after selection
             if (clipEnd > endTime) {
               results.push({
@@ -1035,16 +1161,19 @@ export function appReducer(
                 bufferId: c.bufferId || c.id,
                 start: endTime,
                 duration: clipEnd - endTime,
-                audioOffset: (c.audioOffset || 0) + (endTime - c.start)
+                audioOffset: (c.audioOffset || 0) + (endTime - c.start),
               });
             }
-            
+
             return results;
           });
-          
+
           return { ...t, clips: newClips };
         });
-        return saveHistory({ ...state, timeSelection: null, selectedClipIds: [] }, newTracks);
+        return saveHistory(
+          { ...state, timeSelection: null, selectedClipIds: [] },
+          newTracks,
+        );
       }
 
       if (state.selectedClipIds.length === 0) return state;
@@ -1063,15 +1192,15 @@ export function appReducer(
       if (state.timeSelection) {
         const { startTime, endTime, trackIds } = state.timeSelection;
         const clipsToCopy: Clip[] = [];
-        
+
         state.tracks.forEach((t) => {
           if (trackIds.length > 0 && !trackIds.includes(t.id)) return;
-          
+
           t.clips.forEach((c) => {
             const clipEnd = c.start + c.duration;
             const intersectStart = Math.max(c.start, startTime);
             const intersectEnd = Math.min(clipEnd, endTime);
-            
+
             if (intersectStart < intersectEnd) {
               const sectionClip: Clip = {
                 ...c,
@@ -1079,13 +1208,13 @@ export function appReducer(
                 bufferId: c.bufferId || c.id,
                 start: intersectStart,
                 duration: intersectEnd - intersectStart,
-                audioOffset: (c.audioOffset || 0) + (intersectStart - c.start)
+                audioOffset: (c.audioOffset || 0) + (intersectStart - c.start),
               };
               clipsToCopy.push(sectionClip);
             }
           });
         });
-        
+
         if (clipsToCopy.length > 0) {
           return { ...state, clipboard: clipsToCopy };
         }
@@ -1116,32 +1245,32 @@ export function appReducer(
       if (state.timeSelection) {
         const { startTime, endTime, trackIds } = state.timeSelection;
         const duration = endTime - startTime;
-        
+
         const newTracks = state.tracks.map((t) => {
           if (trackIds.length > 0 && !trackIds.includes(t.id)) return t;
-          
+
           const duplicates: Clip[] = [];
           t.clips.forEach((c) => {
-             const clipEnd = c.start + c.duration;
-             const intersectStart = Math.max(c.start, startTime);
-             const intersectEnd = Math.min(clipEnd, endTime);
-             
-             if (intersectStart < intersectEnd) {
-               duplicates.push({
-                 ...c,
-                 id: c.id + "_dup_" + Math.random().toString(36).substr(2, 5),
-                 bufferId: c.bufferId || c.id,
-                 start: intersectStart + duration, // place immediately after the selection area
-                 duration: intersectEnd - intersectStart,
-                 audioOffset: (c.audioOffset || 0) + (intersectStart - c.start)
-               });
-             }
+            const clipEnd = c.start + c.duration;
+            const intersectStart = Math.max(c.start, startTime);
+            const intersectEnd = Math.min(clipEnd, endTime);
+
+            if (intersectStart < intersectEnd) {
+              duplicates.push({
+                ...c,
+                id: c.id + "_dup_" + Math.random().toString(36).substr(2, 5),
+                bufferId: c.bufferId || c.id,
+                start: intersectStart + duration, // place immediately after the selection area
+                duration: intersectEnd - intersectStart,
+                audioOffset: (c.audioOffset || 0) + (intersectStart - c.start),
+              });
+            }
           });
-          
+
           if (duplicates.length === 0) return t;
           return { ...t, clips: [...t.clips, ...duplicates] };
         });
-        
+
         return saveHistory(state, newTracks);
       }
 
@@ -1172,10 +1301,10 @@ export function appReducer(
         const { startTime, endTime, trackIds } = state.timeSelection;
         const newTracks = state.tracks.map((t) => {
           if (trackIds.length > 0 && !trackIds.includes(t.id)) return t;
-          
+
           const newClips = t.clips.flatMap((c) => {
             const clipEnd = c.start + c.duration;
-            
+
             // If clip is completely outside selection
             if (clipEnd <= startTime || c.start >= endTime) {
               return [c];
@@ -1189,39 +1318,52 @@ export function appReducer(
             if (buffer) {
               const relStart = startTime - c.start + (c.audioOffset || 0);
               const zeroCrossStart = findNearestZeroCrossing(buffer, relStart);
-              snappedStart = Math.max(c.start, Math.min(clipEnd, c.start - (c.audioOffset || 0) + zeroCrossStart));
+              snappedStart = Math.max(
+                c.start,
+                Math.min(
+                  clipEnd,
+                  c.start - (c.audioOffset || 0) + zeroCrossStart,
+                ),
+              );
 
               const relEnd = endTime - c.start + (c.audioOffset || 0);
               const zeroCrossEnd = findNearestZeroCrossing(buffer, relEnd);
-              snappedEnd = Math.max(c.start, Math.min(clipEnd, c.start - (c.audioOffset || 0) + zeroCrossEnd));
+              snappedEnd = Math.max(
+                c.start,
+                Math.min(
+                  clipEnd,
+                  c.start - (c.audioOffset || 0) + zeroCrossEnd,
+                ),
+              );
             }
 
             const results = [];
-            
+
             // Part before selection
             if (c.start < snappedStart) {
               results.push({
                 ...c,
                 id: c.id + "_prefix_" + Math.random().toString(36).substr(2, 5),
                 bufferId: c.bufferId || c.id,
-                duration: snappedStart - c.start
+                duration: snappedStart - c.start,
               });
             }
-            
+
             // The selected part
             const midStart = Math.max(c.start, snappedStart);
             const midEnd = Math.min(clipEnd, snappedEnd);
             if (midEnd > midStart) {
               results.push({
                 ...c,
-                id: c.id + "_isolate_" + Math.random().toString(36).substr(2, 5),
+                id:
+                  c.id + "_isolate_" + Math.random().toString(36).substr(2, 5),
                 bufferId: c.bufferId || c.id,
                 start: midStart,
                 duration: midEnd - midStart,
                 audioOffset: (c.audioOffset || 0) + (midStart - c.start),
               });
             }
-            
+
             // Part after selection
             if (clipEnd > snappedEnd) {
               results.push({
@@ -1230,13 +1372,13 @@ export function appReducer(
                 bufferId: c.bufferId || c.id,
                 start: snappedEnd,
                 duration: clipEnd - snappedEnd,
-                audioOffset: (c.audioOffset || 0) + (snappedEnd - c.start)
+                audioOffset: (c.audioOffset || 0) + (snappedEnd - c.start),
               });
             }
-            
+
             return results;
           });
-          
+
           return { ...t, clips: newClips };
         });
 
@@ -1278,9 +1420,19 @@ export function appReducer(
             let splitTime = state.currentTime;
 
             if (buffer) {
-              const relativeTime = splitTime - clip.start + (clip.audioOffset || 0);
-              const zeroCrossRelative = findNearestZeroCrossing(buffer, relativeTime);
-              splitTime = Math.max(clip.start, Math.min(clip.start + clip.duration, clip.start - (clip.audioOffset || 0) + zeroCrossRelative));
+              const relativeTime =
+                splitTime - clip.start + (clip.audioOffset || 0);
+              const zeroCrossRelative = findNearestZeroCrossing(
+                buffer,
+                relativeTime,
+              );
+              splitTime = Math.max(
+                clip.start,
+                Math.min(
+                  clip.start + clip.duration,
+                  clip.start - (clip.audioOffset || 0) + zeroCrossRelative,
+                ),
+              );
             }
 
             const duration1 = splitTime - clip.start;
@@ -1290,7 +1442,11 @@ export function appReducer(
             if (duration2 <= 0) return [clip]; // Shift aligned past clip duration, don't split
 
             return [
-              { ...clip, bufferId: clip.bufferId || clip.id, duration: duration1 },
+              {
+                ...clip,
+                bufferId: clip.bufferId || clip.id,
+                duration: duration1,
+              },
               {
                 ...clip,
                 id: clip.id + "_split_" + Date.now(),
@@ -1310,10 +1466,10 @@ export function appReducer(
     case "SET_BPM": {
       const newBpm = Math.max(1, action.payload);
       console.log("Reducer: SET_BPM", newBpm);
-      return { 
-        ...state, 
+      return {
+        ...state,
         bpm: newBpm,
-        tempoAutomation: [{ time: 0, bpm: newBpm }]
+        tempoAutomation: [{ time: 0, bpm: newBpm }],
       };
     }
     case "SET_ORIGINAL_BPM": {
@@ -1326,7 +1482,11 @@ export function appReducer(
       return { ...state, isDetectingBPM: action.payload };
     }
     case "SET_SHOW_BPM_SYNC_POPUP": {
-      return { ...state, showBPMSyncPopup: action.payload, bpmSyncCancelRequested: false };
+      return {
+        ...state,
+        showBPMSyncPopup: action.payload,
+        bpmSyncCancelRequested: false,
+      };
     }
     case "REQUEST_BPM_SYNC_CANCEL": {
       return { ...state, bpmSyncCancelRequested: true };
@@ -1352,12 +1512,12 @@ export function appReducer(
       const sanitizedTracks = rawTracks.map((track: any) => ({
         ...track,
         clips: track.clips || [],
-        lanes: track.lanes || []
+        lanes: track.lanes || [],
       }));
-      return { 
-        ...state, 
+      return {
+        ...state,
         ...action.payload,
-        tracks: sanitizedTracks
+        tracks: sanitizedTracks,
       };
     }
     case "INCREMENT_BUFFERS_VERSION": {
@@ -1442,30 +1602,42 @@ export function appReducer(
 
             const sameBufferOverlaps = l.clips.filter((c) => {
               const hasSameBuffer = (c.bufferId || c.id) === draggedBufferId;
-              const overlaps = c.start <= draggedClip.start + draggedClip.duration + 0.001 && c.start + c.duration >= draggedClip.start - 0.001;
+              const overlaps =
+                c.start <= draggedClip.start + draggedClip.duration + 0.001 &&
+                c.start + c.duration >= draggedClip.start - 0.001;
               return hasSameBuffer && overlaps;
             });
 
             if (sameBufferOverlaps.length <= 1) return l; // Just the dragged clip itself
 
-            const minStart = Math.min(...sameBufferOverlaps.map(c => c.start));
-            const maxEnd = Math.max(...sameBufferOverlaps.map(c => c.start + c.duration));
-            
+            const minStart = Math.min(
+              ...sameBufferOverlaps.map((c) => c.start),
+            );
+            const maxEnd = Math.max(
+              ...sameBufferOverlaps.map((c) => c.start + c.duration),
+            );
+
             const refClip = sameBufferOverlaps[0];
             const originalStart = refClip.start - (refClip.audioOffset || 0);
-            
+
             const actualStart = Math.max(minStart, originalStart);
             const actualDuration = maxEnd - actualStart;
 
             const joinedClip: Clip = {
-              id: "joined_drag_lane_" + Date.now() + "_" + Math.random().toString(36).substr(2,4),
+              id:
+                "joined_drag_lane_" +
+                Date.now() +
+                "_" +
+                Math.random().toString(36).substr(2, 4),
               bufferId: refClip.bufferId || refClip.id,
               start: actualStart,
               duration: Math.max(0, actualDuration),
               audioOffset: actualStart - originalStart,
             };
 
-            const remainingClips = l.clips.filter((c) => !sameBufferOverlaps.includes(c));
+            const remainingClips = l.clips.filter(
+              (c) => !sameBufferOverlaps.includes(c),
+            );
             return { ...l, clips: [...remainingClips, joinedClip] };
           });
           return { ...t, lanes: newLanes };
@@ -1477,30 +1649,40 @@ export function appReducer(
 
           const sameBufferOverlaps = t.clips.filter((c) => {
             const hasSameBuffer = (c.bufferId || c.id) === draggedBufferId;
-            const overlaps = c.start <= draggedClip.start + draggedClip.duration + 0.001 && c.start + c.duration >= draggedClip.start - 0.001;
+            const overlaps =
+              c.start <= draggedClip.start + draggedClip.duration + 0.001 &&
+              c.start + c.duration >= draggedClip.start - 0.001;
             return hasSameBuffer && overlaps;
           });
 
           if (sameBufferOverlaps.length <= 1) return t;
 
-          const minStart = Math.min(...sameBufferOverlaps.map(c => c.start));
-          const maxEnd = Math.max(...sameBufferOverlaps.map(c => c.start + c.duration));
-          
+          const minStart = Math.min(...sameBufferOverlaps.map((c) => c.start));
+          const maxEnd = Math.max(
+            ...sameBufferOverlaps.map((c) => c.start + c.duration),
+          );
+
           const refClip = sameBufferOverlaps[0];
           const originalStart = refClip.start - (refClip.audioOffset || 0);
-          
+
           const actualStart = Math.max(minStart, originalStart);
           const actualDuration = maxEnd - actualStart;
 
           const joinedClip: Clip = {
-            id: "joined_drag_" + Date.now() + "_" + Math.random().toString(36).substr(2,4),
+            id:
+              "joined_drag_" +
+              Date.now() +
+              "_" +
+              Math.random().toString(36).substr(2, 4),
             bufferId: refClip.bufferId || refClip.id,
             start: actualStart,
             duration: Math.max(0, actualDuration),
             audioOffset: actualStart - originalStart,
           };
 
-          const remainingClips = t.clips.filter((c) => !sameBufferOverlaps.includes(c));
+          const remainingClips = t.clips.filter(
+            (c) => !sameBufferOverlaps.includes(c),
+          );
           return { ...t, clips: [...remainingClips, joinedClip] };
         }
       });
@@ -1508,7 +1690,8 @@ export function appReducer(
       return saveHistory(state, newTracks);
     }
     case "RESTORE_SELECTION": {
-      if (!state.timeSelection && state.selectedClipIds.length === 0) return state;
+      if (!state.timeSelection && state.selectedClipIds.length === 0)
+        return state;
 
       let newTracks = state.tracks;
 
@@ -1518,20 +1701,29 @@ export function appReducer(
         newTracks = state.tracks.map((t) => {
           if (trackIds.length > 0 && !trackIds.includes(t.id)) return t;
 
-          const allClips = [...t.clips, ...(t.lanes ? t.lanes.flatMap(l => l.clips) : [])];
-          
+          const allClips = [
+            ...t.clips,
+            ...(t.lanes ? t.lanes.flatMap((l) => l.clips) : []),
+          ];
+
           if (allClips.length === 0) return t;
 
           // Find clips intersecting the time selection
           const intersectingClips = allClips.filter(
-            (c) => c.start < endTime && c.start + c.duration > startTime
+            (c) => c.start < endTime && c.start + c.duration > startTime,
           );
 
           if (intersectingClips.length === 0) {
             // Find closest clip to infer buffer
             const closest = [...allClips].sort((a, b) => {
-              const distA = Math.min(Math.abs(a.start - endTime), Math.abs(a.start + a.duration - startTime));
-              const distB = Math.min(Math.abs(b.start - endTime), Math.abs(b.start + b.duration - startTime));
+              const distA = Math.min(
+                Math.abs(a.start - endTime),
+                Math.abs(a.start + a.duration - startTime),
+              );
+              const distB = Math.min(
+                Math.abs(b.start - endTime),
+                Math.abs(b.start + b.duration - startTime),
+              );
               return distA - distB;
             });
             if (closest.length === 0) return t;
@@ -1559,8 +1751,14 @@ export function appReducer(
           const refClip = intersectingClips[0];
           const originalStart = refClip.start - (refClip.audioOffset || 0);
 
-          const minStart = Math.min(startTime, ...intersectingClips.map((c) => c.start));
-          const maxEnd = Math.max(endTime, ...intersectingClips.map((c) => c.start + c.duration));
+          const minStart = Math.min(
+            startTime,
+            ...intersectingClips.map((c) => c.start),
+          );
+          const maxEnd = Math.max(
+            endTime,
+            ...intersectingClips.map((c) => c.start + c.duration),
+          );
 
           const actualStart = Math.max(minStart, originalStart);
           const actualDuration = maxEnd - actualStart;
@@ -1575,36 +1773,53 @@ export function appReducer(
             audioOffset: actualStart - originalStart,
           };
 
-          const intersectingClipIds = new Set(intersectingClips.map((ic) => ic.id));
+          const intersectingClipIds = new Set(
+            intersectingClips.map((ic) => ic.id),
+          );
 
-          const nonIntersectingMain = t.clips.filter((c) => !intersectingClipIds.has(c.id));
-          
-          let newLanes = t.lanes ? t.lanes.map(l => ({
-            ...l,
-            clips: l.clips.filter((c) => !intersectingClipIds.has(c.id))
-          })) : undefined;
+          const nonIntersectingMain = t.clips.filter(
+            (c) => !intersectingClipIds.has(c.id),
+          );
+
+          let newLanes = t.lanes
+            ? t.lanes.map((l) => ({
+                ...l,
+                clips: l.clips.filter((c) => !intersectingClipIds.has(c.id)),
+              }))
+            : undefined;
 
           // Remove empty lanes
           if (newLanes) {
-            newLanes = newLanes.filter(l => l.clips.length > 0);
+            newLanes = newLanes.filter((l) => l.clips.length > 0);
           }
 
-          return { ...t, clips: [...nonIntersectingMain, joinedClip], lanes: newLanes?.length ? newLanes : undefined };
+          return {
+            ...t,
+            clips: [...nonIntersectingMain, joinedClip],
+            lanes: newLanes?.length ? newLanes : undefined,
+          };
         });
       } else if (state.selectedClipIds.length > 0) {
         // Fallback: join selected clips
         const selectedClipIdsSet = new Set(state.selectedClipIds);
         newTracks = state.tracks.map((t) => {
-          const allClips = [...t.clips, ...(t.lanes ? t.lanes.flatMap(l => l.clips) : [])];
-          
-          const selectedInTrack = allClips.filter((c) => selectedClipIdsSet.has(c.id));
+          const allClips = [
+            ...t.clips,
+            ...(t.lanes ? t.lanes.flatMap((l) => l.clips) : []),
+          ];
+
+          const selectedInTrack = allClips.filter((c) =>
+            selectedClipIdsSet.has(c.id),
+          );
           if (selectedInTrack.length < 2) return t;
 
           const refClip = selectedInTrack[0];
           const originalStart = refClip.start - (refClip.audioOffset || 0);
 
           const minStart = Math.min(...selectedInTrack.map((c) => c.start));
-          const maxEnd = Math.max(...selectedInTrack.map((c) => c.start + c.duration));
+          const maxEnd = Math.max(
+            ...selectedInTrack.map((c) => c.start + c.duration),
+          );
 
           const actualStart = Math.max(minStart, originalStart);
           const actualDuration = maxEnd - actualStart;
@@ -1619,24 +1834,32 @@ export function appReducer(
             audioOffset: actualStart - originalStart,
           };
 
-          const unselectedMain = t.clips.filter((c) => !selectedClipIdsSet.has(c.id));
-          
-          let newLanes = t.lanes ? t.lanes.map(l => ({
-            ...l,
-            clips: l.clips.filter((c) => !selectedClipIdsSet.has(c.id))
-          })) : undefined;
+          const unselectedMain = t.clips.filter(
+            (c) => !selectedClipIdsSet.has(c.id),
+          );
+
+          let newLanes = t.lanes
+            ? t.lanes.map((l) => ({
+                ...l,
+                clips: l.clips.filter((c) => !selectedClipIdsSet.has(c.id)),
+              }))
+            : undefined;
 
           if (newLanes) {
-            newLanes = newLanes.filter(l => l.clips.length > 0);
+            newLanes = newLanes.filter((l) => l.clips.length > 0);
           }
 
-          return { ...t, clips: [...unselectedMain, joinedClip], lanes: newLanes?.length ? newLanes : undefined };
+          return {
+            ...t,
+            clips: [...unselectedMain, joinedClip],
+            lanes: newLanes?.length ? newLanes : undefined,
+          };
         });
       }
 
       return saveHistory(
         { ...state, timeSelection: null, selectedClipIds: [] },
-        newTracks
+        newTracks,
       );
     }
 
@@ -1803,21 +2026,21 @@ export function appReducer(
         if (t.id === action.payload.trackId) {
           const lane = t.lanes.find((l) => l.id === action.payload.laneId);
           if (!lane || lane.clips.length === 0) return t;
-          
+
           let currentMainClips = [...t.clips];
 
           // For each clip in the lane, overwrite parts of the main track
-          lane.clips.forEach(laneClip => {
+          lane.clips.forEach((laneClip) => {
             const laneStart = laneClip.start;
             const laneEnd = laneClip.start + laneClip.duration;
 
-            currentMainClips = currentMainClips.flatMap(c => {
+            currentMainClips = currentMainClips.flatMap((c) => {
               const startT = c.start;
               const endT = c.start + c.duration;
 
               // Completely outside
               if (endT <= laneStart || startT >= laneEnd) return [c];
-              
+
               // Completely covered
               if (startT >= laneStart && endT <= laneEnd) return [];
 
@@ -1828,7 +2051,7 @@ export function appReducer(
                   ...c,
                   id: c.id + "_p_l_" + Math.random().toString(36).substr(2, 5),
                   bufferId: c.bufferId || c.id,
-                  duration: laneStart - startT
+                  duration: laneStart - startT,
                 });
               }
               // Right part remains
@@ -1840,7 +2063,7 @@ export function appReducer(
                   bufferId: c.bufferId || c.id,
                   start: laneEnd,
                   duration: endT - laneEnd,
-                  audioOffset: (c.audioOffset || 0) + rightOffset
+                  audioOffset: (c.audioOffset || 0) + rightOffset,
                 });
               }
               return res;
@@ -1932,7 +2155,10 @@ export function appReducer(
                 if (l.id === sourceLaneId) {
                   const clip = l.clips.find((c) => c.id === clipId);
                   if (clip) movedClip = { ...clip, start: newStart };
-                  return { ...l, clips: l.clips.filter((c) => c.id !== clipId) };
+                  return {
+                    ...l,
+                    clips: l.clips.filter((c) => c.id !== clipId),
+                  };
                 }
                 return l;
               }),
@@ -1956,35 +2182,53 @@ export function appReducer(
               if (l.id === targetLaneId) {
                 const draggedBufferId = movedClip!.bufferId || movedClip!.id;
                 let currentMovedClip = movedClip!;
-                
+
                 const sameBufferOverlaps = l.clips.filter((c) => {
-                  const hasSameBuffer = (c.bufferId || c.id) === draggedBufferId;
-                  const overlaps = c.start < currentMovedClip.start + currentMovedClip.duration && c.start + c.duration > currentMovedClip.start;
+                  const hasSameBuffer =
+                    (c.bufferId || c.id) === draggedBufferId;
+                  const overlaps =
+                    c.start <
+                      currentMovedClip.start + currentMovedClip.duration &&
+                    c.start + c.duration > currentMovedClip.start;
                   return hasSameBuffer && overlaps;
                 });
 
                 if (sameBufferOverlaps.length > 0) {
-                  const allToCombine = [...sameBufferOverlaps, currentMovedClip];
-                  const minStart = Math.min(...allToCombine.map(c => c.start));
-                  const maxEnd = Math.max(...allToCombine.map(c => c.start + c.duration));
-                  
+                  const allToCombine = [
+                    ...sameBufferOverlaps,
+                    currentMovedClip,
+                  ];
+                  const minStart = Math.min(
+                    ...allToCombine.map((c) => c.start),
+                  );
+                  const maxEnd = Math.max(
+                    ...allToCombine.map((c) => c.start + c.duration),
+                  );
+
                   const refClip = sameBufferOverlaps[0];
-                  const originalStart = refClip.start - (refClip.audioOffset || 0);
-                  
+                  const originalStart =
+                    refClip.start - (refClip.audioOffset || 0);
+
                   const actualStart = Math.max(minStart, originalStart);
                   const actualDuration = maxEnd - actualStart;
 
                   currentMovedClip = {
-                     ...currentMovedClip,
-                     id: "joined_drag_lane_" + Date.now() + "_" + Math.random().toString(36).substr(2,4),
-                     bufferId: refClip.bufferId || refClip.id,
-                     start: actualStart,
-                     duration: Math.max(0, actualDuration),
-                     audioOffset: actualStart - originalStart,
+                    ...currentMovedClip,
+                    id:
+                      "joined_drag_lane_" +
+                      Date.now() +
+                      "_" +
+                      Math.random().toString(36).substr(2, 4),
+                    bufferId: refClip.bufferId || refClip.id,
+                    start: actualStart,
+                    duration: Math.max(0, actualDuration),
+                    audioOffset: actualStart - originalStart,
                   };
                 }
 
-                const remainingClips = l.clips.filter((c) => !sameBufferOverlaps.includes(c));
+                const remainingClips = l.clips.filter(
+                  (c) => !sameBufferOverlaps.includes(c),
+                );
 
                 return { ...l, clips: [...remainingClips, currentMovedClip] };
               }
@@ -2011,7 +2255,7 @@ const AppContext = createContext<
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
   const stateRef = React.useRef(state);
-  
+
   // Sync ref with state
   React.useEffect(() => {
     stateRef.current = state;
@@ -2078,7 +2322,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } else if (e.code === "Space") {
         e.preventDefault();
         dispatch({ type: "TOGGLE_PLAY" });
-      } else if (e.key.toLowerCase() === "s" && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+      } else if (
+        e.key.toLowerCase() === "s" &&
+        e.shiftKey &&
+        (e.ctrlKey || e.metaKey)
+      ) {
         e.preventDefault();
         cleanUpStemsAsync(currentState, dispatch);
       } else if (e.key.toLowerCase() === "s" && !e.ctrlKey && !e.metaKey) {
@@ -2089,7 +2337,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "TOGGLE_RECORD" });
       } else if (e.key.toLowerCase() === "m" && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        dispatch({ type: "ADD_MARKER", payload: { time: currentState.currentTime } });
+        dispatch({
+          type: "ADD_MARKER",
+          payload: { time: currentState.currentTime },
+        });
       } else if (e.key === "[" && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         dispatch({ type: "GO_TO_PREV_MARKER" });
