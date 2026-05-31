@@ -91,7 +91,6 @@ export class CloudVstBridge {
       this.socket.binaryType = 'arraybuffer';
 
       this.socket.onopen = () => {
-        console.log(`Cloud VST Bridge connected to sidecar on ${url}`);
         this.setStatus('connected');
         // Send initial parameter packet
         this.syncParameters();
@@ -112,30 +111,17 @@ export class CloudVstBridge {
             if (this.onLatencyUpdate) this.onLatencyUpdate(this.latencyMs);
             this.pingTimestamp = 0; // reset
           }
-        } else {
-          // JSON responses
-          try {
-            const data = JSON.parse(event.data);
-            if (data.type === 'status') {
-              console.log('Sidecar DSP status update:', data);
-            }
-          } catch (e) {
-            // ignore
-          }
         }
       };
 
       this.socket.onerror = (err) => {
-        console.warn('Cloud VST WebSocket connection error. Routing to zero-latency local fallback.', err);
         this.setStatus('fallback');
       };
 
       this.socket.onclose = () => {
-        console.log('Cloud VST socket connection closed.');
         this.setStatus('disconnected');
       };
     } catch (e) {
-      console.warn('Cloud VST direct instantiation error.', e);
       this.setStatus('fallback');
     }
   }
