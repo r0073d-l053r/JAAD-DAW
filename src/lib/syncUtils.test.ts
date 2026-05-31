@@ -160,6 +160,23 @@ describe('syncUtils', () => {
     expect(downloadedBlob).toBeInstanceOf(Blob);
   });
 
+  it('falls back to getBlob if fetch response is not ok in downloadProjectBundleCloud', async () => {
+    const progressSpy = vi.fn();
+    const mockResponse = {
+      ok: false,
+      statusText: 'Not Found',
+    };
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse));
+
+    const downloadedBlob = await downloadProjectBundleCloud('proj_user', progressSpy);
+
+    expect(progressSpy).toHaveBeenCalledWith(30);
+    expect(progressSpy).toHaveBeenCalledWith(100);
+    expect(getBlob).toHaveBeenCalledTimes(1);
+    expect(downloadedBlob).toBeInstanceOf(Blob);
+  });
+
   it('uploads and downloads individual raw asset blobs in cloud', async () => {
     const blob = new Blob(['sound']);
     await uploadAssetCloud('asset_abc', blob);
