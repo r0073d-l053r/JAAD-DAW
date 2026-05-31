@@ -55,7 +55,6 @@ export const deleteProjectCloud = async (projectId: string, projectName?: string
   // 1. Delete Firestore metadata document
   const docRef = doc(db, 'projects', projectId);
   await deleteDoc(docRef);
-  console.log(`Cloud Sync: Deleted Firestore metadata for project ${projectId}`);
 
   // 2. Delete Storage bundle if it exists
   const fileRef = ref(storage, `projects/${projectId}.jaad`);
