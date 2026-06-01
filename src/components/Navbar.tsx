@@ -278,7 +278,6 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
       }
     }
     
-    console.log("Generating .jaad bundle...");
     const content = await zip.generateAsync({ type: "blob" });
     downloadBlob(content, `${state.projectName.replace(/\s+/g, '_')}.jaad`);
     console.log("Download triggered.");
