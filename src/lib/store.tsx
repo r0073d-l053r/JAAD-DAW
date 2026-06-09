@@ -2022,68 +2022,69 @@ export function appReducer(
       return { ...state, tracks: newTracks }; // Don't save history for UI toggle
     }
     case "PROMOTE_LANE": {
-      const newTracks = state.tracks.map((t) => {
-        if (t.id === action.payload.trackId) {
-          const lane = t.lanes.find((l) => l.id === action.payload.laneId);
-          if (!lane || lane.clips.length === 0) return t;
+      const targetTrackIndex = state.tracks.findIndex((t) => t.id === action.payload.trackId);
+      if (targetTrackIndex === -1) return state;
 
-          let currentMainClips = [...t.clips];
+      const t = state.tracks[targetTrackIndex];
+      const lane = t.lanes.find((l) => l.id === action.payload.laneId);
+      if (!lane || lane.clips.length === 0) return state;
 
-          // For each clip in the lane, overwrite parts of the main track
-          lane.clips.forEach((laneClip) => {
-            const laneStart = laneClip.start;
-            const laneEnd = laneClip.start + laneClip.duration;
+      let currentMainClips = [...t.clips];
 
-            currentMainClips = currentMainClips.flatMap((c) => {
-              const startT = c.start;
-              const endT = c.start + c.duration;
+      // For each clip in the lane, overwrite parts of the main track
+      lane.clips.forEach((laneClip) => {
+        const laneStart = laneClip.start;
+        const laneEnd = laneClip.start + laneClip.duration;
 
-              // Completely outside
-              if (endT <= laneStart || startT >= laneEnd) return [c];
+        currentMainClips = currentMainClips.flatMap((c) => {
+          const startT = c.start;
+          const endT = c.start + c.duration;
 
-              // Completely covered
-              if (startT >= laneStart && endT <= laneEnd) return [];
+          // Completely outside
+          if (endT <= laneStart || startT >= laneEnd) return [c];
 
-              const res: Clip[] = [];
-              // Left part remains
-              if (startT < laneStart) {
-                res.push({
-                  ...c,
-                  id: c.id + "_p_l_" + Math.random().toString(36).substr(2, 5),
-                  bufferId: c.bufferId || c.id,
-                  duration: laneStart - startT,
-                });
-              }
-              // Right part remains
-              if (endT > laneEnd) {
-                const rightOffset = laneEnd - startT;
-                res.push({
-                  ...c,
-                  id: c.id + "_p_r_" + Math.random().toString(36).substr(2, 5),
-                  bufferId: c.bufferId || c.id,
-                  start: laneEnd,
-                  duration: endT - laneEnd,
-                  audioOffset: (c.audioOffset || 0) + rightOffset,
-                });
-              }
-              return res;
+          // Completely covered
+          if (startT >= laneStart && endT <= laneEnd) return [];
+
+          const res: Clip[] = [];
+          // Left part remains
+          if (startT < laneStart) {
+            res.push({
+              ...c,
+              id: c.id + "_p_l_" + Math.random().toString(36).substr(2, 5),
+              bufferId: c.bufferId || c.id,
+              duration: laneStart - startT,
             });
-          });
-
-          return {
-            ...t,
-            clips: [
-              ...currentMainClips,
-              ...lane.clips.map((c) => ({
-                ...c,
-                id: "clip_" + Date.now() + Math.random(),
-                bufferId: c.bufferId || c.id,
-              })),
-            ],
-          };
-        }
-        return t;
+          }
+          // Right part remains
+          if (endT > laneEnd) {
+            const rightOffset = laneEnd - startT;
+            res.push({
+              ...c,
+              id: c.id + "_p_r_" + Math.random().toString(36).substr(2, 5),
+              bufferId: c.bufferId || c.id,
+              start: laneEnd,
+              duration: endT - laneEnd,
+              audioOffset: (c.audioOffset || 0) + rightOffset,
+            });
+          }
+          return res;
+        });
       });
+
+      const newTracks = [...state.tracks];
+      newTracks[targetTrackIndex] = {
+        ...t,
+        clips: [
+          ...currentMainClips,
+          ...lane.clips.map((c) => ({
+            ...c,
+            id: "clip_" + Date.now() + Math.random(),
+            bufferId: c.bufferId || c.id,
+          })),
+        ],
+      };
+
       return saveHistory(state, newTracks);
     }
     case "PASTE_CLIP_TO_LANE": {
