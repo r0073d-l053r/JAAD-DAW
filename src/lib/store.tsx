@@ -776,22 +776,34 @@ export function appReducer(
               ...t,
               lanes: t.lanes.map((l) => {
                 if (l.id === sourceLaneId) {
-                  const c = l.clips.find((clip) => clip.id === clipId);
-                  if (c) movedClip = { ...c, start: newStart };
+                  const newClips = l.clips.reduce((acc: Clip[], clip) => {
+                    if (clip.id === clipId) {
+                      movedClip = { ...clip, start: newStart };
+                    } else {
+                      acc.push(clip);
+                    }
+                    return acc;
+                  }, []);
                   return {
                     ...l,
-                    clips: l.clips.filter((clip) => clip.id !== clipId),
+                    clips: newClips,
                   };
                 }
                 return l;
               }),
             };
           } else {
-            const c = t.clips.find((clip) => clip.id === clipId);
-            if (c) movedClip = { ...c, start: newStart };
+            const newClips = t.clips.reduce((acc: Clip[], clip) => {
+              if (clip.id === clipId) {
+                movedClip = { ...clip, start: newStart };
+              } else {
+                acc.push(clip);
+              }
+              return acc;
+            }, []);
             return {
               ...t,
-              clips: t.clips.filter((clip) => clip.id !== clipId),
+              clips: newClips,
             };
           }
         }
@@ -2153,20 +2165,32 @@ export function appReducer(
               ...t,
               lanes: t.lanes.map((l) => {
                 if (l.id === sourceLaneId) {
-                  const clip = l.clips.find((c) => c.id === clipId);
-                  if (clip) movedClip = { ...clip, start: newStart };
+                  const newClips = l.clips.reduce((acc: Clip[], clip) => {
+                    if (clip.id === clipId) {
+                      movedClip = { ...clip, start: newStart };
+                    } else {
+                      acc.push(clip);
+                    }
+                    return acc;
+                  }, []);
                   return {
                     ...l,
-                    clips: l.clips.filter((c) => c.id !== clipId),
+                    clips: newClips,
                   };
                 }
                 return l;
               }),
             };
           } else {
-            const clip = t.clips.find((c) => c.id === clipId);
-            if (clip) movedClip = { ...clip, start: newStart };
-            return { ...t, clips: t.clips.filter((c) => c.id !== clipId) };
+            const newClips = t.clips.reduce((acc: Clip[], clip) => {
+              if (clip.id === clipId) {
+                movedClip = { ...clip, start: newStart };
+              } else {
+                acc.push(clip);
+              }
+              return acc;
+            }, []);
+            return { ...t, clips: newClips };
           }
         }
         return t;
