@@ -678,7 +678,12 @@ class AudioEngine {
     return await offlineCtx.startRendering();
   }
   async freezeTrack(track: any, allBuffers: Map<string, AudioBuffer>, sampleRate: number = 44100): Promise<AudioBuffer> {
-    const totalDuration = Math.max(0, ...track.clips.map((c: any) => c.start + c.duration)) + 5; // padding
+    let maxClipEnd = 0;
+    for (let i = 0; i < track.clips.length; i++) {
+      const end = track.clips[i].start + track.clips[i].duration;
+      if (end > maxClipEnd) maxClipEnd = end;
+    }
+    const totalDuration = maxClipEnd + 5; // padding
     
     // Extract raw data for worker transfer
     const clipBuffers: Record<string, Float32Array[]> = {};
