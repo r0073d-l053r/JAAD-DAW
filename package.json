@@ -36,9 +36,11 @@
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
+    "@types/dom-webcodecs": "^0.1.18",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "@vitest/coverage-v8": "^4.1.7",
+    "@webgpu/types": "^0.1.70",
     "autoprefixer": "^10.4.21",
     "jsdom": "^29.1.1",
     "path-browserify": "^1.0.1",

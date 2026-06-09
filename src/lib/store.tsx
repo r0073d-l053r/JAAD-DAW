@@ -8,6 +8,22 @@ import {
   silenceAudioBufferRange,
 } from "./audioUtils";
 
+
+// Helper to generate secure random IDs
+const generateSecureId = (prefix: string = ""): string => {
+  let randomPart = "";
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    randomPart = crypto.randomUUID().split('-')[0];
+  } else if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    const array = new Uint32Array(1);
+    crypto.getRandomValues(array);
+    randomPart = array[0].toString(36);
+  } else {
+    randomPart = Math.random().toString(36).substring(2, 10);
+  }
+  return prefix ? `${prefix}_${randomPart}` : randomPart;
+};
+
 export interface Lane {
   id: string;
   name: string;
@@ -359,7 +375,7 @@ export function appReducer(
             if (!buffer) return clip;
 
             const newBuffer = reverseAudioBuffer(buffer);
-            const newBufferId = `${clip.id}_rev_${Math.random().toString(36).substr(2, 5)}`;
+            const newBufferId = `${generateSecureId(`${clip.id}_rev`)}`;
             audioEngine.buffers.set(newBufferId, newBuffer);
 
             return { ...clip, bufferId: newBufferId };
@@ -393,7 +409,7 @@ export function appReducer(
             if (!buffer) return clip;
 
             const newBuffer = invertAudioBuffer(buffer);
-            const newBufferId = `${clip.id}_inv_${Math.random().toString(36).substr(2, 5)}`;
+            const newBufferId = `${generateSecureId(`${clip.id}_inv`)}`;
             audioEngine.buffers.set(newBufferId, newBuffer);
 
             return { ...clip, bufferId: newBufferId };
@@ -427,7 +443,7 @@ export function appReducer(
             if (!buffer) return clip;
 
             const newBuffer = normalizeAudioBuffer(buffer);
-            const newBufferId = `${clip.id}_norm_${Math.random().toString(36).substr(2, 5)}`;
+            const newBufferId = `${generateSecureId(`${clip.id}_norm`)}`;
             audioEngine.buffers.set(newBufferId, newBuffer);
 
             return { ...clip, bufferId: newBufferId };
@@ -467,7 +483,7 @@ export function appReducer(
               offsetStart,
               duration,
             );
-            const newBufferId = `${clip.id}_silence_${Math.random().toString(36).substr(2, 5)}`;
+            const newBufferId = `${generateSecureId(`${clip.id}_silence`)}`;
             audioEngine.buffers.set(newBufferId, newBuffer);
 
             return { ...clip, bufferId: newBufferId };
@@ -664,7 +680,7 @@ export function appReducer(
       const newTracks = state.tracks.map((t) => {
         if (t.id === trackId) {
           const lane1: Lane = {
-            id: `lane_${Date.now()}_a_${Math.random().toString(36).substring(2, 7)}`,
+            id: `lane_${generateSecureId(`${Date.now()}_a`)}`,
             name: `Option A (Alt)`,
             clips: [
               {
@@ -676,7 +692,7 @@ export function appReducer(
             ],
           };
           const lane2: Lane = {
-            id: `lane_${Date.now()}_b_${Math.random().toString(36).substring(2, 7)}`,
+            id: `lane_${generateSecureId(`${Date.now()}_b`)}`,
             name: `Option B (Alt)`,
             clips: [
               {
@@ -703,7 +719,7 @@ export function appReducer(
     case "ADD_MARKER": {
       const { time, label, color } = action.payload;
       const markerId =
-        "marker_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+        generateSecureId("marker");
       const newMarker: Marker = {
         id: markerId,
         time: Math.max(0, time),
@@ -835,7 +851,7 @@ export function appReducer(
                 "joined_drag_" +
                 Date.now() +
                 "_" +
-                Math.random().toString(36).substr(2, 4),
+                generateSecureId(),
               bufferId: refClip.bufferId || refClip.id,
               start: actualStart,
               duration: Math.max(0, actualDuration),
@@ -970,7 +986,7 @@ export function appReducer(
     case "GROUP_CLIPS": {
       if (state.selectedClipIds.length < 2) return state;
       const groupId =
-        "group_" + Date.now() + Math.random().toString(36).substr(2, 5);
+        generateSecureId("group");
       const selectedSet = new Set(state.selectedClipIds);
       const newTracks = state.tracks.map((t) => ({
         ...t,
@@ -1147,7 +1163,7 @@ export function appReducer(
             if (c.start < startTime) {
               results.push({
                 ...c,
-                id: c.id + "_prefix_" + Math.random().toString(36).substr(2, 5),
+                id: generateSecureId(`${c.id}_prefix`),
                 bufferId: c.bufferId || c.id,
                 duration: startTime - c.start,
               });
@@ -1157,7 +1173,7 @@ export function appReducer(
             if (clipEnd > endTime) {
               results.push({
                 ...c,
-                id: c.id + "_suffix_" + Math.random().toString(36).substr(2, 5),
+                id: generateSecureId(`${c.id}_suffix`),
                 bufferId: c.bufferId || c.id,
                 start: endTime,
                 duration: clipEnd - endTime,
@@ -1204,7 +1220,7 @@ export function appReducer(
             if (intersectStart < intersectEnd) {
               const sectionClip: Clip = {
                 ...c,
-                id: c.id + "_copy_" + Math.random().toString(36).substr(2, 5),
+                id: generateSecureId(`${c.id}_copy`),
                 bufferId: c.bufferId || c.id,
                 start: intersectStart,
                 duration: intersectEnd - intersectStart,
@@ -1230,7 +1246,7 @@ export function appReducer(
       const minStart = Math.min(...state.clipboard.map((c) => c.start));
       const newClips = state.clipboard.map((c) => ({
         ...c,
-        id: "clip_" + Date.now() + Math.random(),
+        id: generateSecureId("clip"),
         bufferId: c.bufferId || c.id, // Ensure buffer link is preserved
         start: action.payload.time + (c.start - minStart), // preserve relative timing
       }));
@@ -1258,7 +1274,7 @@ export function appReducer(
             if (intersectStart < intersectEnd) {
               duplicates.push({
                 ...c,
-                id: c.id + "_dup_" + Math.random().toString(36).substr(2, 5),
+                id: generateSecureId(`${c.id}_dup`),
                 bufferId: c.bufferId || c.id,
                 start: intersectStart + duration, // place immediately after the selection area
                 duration: intersectEnd - intersectStart,
@@ -1288,7 +1304,7 @@ export function appReducer(
         const offset = maxEnd - minStart;
         const duplicates = trackSelectedClips.map((c) => ({
           ...c,
-          id: "clip_" + Date.now() + Math.random(),
+          id: generateSecureId("clip"),
           bufferId: c.bufferId || c.id,
           start: c.start + offset,
         }));
@@ -1343,7 +1359,7 @@ export function appReducer(
             if (c.start < snappedStart) {
               results.push({
                 ...c,
-                id: c.id + "_prefix_" + Math.random().toString(36).substr(2, 5),
+                id: generateSecureId(`${c.id}_prefix`),
                 bufferId: c.bufferId || c.id,
                 duration: snappedStart - c.start,
               });
@@ -1356,7 +1372,7 @@ export function appReducer(
               results.push({
                 ...c,
                 id:
-                  c.id + "_isolate_" + Math.random().toString(36).substr(2, 5),
+                  generateSecureId(`${c.id}_isolate`),
                 bufferId: c.bufferId || c.id,
                 start: midStart,
                 duration: midEnd - midStart,
@@ -1368,7 +1384,7 @@ export function appReducer(
             if (clipEnd > snappedEnd) {
               results.push({
                 ...c,
-                id: c.id + "_suffix_" + Math.random().toString(36).substr(2, 5),
+                id: generateSecureId(`${c.id}_suffix`),
                 bufferId: c.bufferId || c.id,
                 start: snappedEnd,
                 duration: clipEnd - snappedEnd,
@@ -1628,7 +1644,7 @@ export function appReducer(
                 "joined_drag_lane_" +
                 Date.now() +
                 "_" +
-                Math.random().toString(36).substr(2, 4),
+                generateSecureId(),
               bufferId: refClip.bufferId || refClip.id,
               start: actualStart,
               duration: Math.max(0, actualDuration),
@@ -1673,7 +1689,7 @@ export function appReducer(
               "joined_drag_" +
               Date.now() +
               "_" +
-              Math.random().toString(36).substr(2, 4),
+              generateSecureId(),
             bufferId: refClip.bufferId || refClip.id,
             start: actualStart,
             duration: Math.max(0, actualDuration),
@@ -1736,7 +1752,7 @@ export function appReducer(
             if (actualDuration <= 0) return t;
 
             const restoredClip: Clip = {
-              id: "restored_" + Math.random().toString(36).substr(2, 5),
+              id: generateSecureId("restored"),
               bufferId: ref.bufferId || ref.id,
               start: actualStart,
               duration: actualDuration,
@@ -1766,7 +1782,7 @@ export function appReducer(
           if (actualDuration <= 0) return t;
 
           const joinedClip: Clip = {
-            id: "joined_" + Math.random().toString(36).substr(2, 5),
+            id: generateSecureId("joined"),
             bufferId: refClip.bufferId || refClip.id,
             start: actualStart,
             duration: actualDuration,
@@ -1827,7 +1843,7 @@ export function appReducer(
           if (actualDuration <= 0) return t;
 
           const joinedClip: Clip = {
-            id: "joined_" + Math.random().toString(36).substr(2, 5),
+            id: generateSecureId("joined"),
             bufferId: refClip.bufferId || refClip.id,
             start: actualStart,
             duration: actualDuration,
@@ -1882,7 +1898,7 @@ export function appReducer(
             if (intersectStart < intersectEnd) {
               clipsToCopy.push({
                 ...c,
-                id: c.id + "_copy_" + Math.random().toString(36).substr(2, 5),
+                id: generateSecureId(`${c.id}_copy`),
                 bufferId: c.bufferId || c.id,
                 start: intersectStart,
                 duration: intersectEnd - intersectStart,
@@ -1902,7 +1918,7 @@ export function appReducer(
             if (c.start < startTime) {
               results.push({
                 ...c,
-                id: c.id + "_prefix_" + Math.random().toString(36).substr(2, 5),
+                id: generateSecureId(`${c.id}_prefix`),
                 bufferId: c.bufferId || c.id,
                 duration: startTime - c.start,
               });
@@ -1910,7 +1926,7 @@ export function appReducer(
             if (clipEnd > endTime) {
               results.push({
                 ...c,
-                id: c.id + "_suffix_" + Math.random().toString(36).substr(2, 5),
+                id: generateSecureId(`${c.id}_suffix`),
                 bufferId: c.bufferId || c.id,
                 start: endTime,
                 duration: clipEnd - endTime,
@@ -1956,19 +1972,19 @@ export function appReducer(
       if (!trackToClone) return state;
       const newTrack = {
         ...trackToClone,
-        id: "track_" + Date.now() + Math.random(),
+        id: generateSecureId("track"),
         name: trackToClone.name + " (Copy)",
         clips: trackToClone.clips.map((c) => ({
           ...c,
-          id: "clip_" + Date.now() + Math.random(),
+          id: generateSecureId("clip"),
           bufferId: c.bufferId || c.id,
         })),
         lanes: trackToClone.lanes.map((l) => ({
           ...l,
-          id: "lane_" + Date.now() + Math.random(),
+          id: generateSecureId("lane"),
           clips: l.clips.map((c) => ({
             ...c,
-            id: "clip_" + Date.now() + Math.random(),
+            id: generateSecureId("clip"),
             bufferId: c.bufferId || c.id,
           })),
         })),
@@ -2049,7 +2065,7 @@ export function appReducer(
               if (startT < laneStart) {
                 res.push({
                   ...c,
-                  id: c.id + "_p_l_" + Math.random().toString(36).substr(2, 5),
+                  id: c.id + generateSecureId("_p_l"),
                   bufferId: c.bufferId || c.id,
                   duration: laneStart - startT,
                 });
@@ -2059,7 +2075,7 @@ export function appReducer(
                 const rightOffset = laneEnd - startT;
                 res.push({
                   ...c,
-                  id: c.id + "_p_r_" + Math.random().toString(36).substr(2, 5),
+                  id: c.id + generateSecureId("_p_r"),
                   bufferId: c.bufferId || c.id,
                   start: laneEnd,
                   duration: endT - laneEnd,
@@ -2076,7 +2092,7 @@ export function appReducer(
               ...currentMainClips,
               ...lane.clips.map((c) => ({
                 ...c,
-                id: "clip_" + Date.now() + Math.random(),
+                id: generateSecureId("clip"),
                 bufferId: c.bufferId || c.id,
               })),
             ],
@@ -2091,7 +2107,7 @@ export function appReducer(
       if (state.clipboard.length === 0) return state;
       const newClips = state.clipboard.map((c) => ({
         ...c,
-        id: "clip_" + Date.now() + Math.random(),
+        id: generateSecureId("clip"),
         bufferId: c.bufferId || c.id,
         start: c.start, // Paste at exact same absolute spot in timeline
       }));
@@ -2218,7 +2234,7 @@ export function appReducer(
                       "joined_drag_lane_" +
                       Date.now() +
                       "_" +
-                      Math.random().toString(36).substr(2, 4),
+                      generateSecureId(),
                     bufferId: refClip.bufferId || refClip.id,
                     start: actualStart,
                     duration: Math.max(0, actualDuration),
