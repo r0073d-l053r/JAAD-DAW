@@ -184,9 +184,7 @@ export function applySpectralExtension(
   frameSize = 2048, hopSize = frameSize / 2
 ): Float32Array {
   if (cutoffHz >= sampleRate / 2 - 500 || intensity <= 0) {
-    const out = new Float32Array(data.length);
-    for (let i = 0; i < data.length; i++) out[i] = data[i];
-    return out;
+    return data.slice();
   }
 
   const rand = seededRandom(42);
@@ -288,9 +286,7 @@ export function applyNoiseFloor(
   data: Float32Array, sampleRate: number, level: number, profile: NoiseProfile
 ): Float32Array {
   if (level <= 0) {
-    const out = new Float32Array(data.length);
-    for (let i = 0; i < data.length; i++) out[i] = data[i];
-    return out;
+    return data.slice();
   }
   const output = new Float32Array(data.length);
   const config = NOISE_PROFILES[profile];
@@ -345,8 +341,8 @@ function cubicInterpolate(y0: number, y1: number, y2: number, y3: number, mu: nu
 export function applyMicroVariation(
   data: Float32Array, sampleRate: number, amount: number
 ): Float32Array {
+  if (amount <= 0) { return data.slice(); }
   const output = new Float32Array(data.length);
-  if (amount <= 0) { data.forEach((v, i) => output[i] = v); return output; }
 
   // Tame max deviation: limit to ~0.15ms at full amount to preserve absolute pitch cohesion
   const maxDeviationSamples = amount * 0.00015 * sampleRate;
@@ -389,9 +385,7 @@ export function applyPhaseEntropy(
   frameSize = 2048, hopSize = frameSize / 2
 ): Float32Array {
   if (intensity <= 0) {
-    const out = new Float32Array(data.length);
-    for (let i = 0; i < data.length; i++) out[i] = data[i];
-    return out;
+    return data.slice();
   }
 
   const nyquist = sampleRate / 2;
@@ -485,8 +479,8 @@ export function applyPhaseEntropy(
 export function applyDynamicEnvelope(
   data: Float32Array, sampleRate: number, depth: number
 ): Float32Array {
+  if (depth <= 0) { return data.slice(); }
   const output = new Float32Array(data.length);
-  if (depth <= 0) { data.forEach((v, i) => output[i] = v); return output; }
 
   const rand = seededRandom(888 + Math.floor(depth * 100));
 
@@ -536,9 +530,7 @@ export function applySpectralMasking(
   frameSize = 2048, hopSize = frameSize / 2
 ): Float32Array {
   if (intensity <= 0) {
-    const out = new Float32Array(data.length);
-    for (let i = 0; i < data.length; i++) out[i] = data[i];
-    return out;
+    return data.slice();
   }
 
   const nyquist = sampleRate / 2;
@@ -645,9 +637,7 @@ export function applyMFCCShaping(
   frameSize = 2048, hopSize = frameSize / 2
 ): Float32Array {
   if (strength <= 0) {
-    const out = new Float32Array(data.length);
-    for (let i = 0; i < data.length; i++) out[i] = data[i];
-    return out;
+    return data.slice();
   }
 
   const nyquist = sampleRate / 2;
@@ -756,9 +746,7 @@ export function applySpectralSmoothing(
   frameSize = 2048, hopSize = frameSize / 2
 ): Float32Array {
   if (cutoffHz >= sampleRate / 2 - 500 || slope <= 0) {
-    const out = new Float32Array(data.length);
-    for (let i = 0; i < data.length; i++) out[i] = data[i];
-    return out;
+    return data.slice();
   }
 
   const outBuf = new Float64Array(data.length);
@@ -820,11 +808,10 @@ export function applySpectralSmoothing(
 export function applyUAPFilter(
   data: Float32Array, sampleRate: number, intensity: number
 ): Float32Array {
-  const output = new Float32Array(data.length);
   if (intensity <= 0) {
-    for (let i = 0; i < data.length; i++) output[i] = data[i];
-    return output;
+    return data.slice();
   }
+  const output = new Float32Array(data.length);
 
   const maxDelta = 0.004 * intensity;
 
@@ -848,8 +835,8 @@ export function applyUAPFilter(
 export function applyHarmonicSaturation(
   data: Float32Array, drive: number, even: number, odd: number
 ): Float32Array {
+  if (drive <= 0) { return data.slice(); }
   const output = new Float32Array(data.length);
-  if (drive <= 0) { data.forEach((v, i) => output[i] = v); return output; }
 
   // Softened gain/mix to prevent clipping artifacts and preserve transparent quality.
   // Original values (1.2 / 0.12) caused audible distortion on limited/normalized signals.
@@ -880,13 +867,11 @@ export function applyHarmonicSaturation(
 export function applyStereoHumanize(
   left: Float32Array, right: Float32Array, sampleRate: number, width: number
 ): { left: Float32Array; right: Float32Array } {
+  if (width <= 0) {
+    return { left: left.slice(), right: right.slice() };
+  }
   const outL = new Float32Array(left.length);
   const outR = new Float32Array(right.length);
-  if (width <= 0) {
-    left.forEach((v, i) => outL[i] = v);
-    right.forEach((v, i) => outR[i] = v);
-    return { left: outL, right: outR };
-  }
 
   const randL = seededRandom(271);
   const randR = seededRandom(314);
