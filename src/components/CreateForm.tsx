@@ -372,7 +372,7 @@ export function CreateForm() {
         });
 
         const clipId = "clip_" + Date.now() + "_" + suffix.toLowerCase() + "_" + Math.random().toString(36).substring(2, 5);
-        let clipDuration = await audioEngine.loadAudio(clipId, file);
+        const clipDuration = await audioEngine.loadAudio(clipId, file);
         
         let finalFile = file;
         let finalDuration = clipDuration;

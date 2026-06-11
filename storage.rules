@@ -1,14 +1,28 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /assets/{allPaths=**} {
-      // WIDE OPEN FOR TESTING: Anyone can read and upload assets
-      allow read, write: if true;
+    // Audio assets are content-addressed by ID and referenced from shared
+    // projects, so reads stay open to anyone with the asset ID. Writes
+    // require a signed-in (anonymous) user so they can be attributed,
+    // throttled, and revoked.
+    match /assets/{assetId} {
+      allow read: if true;
+      allow write: if request.auth != null;
     }
-    
-    match /projects/{allPaths=**} {
-      // Open project metadata for now as per firestore rules
-      allow read, write: if true;
+
+    // Project bundles (.jaad). Readable via share links; writable only by
+    // signed-in users.
+    match /projects/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null;
     }
+
+    // Project backups follow the same policy as bundles.
+    match /backups/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Everything else is denied by default.
   }
 }

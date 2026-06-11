@@ -15,7 +15,7 @@ interface SpectrogramProps {
 const MAGMA_PALETTE = new Uint32Array(256);
 for (let i = 0; i < 256; i++) {
   const val = i / 255;
-  let r = 0, g = 0, b = 0;
+  let r: number, g: number, b: number;
   
   // Custom Magma keypoints
   const c0 = [10, 5, 30];      // Quiet (Deep Space)

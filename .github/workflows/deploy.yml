@@ -31,6 +31,13 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      - name: Type check
+        run: npm run lint
+      - name: Run tests
+        run: npm run test
+      # NOTE: VITE_GEMINI_API_KEY is intentionally NOT injected here. Any key
+      # baked into the public bundle is extractable by anyone. The hosted build
+      # is BYOK: users provide their own key in Settings (stored in localStorage).
       - name: Build
         run: npm run build
         env:
@@ -41,7 +48,6 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_DATABASE_URL: ${{ secrets.VITE_FIREBASE_DATABASE_URL }}
-          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
       - name: Setup Pages
         uses: actions/configure-pages@v4
       - name: Upload artifact

@@ -1,14 +1,17 @@
 import React, { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, useDragControls, useMotionValue } from "motion/react";
-import { Scissors, Trash2, Wand2 } from "lucide-react";
+import { Music2, Scissors, Trash2, Wand2 } from "lucide-react";
 import { useApp, Clip } from "../lib/store";
 import { Waveform } from "./Waveform";
 import { Spectrogram } from "./Spectrogram";
 import { audioEngine } from "../lib/audioEngine";
 import { useGemini } from "../lib/useGemini";
 
-export function ClipItem({
+// Memoized: timelines render one ClipItem per clip, so parent re-renders
+// (lasso drags, zoom hovers, marker edits) would otherwise re-render every
+// clip even when its props and store state are unchanged.
+export const ClipItem = React.memo(function ClipItem({
   clip,
   track,
   trackId,
@@ -29,12 +32,25 @@ export function ClipItem({
   const [isDragging, setIsDragging] = useState(false);
   const isSelected = state.selectedClipIds.includes(clip.id);
 
+  // MIDI clips carry notes and have no decoded audio buffer; they render a
+  // note-pattern preview instead of a waveform and open the piano roll editor.
+  const hasNotes = !!clip.notes && clip.notes.length > 0;
+  const isMidiClip =
+    hasNotes && !audioEngine.buffers.has(clip.bufferId || clip.id);
+
   // selection state coordinates relative to the clip
   const [dragStartOffset, setDragStartOffset] = useState<number | null>(null);
   const [currentDragOffset, setCurrentDragOffset] = useState<number | null>(null);
 
   // Envelope state
   const [draggingEnvNode, setDraggingEnvNode] = useState<number | null>(null);
+
+  // Fade handle state. UPDATE_CLIP saves an undo snapshot on every dispatch,
+  // so the fade length is kept in local state while dragging and committed
+  // with a single UPDATE_CLIP on pointer release.
+  const [draggingFade, setDraggingFade] = useState<"in" | "out" | null>(null);
+  const fadeDragStart = useRef<{ x: number; initial: number }>({ x: 0, initial: 0 });
+  const [fadePreview, setFadePreview] = useState<{ fadeIn: number; fadeOut: number } | null>(null);
 
   // Resize State
   const [resizing, setResizing] = useState<"left" | "right" | null>(null);
@@ -299,6 +315,62 @@ export function ClipItem({
     setCurrentDragOffset(null);
   };
 
+  const handleFadePointerDown = (e: React.PointerEvent, side: "in" | "out") => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDraggingFade(side);
+    fadeDragStart.current = {
+      x: e.clientX,
+      initial: side === "in" ? clip.fadeIn || 0 : clip.fadeOut || 0,
+    };
+    setFadePreview({ fadeIn: clip.fadeIn || 0, fadeOut: clip.fadeOut || 0 });
+  };
+
+  const computeFadeValue = (e: React.PointerEvent, side: "in" | "out") => {
+    const deltaTime = (e.clientX - fadeDragStart.current.x) / PIXELS_PER_SECOND;
+    if (side === "in") {
+      // Dragging right lengthens the fade-in; never cross the fade-out.
+      const max = Math.max(0, clip.duration - (clip.fadeOut || 0));
+      return Math.min(max, Math.max(0, fadeDragStart.current.initial + deltaTime));
+    }
+    // Dragging left lengthens the fade-out; never cross the fade-in.
+    const max = Math.max(0, clip.duration - (clip.fadeIn || 0));
+    return Math.min(max, Math.max(0, fadeDragStart.current.initial - deltaTime));
+  };
+
+  const handleFadePointerMove = (e: React.PointerEvent) => {
+    if (!draggingFade) return;
+    e.stopPropagation();
+    const value = computeFadeValue(e, draggingFade);
+    setFadePreview({
+      fadeIn: draggingFade === "in" ? value : clip.fadeIn || 0,
+      fadeOut: draggingFade === "out" ? value : clip.fadeOut || 0,
+    });
+  };
+
+  const handleFadePointerUp = (e: React.PointerEvent) => {
+    if (!draggingFade) return;
+    e.stopPropagation();
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    const value = computeFadeValue(e, draggingFade);
+    // Single commit on release so one drag equals one undo step.
+    dispatch({
+      type: "UPDATE_CLIP",
+      payload: {
+        trackId,
+        clipId: clip.id,
+        changes:
+          draggingFade === "in"
+            ? { fadeIn: value > 0.01 ? value : undefined }
+            : { fadeOut: value > 0.01 ? value : undefined },
+      },
+    });
+    setDraggingFade(null);
+    setFadePreview(null);
+  };
+
   const handleEnvNodePointerDown = (e: React.PointerEvent, index: number) => {
     if (e.button !== 0) return;
     e.stopPropagation();
@@ -344,8 +416,7 @@ export function ClipItem({
   };
 
   const drawSelection = () => {
-    let start = 0,
-      end = 0;
+    let start: number, end: number;
     let isGlobal = false;
     
     if (dragStartOffset !== null && currentDragOffset !== null) {
@@ -671,6 +742,19 @@ export function ClipItem({
             >
               Revert to Original
             </button>
+            {hasNotes && !laneId && (
+              <button
+                aria-label="Edit MIDI notes in piano roll"
+                className="w-full text-left px-4 py-2 text-sm text-[#10b981] hover:bg-white/10 transition-colors flex items-center gap-2"
+                onClick={() => {
+                  dispatch({ type: "SET_PIANO_ROLL_CLIP", payload: clip.id });
+                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
+                }}
+              >
+                <Music2 size={14} />
+                <span>Edit MIDI</span>
+              </button>
+            )}
             {state.selectedClipIds.length > 1 && (
               <button
                 className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
@@ -834,9 +918,48 @@ export function ClipItem({
         </div>
       )}
 
-      {/* Real Waveform / Spectrogram */}
+      {/* Real Waveform / Spectrogram / MIDI note preview */}
       <div className="absolute inset-0 pointer-events-none">
-        {state.spectrogramEnabled ? (
+        {isMidiClip ? (
+          (() => {
+            const notes = clip.notes!;
+            const secondsPerBeat = 60 / Math.max(1, state.bpm);
+            const previewWidth = Math.max(1, clip.duration * PIXELS_PER_SECOND);
+            const minNote = Math.min(...notes.map((n) => n.note));
+            const maxNote = Math.max(...notes.map((n) => n.note));
+            const range = Math.max(1, maxNote - minNote + 1);
+            const noteHeight = Math.max(2.5, Math.min(8, 88 / range));
+            return (
+              <svg
+                className="w-full h-full"
+                viewBox={`0 0 ${previewWidth} 100`}
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                {notes.map((n, i) => {
+                  const x = n.start * secondsPerBeat * PIXELS_PER_SECOND;
+                  const w = Math.max(
+                    2,
+                    n.duration * secondsPerBeat * PIXELS_PER_SECOND - 1,
+                  );
+                  const y = 6 + ((maxNote - n.note) / range) * 88;
+                  return (
+                    <rect
+                      key={i}
+                      x={x}
+                      y={y}
+                      width={w}
+                      height={noteHeight}
+                      rx="1"
+                      fill="white"
+                      fillOpacity="0.85"
+                    />
+                  );
+                })}
+              </svg>
+            );
+          })()
+        ) : state.spectrogramEnabled ? (
           <Spectrogram
             clipId={clip.id}
             bufferId={clip.bufferId}
@@ -869,6 +992,12 @@ export function ClipItem({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onDoubleClick={(e) => {
+          // Clips with MIDI notes open the piano roll editor on double-click
+          if (hasNotes && !laneId) {
+            e.stopPropagation();
+            dispatch({ type: "SET_PIANO_ROLL_CLIP", payload: clip.id });
+            return;
+          }
           if (!clip.volumeEnvelope) return;
           e.stopPropagation();
           const rect = e.currentTarget.getBoundingClientRect();
@@ -916,6 +1045,82 @@ export function ClipItem({
          </svg>
       )}
 
+      {/* Fade overlays: shaded triangles over the faded-out regions */}
+      {(() => {
+        const clipWidth = clip.duration * PIXELS_PER_SECOND;
+        const rawFadeIn = fadePreview ? fadePreview.fadeIn : clip.fadeIn || 0;
+        const rawFadeOut = fadePreview ? fadePreview.fadeOut : clip.fadeOut || 0;
+        // Clamp for display in case the clip was trimmed shorter than its fades
+        let dFadeIn = Math.max(0, Math.min(rawFadeIn, clip.duration));
+        let dFadeOut = Math.max(0, Math.min(rawFadeOut, clip.duration));
+        if (dFadeIn + dFadeOut > clip.duration && dFadeIn + dFadeOut > 0) {
+          const scale = clip.duration / (dFadeIn + dFadeOut);
+          dFadeIn *= scale;
+          dFadeOut *= scale;
+        }
+        const fadeInX = dFadeIn * PIXELS_PER_SECOND;
+        const fadeOutX = dFadeOut * PIXELS_PER_SECOND;
+
+        return (
+          <>
+            {(dFadeIn > 0 || dFadeOut > 0) && (
+              <svg
+                className="absolute inset-0 z-20 pointer-events-none"
+                width="100%"
+                height="100%"
+                viewBox={`0 0 ${Math.max(1, clipWidth)} 100`}
+                preserveAspectRatio="none"
+              >
+                {dFadeIn > 0 && (
+                  <>
+                    <polygon points={`0,0 ${fadeInX},0 0,100`} fill="black" fillOpacity="0.45" />
+                    <line x1="0" y1="100" x2={fadeInX} y2="0" stroke="white" strokeWidth="1.5" strokeOpacity="0.85" vectorEffect="non-scaling-stroke" />
+                  </>
+                )}
+                {dFadeOut > 0 && (
+                  <>
+                    <polygon points={`${clipWidth - fadeOutX},0 ${clipWidth},0 ${clipWidth},100`} fill="black" fillOpacity="0.45" />
+                    <line x1={clipWidth - fadeOutX} y1="0" x2={clipWidth} y2="100" stroke="white" strokeWidth="1.5" strokeOpacity="0.85" vectorEffect="non-scaling-stroke" />
+                  </>
+                )}
+              </svg>
+            )}
+
+            {/* Fade handles: drag horizontally from the clip's top corners */}
+            <div
+              className={`absolute top-0 z-40 w-3.5 h-3.5 cursor-ew-resize transition-opacity ${
+                draggingFade === "in" || dFadeIn > 0 ? "opacity-90" : "opacity-0 group-hover/clip:opacity-70"
+              }`}
+              style={{ left: Math.max(0, fadeInX - 7) }}
+              title="Drag to set fade in"
+              onPointerDown={(e) => handleFadePointerDown(e, "in")}
+              onPointerMove={draggingFade === "in" ? handleFadePointerMove : undefined}
+              onPointerUp={handleFadePointerUp}
+              onPointerCancel={handleFadePointerUp}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14">
+                <polygon points="1,1 13,1 7,11" fill="white" stroke="rgba(0,0,0,0.6)" strokeWidth="1" />
+              </svg>
+            </div>
+            <div
+              className={`absolute top-0 z-40 w-3.5 h-3.5 cursor-ew-resize transition-opacity ${
+                draggingFade === "out" || dFadeOut > 0 ? "opacity-90" : "opacity-0 group-hover/clip:opacity-70"
+              }`}
+              style={{ right: Math.max(0, fadeOutX - 7) }}
+              title="Drag to set fade out"
+              onPointerDown={(e) => handleFadePointerDown(e, "out")}
+              onPointerMove={draggingFade === "out" ? handleFadePointerMove : undefined}
+              onPointerUp={handleFadePointerUp}
+              onPointerCancel={handleFadePointerUp}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14">
+                <polygon points="1,1 13,1 7,11" fill="white" stroke="rgba(0,0,0,0.6)" strokeWidth="1" />
+              </svg>
+            </div>
+          </>
+        );
+      })()}
+
       {drawSelection()}
 
       {/* Resize handles */}
@@ -939,4 +1144,4 @@ export function ClipItem({
       </div>
     </motion.div>
   );
-}
+});

@@ -307,7 +307,7 @@ export const AuthenticityProcessor: React.FC = () => {
     setShowBefore(isBefore);
     if (isPlaying && audioEngine.context) {
       const elapsed = audioEngine.context.currentTime - playStartRef.current;
-      let currentOffset = (playOffsetRef.current + elapsed) % clipDuration;
+      const currentOffset = (playOffsetRef.current + elapsed) % clipDuration;
       startPlayback(isBefore ? effectiveBufferId : (previewBufferId || effectiveBufferId), currentOffset);
     }
   };
@@ -396,7 +396,7 @@ export const AuthenticityProcessor: React.FC = () => {
         // Auto hot-swap playback if playing
         if (isPlaying && !showBefore) {
           const elapsed = audioEngine.context!.currentTime - playStartRef.current;
-          let currentOffset = (playOffsetRef.current + elapsed) % clipDuration;
+          const currentOffset = (playOffsetRef.current + elapsed) % clipDuration;
           startPlayback(res.newBufferId, currentOffset);
         }
       } else {

@@ -1,5 +1,5 @@
-import { db, storage, isFirebaseAvailable } from './firebase';
-import { doc, onSnapshot, setDoc, getDocs, getDoc, collection, deleteDoc } from 'firebase/firestore';
+import { db, storage, isFirebaseAvailable, ensureSignedIn } from './firebase';
+import { doc, onSnapshot, setDoc, getDocs, getDoc, collection, deleteDoc, query, where } from 'firebase/firestore';
 import { ref, uploadBytes, getBlob, getMetadata, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Track } from './store';
 
@@ -13,6 +13,8 @@ export interface CloudProjectMetadata {
   lastUpdated: number;
   hasBundle?: boolean;
   backups?: number[];
+  ownerId?: string;
+  isPublic?: boolean;
 }
 
 export const isGitHubPagesBuild = (): boolean => {
@@ -51,7 +53,8 @@ export const deleteProjectCloud = async (projectId: string, projectName?: string
   }
   
   if (!isFirebaseAvailable) return;
-  
+  await ensureSignedIn();
+
   // 1. Delete Firestore metadata document
   const docRef = doc(db, 'projects', projectId);
   await deleteDoc(docRef);
@@ -77,6 +80,7 @@ export const uploadProjectBundleCloud = async (
   }
   
   if (!isFirebaseAvailable) throw new Error("Firebase is not initialized");
+  await ensureSignedIn();
   const fileRef = ref(storage, `projects/${projectId}.jaad`);
   console.log(`Cloud Sync: Starting upload of project bundle ${projectId}...`);
 
@@ -169,6 +173,7 @@ export const downloadProjectBundleCloud = async (
 
 export const uploadAssetCloud = async (assetId: string, blob: Blob, onProgress?: (progress: number) => void) => {
   if (!isFirebaseAvailable) return;
+  await ensureSignedIn();
   const assetRef = ref(storage, `assets/${assetId}`);
   console.log(`Cloud Sync: Uploading asset ${assetId}...`);
   
@@ -214,11 +219,24 @@ export const downloadAssetCloud = async (assetId: string) => {
 
 export const listProjects = async () => {
   if (!isFirebaseAvailable) return [];
-  const querySnapshot = await getDocs(collection(db, 'projects'));
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  }));
+  const user = await ensureSignedIn();
+  const projectsRef = collection(db, 'projects');
+
+  // Security rules only allow listing your own projects and public templates,
+  // so we issue both queries and merge the results.
+  const queries = [getDocs(query(projectsRef, where('isPublic', '==', true)))];
+  if (user) {
+    queries.push(getDocs(query(projectsRef, where('ownerId', '==', user.uid))));
+  }
+
+  const snapshots = await Promise.all(queries);
+  const byId = new Map<string, any>();
+  for (const snapshot of snapshots) {
+    for (const docSnap of snapshot.docs) {
+      byId.set(docSnap.id, { id: docSnap.id, ...docSnap.data() });
+    }
+  }
+  return Array.from(byId.values());
 };
 
 export const subscribeToProject = (projectId: string, onUpdate: (data: any) => void) => {
@@ -237,6 +255,7 @@ export const uploadProjectBackupCloud = async (
   timestamp: number
 ): Promise<string> => {
   if (!isFirebaseAvailable) throw new Error("Firebase is not initialized");
+  await ensureSignedIn();
   const fileRef = ref(storage, `backups/${projectId}_${timestamp}.jaad`);
   console.log(`Cloud Sync: Starting upload of project backup ${projectId}_${timestamp}...`);
 
@@ -315,6 +334,7 @@ export const downloadProjectBackupCloud = async (
 
 export const deleteProjectBackupCloud = async (projectId: string, timestamp: number) => {
   if (!isFirebaseAvailable) return;
+  await ensureSignedIn();
   const fileRef = ref(storage, `backups/${projectId}_${timestamp}.jaad`);
   try {
     await deleteObject(fileRef);
@@ -331,6 +351,7 @@ export const updateProjectCloud = async (projectId: string, projectName: string,
   }
   
   if (!isFirebaseAvailable) return;
+  const user = await ensureSignedIn();
   const docRef = doc(db, 'projects', projectId);
 
   // Estimate payload size for Firestore (1MB limit)
@@ -361,7 +382,9 @@ export const updateProjectCloud = async (projectId: string, projectName: string,
       audioOffset: clip.audioOffset || 0,
       audioData: clip.audioData,
       notes: clip.notes || [],
-      volumeEnvelope: clip.volumeEnvelope || []
+      volumeEnvelope: clip.volumeEnvelope || [],
+      fadeIn: clip.fadeIn || 0,
+      fadeOut: clip.fadeOut || 0
     })),
     lanes: (track.lanes || []).map(lane => ({
       id: lane.id,
@@ -374,19 +397,27 @@ export const updateProjectCloud = async (projectId: string, projectName: string,
         audioOffset: clip.audioOffset || 0,
         audioData: clip.audioData,
         notes: clip.notes || [],
-        volumeEnvelope: clip.volumeEnvelope || []
+        volumeEnvelope: clip.volumeEnvelope || [],
+        fadeIn: clip.fadeIn || 0,
+        fadeOut: clip.fadeOut || 0
       }))
     }))
   }));
 
-  const payload: any = { 
+  const payload: any = {
     projectName,
-    tracks: sanitizedTracks, 
-    bpm, 
+    tracks: sanitizedTracks,
+    bpm,
     originalBpm,
     masterVolume,
-    lastUpdated: Date.now() 
+    lastUpdated: Date.now()
   };
+
+  // Claim/retain ownership so security rules can attribute the document.
+  // Non-owners are rejected by the rules; shared links stay read-only.
+  if (user) {
+    payload.ownerId = user.uid;
+  }
 
   if (hasBundle !== undefined) {
     payload.hasBundle = hasBundle;

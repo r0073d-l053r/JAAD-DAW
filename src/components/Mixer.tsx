@@ -5,21 +5,17 @@ import { audioEngine } from '../lib/audioEngine';
 import { Volume2 } from './Icons';
 import { MoreHorizontal, Trash2, Download, Wand2 } from 'lucide-react';
 import { useGemini } from '../lib/useGemini';
-import { saveAsset } from '../lib/assetManager';
-import { uploadAssetCloud } from '../lib/syncUtils';
 import { audioBufferToWav } from '../lib/exportUtils';
 
 import { LiquidGlassPanel } from './LiquidGlass';
-import { detectBPMOffline } from '../lib/essentiaBPM';
+import { useAudioImport } from '../lib/useAudioImport';
 
 export function Mixer() {
   const { state, dispatch } = useApp();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const { getFixMyMixSuggestions, isGenerating, detectBPM } = useGemini();
 
-  // Use a ref to access the latest state in async functions
-  const stateRef = useRef(state);
-  stateRef.current = state;
+  const { importAudioFiles } = useAudioImport();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // High-performance, GPU-friendly visualizer loop
@@ -119,79 +115,7 @@ export function Mixer() {
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files as FileList);
-      const audioFiles = files.filter(f => f.type.startsWith('audio/') || f.name.match(/\.(mp3|wav|ogg|flac|aac|m4a|weba|webm)$/i));
-      
-      if (audioFiles.length === 0) return;
-
-      const isMultiple = audioFiles.length > 1;
-      if (isMultiple) {
-        dispatch({ type: 'SET_SHOW_BPM_SYNC_POPUP', payload: true });
-      } else {
-        dispatch({ type: 'SET_IS_DETECTING_BPM', payload: true });
-      }
-
-      try {
-        const loadedClipIds: string[] = [];
-        
-        for (let i = 0; i < audioFiles.length; i++) {
-          const file = audioFiles[i];
-          const id = 'clip_' + Date.now() + '_' + i;
-          const duration = await audioEngine.loadAudio(id, file);
-          loadedClipIds.push(id);
-
-          await saveAsset(id, file);
-          uploadAssetCloud(id, file).catch(err => console.error("Cloud upload for mixer asset failed", err));
-          dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
-
-          const clip: Clip = {
-            id,
-            start: 0,
-            duration,
-            audioData: file.name
-          };
-
-          const TRACK_COLORS = ['#FF2A5F', '#00E871', '#6B44FF', '#4B7BFF', '#FFEB3B', '#FF9800', '#00BCD4', '#E91E63', '#9C27B0', '#8BC34A'];
-          const newTrackColor = TRACK_COLORS[(state.tracks.length + i) % TRACK_COLORS.length];
-          const targetTrackId = 'track_' + Date.now() + '_' + i;
-          
-          dispatch({ 
-            type: 'ADD_TRACK', 
-            payload: { 
-              id: targetTrackId, 
-              name: file.name.substring(0, 15) || 'Audio', 
-              volume: 1, 
-              pan: 0, 
-              muted: false, 
-              solo: false, 
-              color: newTrackColor, 
-              clips: [] 
-            } 
-          });
-
-          dispatch({ type: 'ADD_CLIP', payload: { trackId: targetTrackId, clip } });
-        }
-
-        // After all files are loaded, detect BPM
-        // Check if user cancelled (only for multiple files)
-        if (isMultiple && stateRef.current.bpmSyncCancelRequested) {
-          console.log("Mixer: BPM Sync cancelled by user.");
-        } else {
-          const firstBufferId = loadedClipIds[0];
-          const buffer = audioEngine.buffers.get(firstBufferId);
-          if (buffer) {
-            const bpm = await detectBPMOffline(buffer);
-            if (bpm) {
-              dispatch({ type: 'SET_ORIGINAL_BPM', payload: bpm });
-              dispatch({ type: 'SET_BPM', payload: bpm });
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Mixer file handling error:", err);
-      } finally {
-        dispatch({ type: 'SET_IS_DETECTING_BPM', payload: false });
-        dispatch({ type: 'SET_SHOW_BPM_SYNC_POPUP', payload: false });
-      }
+      await importAudioFiles(files, { trackStyle: 'compact', detectingIndicatorOnlyForSingle: true, logLabel: 'Mixer' });
     }
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -403,6 +327,11 @@ export function Mixer() {
                 audioEngine.addTrackEffect(track.id, 'delay');
              }} className="w-full bg-[#111] border border-[#333] text-[10px] text-gray-400 p-1 rounded text-center cursor-pointer hover:bg-[#222]">
                + WebDelay
+             </div>
+             <div onClick={() => {
+                audioEngine.addTrackEffect(track.id, 'reverb', { reverbPreset: 'hall' });
+             }} className="w-full bg-[#111] border border-[#333] text-[10px] text-gray-400 p-1 rounded text-center cursor-pointer hover:bg-[#222]">
+               + WebReverb (Hall)
              </div>
              <div onClick={() => {
                 if (!audioEngine.cloudVstBridges.has(track.id)) {

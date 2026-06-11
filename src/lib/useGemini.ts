@@ -2,6 +2,59 @@ import { useState } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { audioEngine } from './audioEngine';
 
+// Single source of truth for model IDs. If Google renames or retires a model,
+// update it here (or override per-browser via localStorage without a rebuild).
+const DEFAULT_PRO_MODEL = 'gemini-3.1-pro-preview';
+const DEFAULT_FLASH_MODEL = 'gemini-3-flash-preview';
+
+export const getProModel = () =>
+  localStorage.getItem('user_gemini_pro_model') || DEFAULT_PRO_MODEL;
+export const getFlashModel = () =>
+  localStorage.getItem('user_gemini_flash_model') || DEFAULT_FLASH_MODEL;
+
+const MAX_ATTEMPTS = 3;
+const isRetryableError = (err: unknown): boolean => {
+  const anyErr = err as any;
+  const status: number | undefined =
+    typeof anyErr?.status === 'number' ? anyErr.status :
+    typeof anyErr?.code === 'number' ? anyErr.code : undefined;
+  if (status !== undefined) {
+    return status === 429 || (status >= 500 && status < 600);
+  }
+  const message = anyErr?.message ? String(anyErr.message) : '';
+  return /\b(429|500|502|503|504)\b/.test(message) || /fetch|network/i.test(message);
+};
+
+/**
+ * Calls generateContent with exponential backoff on rate limits (429),
+ * server errors (5xx), and transient network failures.
+ */
+async function generateWithRetry(
+  ai: GoogleGenAI,
+  params: { model: string; contents: any }
+) {
+  let delay = 1000;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await ai.models.generateContent(params);
+    } catch (err) {
+      if (attempt >= MAX_ATTEMPTS || !isRetryableError(err)) throw err;
+      console.warn(`Gemini AI: attempt ${attempt} failed for ${params.model}, retrying in ${delay}ms...`, err);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      delay *= 2;
+    }
+  }
+}
+
+const describeError = (err: unknown, fallback: string): string => {
+  if (err instanceof Error && err.message) {
+    // Surface the real API message (e.g. invalid model, quota exceeded)
+    // instead of a generic label so users can act on it.
+    return `${fallback}: ${err.message}`;
+  }
+  return fallback;
+};
+
 let aiInstance: GoogleGenAI | null = null;
 let lastUsedKey: string | null = null;
 
@@ -66,7 +119,7 @@ function audioBufferToWavBase64(buffer: AudioBuffer, durationSeconds: number = 1
   for (let i = 0; i < length; i++) {
     for (let channel = 0; channel < numChannels; channel++) {
       const sample = buffer.getChannelData(channel)[i];
-      let maxStr = Math.max(-1, Math.min(1, sample));
+      const maxStr = Math.max(-1, Math.min(1, sample));
       view.setInt16(offset, maxStr < 0 ? maxStr * 0x8000 : maxStr * 0x7FFF, true);
       offset += 2;
     }
@@ -92,8 +145,8 @@ export function useGemini() {
       const ai = getAI();
       if (!ai) throw new Error("Gemini API key is not configured in .env file.");
       const base64Audio = audioBufferToWavBase64(buffer, 15); // Up to 15 seconds
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
+      const response = await generateWithRetry(ai, {
+        model: getProModel(),
         contents: [
           'Listen to this audio track and automatically detect its tempo in BPM (Beats Per Minute). Respond with JUST the number, e.g. "120". If you cannot tell, respond with "120".',
           {
@@ -107,7 +160,7 @@ export function useGemini() {
       const text = response.text.trim();
       const match = text.match(/(\d+)/);
       if (match) {
-        let bpm = parseInt(match[1]);
+        const bpm = parseInt(match[1]);
         if (bpm > 50 && bpm < 250) {
            return bpm;
         }
@@ -115,7 +168,7 @@ export function useGemini() {
       return null;
     } catch (err: unknown) {
       console.error(err);
-      setError(err instanceof Error ? err.message : 'Error detecting BPM');
+      setError(describeError(err, 'Error detecting BPM'));
       return null;
     } finally {
       setIsGenerating(false);
@@ -128,16 +181,16 @@ export function useGemini() {
     try {
       const ai = getAI();
       if (!ai) throw new Error("Gemini API key is not configured in .env file.");
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
-        contents: `You are an expert audio engineer and mastering assistant. 
+      const response = await generateWithRetry(ai, {
+        model: getProModel(),
+        contents: `You are an expert audio engineer and mastering assistant.
 Current Track Data: ${JSON.stringify(trackData, null, 2)}
 User Request: ${prompt}
 Provide professional actionable mixing or mastering advice. Make your advice technical but accessible. Suggest specific EQ, compression, or panning changes.`,
       });
       return response.text;
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error generating advice');
+      setError(describeError(err, 'Error generating advice'));
       return null;
     } finally {
       setIsGenerating(false);
@@ -149,11 +202,14 @@ Provide professional actionable mixing or mastering advice. Make your advice tec
     try {
       const ai = getAI();
       if (!ai) throw new Error("Gemini API key is not configured in .env file.");
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+      const response = await generateWithRetry(ai, {
+        model: getFlashModel(),
         contents: `Provide mastering chain suggestions (EQ, Compression, Limiter thresholds) for a ${genre} track. Format as a short technical list.`,
       });
       return response.text;
+    } catch (err: unknown) {
+      setError(describeError(err, 'Error getting mastering settings'));
+      throw err;
     } finally {
       setIsGenerating(false);
     }
@@ -165,10 +221,10 @@ Provide professional actionable mixing or mastering advice. Make your advice tec
     try {
       const ai = getAI();
       if (!ai) throw new Error("Gemini API key is not configured.");
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
+      const response = await generateWithRetry(ai, {
+        model: getProModel(),
         contents: [
-          `You are an expert mixing engineer. I will give you a list of tracks with their current volume and pan settings. 
+          `You are an expert mixing engineer. I will give you a list of tracks with their current volume and pan settings.
           Suggest a balanced mix for a professional sound. 
           Return ONLY a JSON object where keys are track IDs and values are objects with "volume" (0 to 1) and "pan" (-1 to 1). 
           Also include a "masterVolume" suggestion (0 to 1).
@@ -185,7 +241,7 @@ Provide professional actionable mixing or mastering advice. Make your advice tec
       return null;
     } catch (err) {
       console.error(err);
-      setError("Failed to get mix suggestions");
+      setError(describeError(err, 'Failed to get mix suggestions'));
       return null;
     } finally {
       setIsGenerating(false);
@@ -199,8 +255,8 @@ Provide professional actionable mixing or mastering advice. Make your advice tec
       const ai = getAI();
       if (!ai) throw new Error("Gemini API key is not configured.");
       const base64Audio = audioBufferToWavBase64(buffer, 10);
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
+      const response = await generateWithRetry(ai, {
+        model: getProModel(),
         contents: [
           'Listen to this audio clip and provide a short, 2-3 word descriptive title/tag for it (e.g. "Fat Synth Bass", "Crispy Hi-Hat"). Respond with JUST the title.',
           {
@@ -214,7 +270,7 @@ Provide professional actionable mixing or mastering advice. Make your advice tec
       return response.text.trim().replace(/"/g, '');
     } catch (err) {
       console.error(err);
-      setError("Failed to tag clip");
+      setError(describeError(err, 'Failed to tag clip'));
       return null;
     } finally {
       setIsGenerating(false);
@@ -227,10 +283,10 @@ Provide professional actionable mixing or mastering advice. Make your advice tec
     try {
       const ai = getAI();
       if (!ai) throw new Error("Gemini API key is not configured.");
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
+      const response = await generateWithRetry(ai, {
+        model: getProModel(),
         contents: [
-          `Generate a MIDI sequence based on this prompt: "${prompt}". 
+          `Generate a MIDI sequence based on this prompt: "${prompt}".
           Return ONLY a JSON array of note objects with "note" (MIDI number 0-127), "start" (beats), and "duration" (beats).
           Example: [{"note": 60, "start": 0, "duration": 0.5}, {"note": 62, "start": 0.5, "duration": 0.5}]`
         ],
@@ -243,7 +299,7 @@ Provide professional actionable mixing or mastering advice. Make your advice tec
       return [];
     } catch (err) {
       console.error(err);
-      setError("Failed to generate MIDI");
+      setError(describeError(err, 'Failed to generate MIDI'));
       return [];
     } finally {
       setIsGenerating(false);

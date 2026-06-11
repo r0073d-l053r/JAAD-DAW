@@ -100,7 +100,7 @@ export async function detectBPMOffline(audioBuffer: AudioBuffer): Promise<number
       
       if (ticks && ticks.length > 1) {
         // Calculate BPM from average tick interval
-        let intervals = [];
+        const intervals = [];
         for (let i = 1; i < ticks.length; i++) {
           intervals.push(ticks[i] - ticks[i-1]);
         }

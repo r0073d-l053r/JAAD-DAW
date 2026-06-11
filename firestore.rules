@@ -1,8 +1,33 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true; // Open for now for development
+    match /projects/{projectId} {
+      // Anyone with the share link (project ID) can read a single project.
+      allow get: if true;
+
+      // Listing is restricted to your own projects and public templates.
+      // Clients must query with where('ownerId','==',uid) or where('isPublic','==',true).
+      allow list: if request.auth != null
+                  && (resource.data.ownerId == request.auth.uid
+                      || resource.data.isPublic == true);
+
+      // Creating a project requires claiming ownership with your own uid.
+      allow create: if request.auth != null
+                    && request.resource.data.ownerId == request.auth.uid;
+
+      // Only the owner may update. Legacy documents written before ownership
+      // existed (no ownerId field) may be claimed by the first writer.
+      allow update: if request.auth != null
+                    && request.resource.data.ownerId == request.auth.uid
+                    && (resource.data.ownerId == request.auth.uid
+                        || !('ownerId' in resource.data));
+
+      // Only the owner may delete (legacy docs deletable until claimed).
+      allow delete: if request.auth != null
+                    && (resource.data.ownerId == request.auth.uid
+                        || !('ownerId' in resource.data));
     }
+
+    // All other collections are denied by default.
   }
 }

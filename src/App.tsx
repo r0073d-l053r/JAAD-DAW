@@ -18,15 +18,15 @@ import { SyncOverlay } from './components/SyncOverlay';
 import { BPMSyncPopup } from './components/BPMSyncPopup';
 import { WelcomeModal } from './components/WelcomeModal';
 import { useApp } from './lib/store';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { audioEngine } from './lib/audioEngine';
 import { useGemini } from './lib/useGemini';
-import { subscribeToProject, updateProjectCloud, uploadAssetCloud, downloadAssetCloud, isGitHubPagesBuild, isDemoProject, getProjectCloud } from './lib/syncUtils';
-import { saveAsset, getAsset, saveLocalProjectState, getLocalProjectState } from './lib/assetManager';
+import { subscribeToProject, updateProjectCloud, downloadAssetCloud, isGitHubPagesBuild, isDemoProject, getProjectCloud } from './lib/syncUtils';
+import { saveAsset, getAsset, saveLocalProjectState, getLocalProjectState, STORAGE_WARNING_EVENT, StorageWarningDetail } from './lib/assetManager';
 
 import { WebGLBackground } from './components/WebGLBackground';
 import { LiquidGlassPanel } from './components/LiquidGlass';
-import { detectBPMOffline } from './lib/essentiaBPM';
+import { useAudioImport } from './lib/useAudioImport';
 import { Cloud, Loader2 } from 'lucide-react';
 import { VideoSyncPanel } from './components/VideoSyncPanel';
 import { VstBridgeEditor } from './components/VstBridgeEditor';
@@ -34,6 +34,7 @@ import { SidechainEditor } from './components/SidechainEditor';
 import { AuthenticityProcessor } from './components/AuthenticityProcessor';
 import { LiveAnalyzers } from './components/LiveAnalyzers';
 import { StemSeparator } from './components/StemSeparator';
+import { PianoRoll } from './components/PianoRoll';
 
 
 
@@ -41,14 +42,21 @@ import { StemSeparator } from './components/StemSeparator';
 function AppContent() {
   const { state, dispatch } = useApp();
   const { detectBPM } = useGemini();
+  const { importAudioFiles } = useAudioImport();
   const [syncProgress, setSyncProgress] = useState(0);
   const [deepLinkLoading, setDeepLinkLoading] = useState(false);
   const [deepLinkStatus, setDeepLinkStatus] = useState('');
   const [deepLinkProgress, setDeepLinkProgress] = useState(0);
+  const [storageWarning, setStorageWarning] = useState<StorageWarningDetail | null>(null);
 
-  // Ref to access latest state in async callbacks
-  const stateRef = useRef(state);
-  stateRef.current = state;
+  // Surface local storage pressure (quota nearly full / failed cache writes)
+  useEffect(() => {
+    const onStorageWarning = (e: Event) => {
+      setStorageWarning((e as CustomEvent<StorageWarningDetail>).detail);
+    };
+    window.addEventListener(STORAGE_WARNING_EVENT, onStorageWarning);
+    return () => window.removeEventListener(STORAGE_WARNING_EVENT, onStorageWarning);
+  }, []);
 
   useEffect(() => {
     (window as any).dispatchForTesting = dispatch;
@@ -329,86 +337,10 @@ function AppContent() {
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const files = Array.from(e.dataTransfer.files as FileList);
-      const audioFiles = files.filter(f => f.type.startsWith('audio/') || f.name.match(/\.(mp3|wav|ogg|flac|aac|m4a|weba|webm)$/i));
-      
-      if (audioFiles.length === 0) return;
-
-      const isMultiple = audioFiles.length > 1;
-      if (isMultiple) {
-        dispatch({ type: 'SET_SHOW_BPM_SYNC_POPUP', payload: true });
-      }
-      dispatch({ type: 'SET_IS_DETECTING_BPM', payload: true });
-
-      try {
-        const loadedClipIds: string[] = [];
-
-        // Step 1: Load ALL files first
-        for (let i = 0; i < audioFiles.length; i++) {
-          const file = audioFiles[i];
-          const clipId = `clip_${Date.now()}_${i}`;
-          const trackId = `track_${Date.now()}_${i}`;
-          const trackName = file.name.replace(/\.[^/.]+$/, "") || 'Audio Track';
-          
-          const colors = ['#FF2A5F', '#00E871', '#6B44FF', '#FFBB00', '#00E5FF', '#FF00EA'];
-          const randomColor = colors[(state.tracks.length + i) % colors.length];
-          
-          const duration = await audioEngine.loadAudio(clipId, file);
-          loadedClipIds.push(clipId);
-
-          await saveAsset(clipId, file);
-          // Also sync to cloud storage for cross-device persistence
-          await uploadAssetCloud(clipId, file).catch(err => console.error("Cloud upload failed", err));
-          
-          dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
-          
-          dispatch({
-            type: 'ADD_TRACK',
-            payload: {
-              id: trackId,
-              name: trackName,
-              volume: 0.8,
-              pan: 0,
-              muted: false,
-              solo: false,
-              color: randomColor,
-              clips: [{
-                id: clipId,
-                start: 0,
-                duration,
-                audioData: file.name
-              }],
-              lanes: [],
-              showLanes: false
-            }
-          });
-        }
-
-        // Step 2: After ALL files loaded, detect BPM from the first track
-        // Check if user cancelled (for multi-file popup)
-        if (isMultiple && stateRef.current.bpmSyncCancelRequested) {
-          console.log("App: BPM Sync cancelled by user.");
-        } else {
-          console.log("App: All files loaded. Starting BPM detection...");
-          const firstBufferId = loadedClipIds[0];
-          const buffer = audioEngine.buffers.get(firstBufferId);
-          if (buffer) {
-            const bpm = await detectBPMOffline(buffer);
-            if (bpm) {
-              dispatch({ type: 'SET_ORIGINAL_BPM', payload: bpm });
-              dispatch({ type: 'SET_BPM', payload: bpm });
-              console.log("App: Auto-detected BPM:", bpm);
-            }
-          }
-        }
-      } catch (err) {
-        console.error("App drop handler error:", err);
-      } finally {
-        dispatch({ type: 'SET_IS_DETECTING_BPM', payload: false });
-        dispatch({ type: 'SET_SHOW_BPM_SYNC_POPUP', payload: false });
-      }
+      await importAudioFiles(files, { awaitCloudUpload: true, logLabel: 'App' });
     }
   };
 
@@ -435,6 +367,25 @@ function AppContent() {
       
       <div className="relative z-10 flex flex-col h-full w-full bg-transparent shadow-2xl">
         <Navbar setSyncProgress={setSyncProgress} />
+        {storageWarning && (
+          <div
+            role="alert"
+            className={`absolute top-16 left-1/2 transform -translate-x-1/2 z-50 max-w-xl px-4 py-2 rounded-xl text-xs font-medium shadow-xl flex items-center gap-3 border ${
+              storageWarning.severity === 'error'
+                ? 'bg-red-950/90 border-red-500/40 text-red-200'
+                : 'bg-amber-950/90 border-amber-500/40 text-amber-200'
+            }`}
+          >
+            <span>{storageWarning.message}</span>
+            <button
+              onClick={() => setStorageWarning(null)}
+              aria-label="Dismiss storage warning"
+              className="shrink-0 px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         {state.isDetectingBPM && (
           <div className="absolute top-16 left-1/2 transform -translate-x-1/2 z-50 bg-primary text-black px-4 py-2 rounded-full text-xs font-bold animate-pulse shadow-xl">
              Analyzing Project Tempo...
@@ -469,6 +420,7 @@ function AppContent() {
         {state.sidechainEditorTrackId && <SidechainEditor />}
         {state.authenticityProcessorClipId && <AuthenticityProcessor />}
         {state.stemSeparatorClipId && <StemSeparator />}
+        {state.pianoRollClipId && <PianoRoll />}
         
         <LiveAnalyzers />
 

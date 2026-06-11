@@ -22,6 +22,7 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "types": ["vite/client"]
-  }
+    "types": ["vite/client", "@webgpu/types"]
+  },
+  "exclude": ["node_modules", "dist", "liquid-glass-package"]
 }

@@ -39,6 +39,8 @@ export interface Clip {
   audioOffset?: number; // seconds into the audio buffer
   audioData?: any; // placeholder for real audio
   volumeEnvelope?: { time: number; value: number }[]; // time relative to clip start
+  fadeIn?: number; // fade-in length in seconds from the clip start (0/absent = no fade)
+  fadeOut?: number; // fade-out length in seconds before the clip end (0/absent = no fade)
   groupId?: string; // ID linking this clip to others in a group
   notes?: { note: number; start: number; duration: number }[]; // MIDI notes
 }
@@ -102,6 +104,7 @@ interface AppState {
   sidechainEditorTrackId: string | null;
   authenticityProcessorClipId: string | null;
   stemSeparatorClipId: string | null;
+  pianoRollClipId: string | null;
   showLiveAnalyzers: boolean;
   activeContextMenu: {
     type: "clip" | "selection";
@@ -225,6 +228,7 @@ export type Action =
   | { type: "SET_VIDEO_MUTED"; payload: boolean }
   | { type: "TOGGLE_LIVE_ANALYZERS" }
   | { type: "SET_STEM_SEPARATOR_CLIP"; payload: string | null }
+  | { type: "SET_PIANO_ROLL_CLIP"; payload: string | null }
   | {
       type: "ADD_GENERATED_ALTERNATIVES";
       payload: {
@@ -325,17 +329,26 @@ export const initialState: AppStateWithHistory = {
   sidechainEditorTrackId: null,
   authenticityProcessorClipId: null,
   stemSeparatorClipId: null,
+  pianoRollClipId: null,
   showLiveAnalyzers: false,
   activeContextMenu: null,
 };
+
+// Each history entry is a full Track[] snapshot, so an unbounded stack grows
+// without limit during long sessions. Oldest entries are dropped past this cap.
+export const MAX_HISTORY_ENTRIES = 50;
 
 function saveHistory(
   state: AppStateWithHistory,
   newTracks: Track[],
 ): AppStateWithHistory {
+  const past = [...state.past, state.tracks];
+  if (past.length > MAX_HISTORY_ENTRIES) {
+    past.splice(0, past.length - MAX_HISTORY_ENTRIES);
+  }
   return {
     ...state,
-    past: [...state.past, state.tracks],
+    past,
     future: [],
     tracks: newTracks,
   };
@@ -530,13 +543,14 @@ export function appReducer(
       audioEngine.setMasterVolume(action.payload);
       return { ...state, masterVolume: action.payload };
     }
-    case "ADD_TRACK":
+    case "ADD_TRACK": {
       const trackWithLanes = {
         ...action.payload,
         lanes: action.payload.lanes || [],
         showLanes: action.payload.showLanes ?? false,
       };
       return saveHistory(state, [...state.tracks, trackWithLanes]);
+    }
     case "UPDATE_TRACK": {
       const { id, changes } = action.payload;
       return {
@@ -651,6 +665,8 @@ export function appReducer(
       return { ...state, authenticityProcessorClipId: action.payload };
     case "SET_STEM_SEPARATOR_CLIP":
       return { ...state, stemSeparatorClipId: action.payload };
+    case "SET_PIANO_ROLL_CLIP":
+      return { ...state, pianoRollClipId: action.payload };
     case "ADD_GENERATED_ALTERNATIVES": {
       const {
         trackId,
@@ -1062,6 +1078,8 @@ export function appReducer(
                 ...c,
                 // Keep the current timeline bounds (start, duration, audioOffset remain unchanged)
                 volumeEnvelope: undefined,
+                fadeIn: undefined,
+                fadeOut: undefined,
                 audioData: undefined, // Remove AI processing/tagging
                 notes: undefined, // Remove MIDI if any
               };
@@ -1408,8 +1426,8 @@ export function appReducer(
       }
 
       const selectedClipIdsSet = new Set(state.selectedClipIds);
-      const newTracks = state.tracks.map((track) => {
-        const newClips = track.clips.flatMap((clip) => {
+      const splitClipsAtPlayhead = (clips: Clip[]): Clip[] =>
+        clips.flatMap((clip) => {
           if (
             selectedClipIdsSet.has(clip.id) &&
             state.currentTime > clip.start &&
@@ -1459,8 +1477,17 @@ export function appReducer(
           }
           return [clip];
         });
-        return { ...track, clips: newClips };
-      });
+      const newTracks = state.tracks.map((track) => ({
+        ...track,
+        clips: splitClipsAtPlayhead(track.clips),
+        // Lane clips are selectable and deletable, so they must split too
+        lanes: track.lanes
+          ? track.lanes.map((lane) => ({
+              ...lane,
+              clips: splitClipsAtPlayhead(lane.clips),
+            }))
+          : track.lanes,
+      }));
       return saveHistory(state, newTracks);
     }
     case "SET_BPM": {
@@ -1865,7 +1892,7 @@ export function appReducer(
 
     case "CUT_CLIPS": {
       let clipboard = [...state.clipboard];
-      let newTracks = state.tracks;
+      let newTracks: Track[];
 
       if (state.timeSelection) {
         const { startTime, endTime, trackIds } = state.timeSelection;

@@ -7,13 +7,7 @@ import { audioEngine } from '../lib/audioEngine';
 import { saveAsset } from '../lib/assetManager';
 import { uploadAssetCloud } from '../lib/syncUtils';
 import { audioBufferToWav } from '../lib/exportUtils';
-
-const EXPANDED_COLORS = [
-  '#FF2A5F', '#FF3B30', '#FF9500', '#FFCC00', 
-  '#4CD964', '#00E871', '#5AC8FA', '#007AFF', 
-  '#5856D6', '#6B44FF', '#AF52DE', '#FF2D55',
-  '#A2845E', '#8E8E93', '#1C1C1E', '#FFFFFF'
-];
+import { TRACK_COLORS } from '../lib/trackColors';
 
 export function TrackList() {
   const { state, dispatch } = useApp();
@@ -285,7 +279,7 @@ export function TrackList() {
                       <div className="px-3 py-2">
                         <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-2">Track Color</div>
                         <div className="grid grid-cols-4 gap-1.5">
-                          {EXPANDED_COLORS.map(color => (
+                          {TRACK_COLORS.map(color => (
                             <button
                               key={color}
                               onClick={(e) => {

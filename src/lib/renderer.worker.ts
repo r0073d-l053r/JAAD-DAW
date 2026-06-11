@@ -18,14 +18,35 @@ self.onmessage = async (e) => {
     const startSample = Math.floor(clip.start * sampleRate);
     const clipOffset = Math.floor((clip.audioOffset || 0) * sampleRate);
     const clipLength = Math.floor(clip.duration * sampleRate);
-    
+
+    // Linear fade-in/fade-out gains, clamped so the fades never overlap when
+    // the clip is shorter than their combined length (matches playback).
+    let fadeInSec = Math.max(0, Math.min(clip.fadeIn || 0, clip.duration));
+    let fadeOutSec = Math.max(0, Math.min(clip.fadeOut || 0, clip.duration));
+    if (fadeInSec + fadeOutSec > clip.duration && fadeInSec + fadeOutSec > 0) {
+      const scale = clip.duration / (fadeInSec + fadeOutSec);
+      fadeInSec *= scale;
+      fadeOutSec *= scale;
+    }
+    const fadeInSamples = Math.floor(fadeInSec * sampleRate);
+    const fadeOutSamples = Math.floor(fadeOutSec * sampleRate);
+    const hasFades = fadeInSamples > 0 || fadeOutSamples > 0;
+    const fadeGainAt = (i: number) => {
+      let g = 1;
+      if (fadeInSamples > 0 && i < fadeInSamples) g *= i / fadeInSamples;
+      if (fadeOutSamples > 0 && i >= clipLength - fadeOutSamples) {
+        g *= Math.max(0, clipLength - i) / fadeOutSamples;
+      }
+      return g;
+    };
+
     if (bufferData.length === 1) {
       const channelData = bufferData[0];
       for (let i = 0; i < clipLength; i++) {
         const outIdx = startSample + i;
         const inIdx = clipOffset + i;
         if (outIdx < length && inIdx < channelData.length) {
-          const val = channelData[inIdx];
+          const val = hasFades ? channelData[inIdx] * fadeGainAt(i) : channelData[inIdx];
           output[0][outIdx] += val;
           output[1][outIdx] += val;
         }
@@ -37,7 +58,7 @@ self.onmessage = async (e) => {
           const outIdx = startSample + i;
           const inIdx = clipOffset + i;
           if (outIdx < length && inIdx < channelData.length) {
-            output[c][outIdx] += channelData[inIdx];
+            output[c][outIdx] += hasFades ? channelData[inIdx] * fadeGainAt(i) : channelData[inIdx];
           }
         }
       }

@@ -123,9 +123,9 @@ export function Transport() {
           if (buffer) {
              const trackDuration = buffer.duration;
              if (trackDuration > state.currentTime) {
-               let startContextTime = scheduleTime;
-               let offset = state.currentTime;
-               let remaining = trackDuration - state.currentTime;
+               const startContextTime = scheduleTime;
+               const offset = state.currentTime;
+               const remaining = trackDuration - state.currentTime;
                
                audioEngine.playClip(`frozen_${track.id}`, track.id, startContextTime, offset, remaining, track.frozenBufferId, undefined, track.deHummerEnabled);
                return;
@@ -134,11 +134,29 @@ export function Transport() {
         }
 
         track.clips.forEach(clip => {
+          // MIDI-note clips have no audio buffer; schedule their notes as
+          // oscillators instead of going through playClip (which needs a buffer).
+          if (clip.notes && clip.notes.length > 0 && !audioEngine.buffers.has(clip.bufferId || clip.id)) {
+            if (clip.start + clip.duration > state.currentTime) {
+              audioEngine.playClipNotes(
+                track.id,
+                clip.notes,
+                clip.start,
+                clip.duration,
+                state.currentTime,
+                scheduleTime,
+                state.bpm
+              );
+            }
+            return;
+          }
+
           if (clip.start + clip.duration > state.currentTime) {
             let clipStartContextTime = scheduleTime;
             let offset = clip.audioOffset || 0;
             let remainingDuration = clip.duration;
-            
+            let clipOffset = 0;
+
             if (clip.start > state.currentTime) {
               const rate = audioEngine.playbackRate > 0 ? audioEngine.playbackRate : 1.0;
               clipStartContextTime = scheduleTime + (clip.start - state.currentTime) / rate;
@@ -146,9 +164,13 @@ export function Transport() {
               const overlap = state.currentTime - clip.start;
               offset += overlap;
               remainingDuration -= overlap;
+              clipOffset = overlap;
             }
-            
-            audioEngine.playClip(clip.id, track.id, clipStartContextTime, offset, remainingDuration, clip.bufferId, clip.volumeEnvelope, track.deHummerEnabled);
+
+            const fades = (clip.fadeIn || clip.fadeOut)
+              ? { fadeIn: clip.fadeIn, fadeOut: clip.fadeOut, clipOffset }
+              : undefined;
+            audioEngine.playClip(clip.id, track.id, clipStartContextTime, offset, remainingDuration, clip.bufferId, clip.volumeEnvelope, track.deHummerEnabled, fades);
           }
         });
       });
@@ -159,7 +181,7 @@ export function Transport() {
 
     prevIsPlaying.current = state.isPlaying;
     lastTimeRef.current = state.currentTime;
-  }, [state.isPlaying, state.currentTime, state.tracks, state.looping, state.loopStart, state.loopEnd, state.masterVolume]);
+  }, [state.isPlaying, state.currentTime, state.tracks, state.looping, state.loopStart, state.loopEnd, state.masterVolume, state.bpm]);
 
   useEffect(() => {
     audioEngine.setMetronomeState(state.metronomeEnabled, state.tempoAutomation);

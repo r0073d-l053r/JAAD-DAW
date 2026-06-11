@@ -1,4 +1,3 @@
-import { SoundTouch, SimpleFilter, WebAudioBufferSource } from 'soundtouchjs';
 import { CloudVstBridge } from './cloudVstBridge';
 import { applyDeHummerNode } from './audioUtils';
 
@@ -14,8 +13,12 @@ class AudioEngine {
   sidechainSources: Map<string, string> = new Map(); // Target Track ID -> Trigger Track ID
   masterGain: GainNode | null = null;
   
-  // Track currently playing sources
-  activeSources: Map<string, { node: AudioNode, filter?: any, soundtouch?: any }> = new Map();
+  // Track currently playing sources (soundtouch = pitch-correction worklet
+  // attached when playing at a non-1.0 rate)
+  activeSources: Map<string, { node: AudioNode, soundtouch?: AudioWorkletNode }> = new Map();
+  // Oscillators scheduled for MIDI-note clips. Kept separate from
+  // activeSources so the transport's clip-sync logic never touches them.
+  activeNoteSources: { osc: OscillatorNode; gain: GainNode }[] = [];
   midiAccess: any = null;
 
   // New precise timing tracking
@@ -78,7 +81,7 @@ class AudioEngine {
     // By subtracting a typical output latency (~50ms), we compensate for this 
     // hardware delay and perfectly sync the visual playhead with the audible transients.
     const outputLatency = this.context.outputLatency || this.context.baseLatency || 0.05;
-    let elapsed = (this.context.currentTime - this.playStartTime) * this.playbackRate;
+    const elapsed = (this.context.currentTime - this.playStartTime) * this.playbackRate;
     
     // Only subtract latency once playback has actually started (elapsed > 0)
     let time = this.playPositionAtStart + (elapsed > 0 ? elapsed - outputLatency : elapsed);
@@ -155,7 +158,7 @@ class AudioEngine {
     if (navigator.requestMIDIAccess) {
       try {
         this.midiAccess = await navigator.requestMIDIAccess();
-        for (let input of this.midiAccess.inputs.values()) {
+        for (const input of this.midiAccess.inputs.values()) {
           input.onmidimessage = this.handleMidiMessage.bind(this);
         }
       } catch (err) {
@@ -189,6 +192,98 @@ class AudioEngine {
     
     osc.start();
     osc.stop(ctx.currentTime + 1);
+  }
+
+  /**
+   * Schedules the MIDI notes of a clip as sawtooth oscillators (same voice as
+   * playSynthNote). Note start/duration are in beats; they are converted to
+   * project seconds via `bpm` and mapped onto the context clock honoring the
+   * current playbackRate. Notes route through the track's gain/panner so
+   * volume, pan, mute and solo all apply. Cancelled by stopAll().
+   *
+   * @param trackId         track whose routing the notes play through
+   * @param notes           MIDI notes ({ note, start(beats), duration(beats) })
+   * @param clipStart       clip start in project seconds
+   * @param clipDuration    clip duration in project seconds (notes are clamped to it)
+   * @param fromProjectTime project time playback begins at (transport position)
+   * @param scheduleTime    context time corresponding to fromProjectTime
+   * @param bpm             project tempo used for beats -> seconds
+   */
+  playClipNotes(
+    trackId: string,
+    notes: { note: number; start: number; duration: number }[],
+    clipStart: number,
+    clipDuration: number,
+    fromProjectTime: number,
+    scheduleTime: number,
+    bpm: number,
+  ) {
+    if (!this.context || !this.masterGain) this.init();
+    const ctx = this.context!;
+    if (!this.trackNodes.has(trackId)) {
+      this.setupTrackRouting(trackId);
+    }
+    const dest = this.trackNodes.get(trackId)?.gain || this.masterGain!;
+    const rate = this.playbackRate > 0 ? this.playbackRate : 1.0;
+    const secondsPerBeat = 60 / Math.max(1, bpm);
+    const clipEnd = clipStart + clipDuration;
+
+    for (const n of notes) {
+      const noteStart = clipStart + n.start * secondsPerBeat;
+      const noteEnd = Math.min(noteStart + Math.max(0.05, n.duration * secondsPerBeat), clipEnd);
+      // Skip notes that fall outside the clip bounds or already finished
+      if (noteStart >= clipEnd || noteEnd <= fromProjectTime) continue;
+
+      // Project-time deltas land on the context clock divided by the rate
+      const startCtx = scheduleTime + Math.max(0, noteStart - fromProjectTime) / rate;
+      const endCtx = scheduleTime + (noteEnd - fromProjectTime) / rate;
+      if (endCtx - startCtx < 0.01) continue;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.value = 440 * Math.pow(2, (n.note - 69) / 12);
+
+      // playSynthNote-style envelope: short attack to avoid clicks, then an
+      // exponential decay that reaches silence exactly at the note end.
+      gain.gain.setValueAtTime(0.0001, startCtx);
+      gain.gain.linearRampToValueAtTime(0.35, Math.min(startCtx + 0.01, endCtx));
+      gain.gain.exponentialRampToValueAtTime(0.001, endCtx);
+
+      osc.connect(gain);
+      gain.connect(dest);
+      osc.start(startCtx);
+      osc.stop(endCtx + 0.05);
+
+      const entry = { osc, gain };
+      osc.onended = () => {
+        try {
+          osc.disconnect();
+          gain.disconnect();
+        } catch (e) { /* already gone */ }
+        const idx = this.activeNoteSources.indexOf(entry);
+        if (idx !== -1) this.activeNoteSources.splice(idx, 1);
+      };
+      this.activeNoteSources.push(entry);
+    }
+  }
+
+  stopAllNotes() {
+    this.activeNoteSources.forEach(({ osc, gain }) => {
+      try {
+        osc.onended = null;
+        osc.stop();
+      } catch (e) {
+        // Not started yet or already stopped
+      }
+      try {
+        osc.disconnect();
+        gain.disconnect();
+      } catch (e) {
+        // Already disconnected
+      }
+    });
+    this.activeNoteSources = [];
   }
 
   async loadAudio(id: string, file: File | Blob): Promise<number> {
@@ -227,11 +322,50 @@ class AudioEngine {
     nodes.panner.pan.value = pan;
   }
 
-  addTrackEffect(trackId: string, type: 'reverb' | 'delay' | 'eq' | 'compressor' | 'wasm-vst' | 'limiter') {
+  /**
+   * Synthesizes an exponentially-decaying noise impulse response. Avoids
+   * shipping IR sample files while still producing dense, natural reverb tails.
+   */
+  private createImpulseResponse(durationSeconds: number, decay: number): AudioBuffer {
+    const sampleRate = this.context!.sampleRate;
+    const length = Math.max(1, Math.floor(sampleRate * durationSeconds));
+    const impulse = this.context!.createBuffer(2, length, sampleRate);
+    for (let channel = 0; channel < 2; channel++) {
+      const data = impulse.getChannelData(channel);
+      for (let i = 0; i < length; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+      }
+    }
+    return impulse;
+  }
+
+  static readonly REVERB_PRESETS = {
+    room:  { duration: 0.6, decay: 2.0, wet: 0.25 },
+    hall:  { duration: 2.8, decay: 3.5, wet: 0.3 },
+    plate: { duration: 1.4, decay: 5.0, wet: 0.3 },
+  } as const;
+
+  addTrackEffect(
+    trackId: string,
+    type: 'reverb' | 'delay' | 'eq' | 'compressor' | 'wasm-vst' | 'limiter',
+    options?: { reverbPreset?: keyof typeof AudioEngine.REVERB_PRESETS }
+  ) {
     if (!this.context || !this.trackNodes.has(trackId)) return;
     const nodes = this.trackNodes.get(trackId)!;
-    
-    if (type === 'wasm-vst') {
+
+    if (type === 'reverb') {
+      const preset = AudioEngine.REVERB_PRESETS[options?.reverbPreset || 'hall'];
+      const convolver = this.context.createConvolver();
+      convolver.buffer = this.createImpulseResponse(preset.duration, preset.decay);
+      const wet = this.context.createGain();
+      wet.gain.value = preset.wet;
+
+      nodes.panner.disconnect();
+      nodes.panner.connect(this.masterGain!); // dry signal
+      nodes.panner.connect(convolver);
+      convolver.connect(wet);
+      wet.connect(this.masterGain!);
+    } else if (type === 'wasm-vst') {
       try {
         const vstNode = new AudioWorkletNode(this.context, 'vst-wrapper', {
           outputChannelCount: [2]
@@ -433,6 +567,72 @@ class AudioEngine {
 
 
 
+  /**
+   * Clamps fade lengths to the clip duration. When the clip is shorter than
+   * the combined fades, both are scaled down proportionally so they meet
+   * without overlapping.
+   */
+  static clampFades(fadeIn: number, fadeOut: number, clipDuration: number): { fadeIn: number; fadeOut: number } {
+    let fIn = Math.max(0, Math.min(fadeIn || 0, clipDuration));
+    let fOut = Math.max(0, Math.min(fadeOut || 0, clipDuration));
+    if (fIn + fOut > clipDuration && fIn + fOut > 0) {
+      const scale = clipDuration / (fIn + fOut);
+      fIn *= scale;
+      fOut *= scale;
+    }
+    return { fadeIn: fIn, fadeOut: fOut };
+  }
+
+  /**
+   * Builds a gain node implementing linear fade-in/fade-out ramps for a clip,
+   * or returns null when no audible fade applies.
+   *
+   * @param scheduleTime context (wall) time at which playback begins
+   * @param posInClip    seconds into the clip (clip/buffer time) where playback begins
+   * @param remaining    clip/buffer-time seconds left to play from posInClip
+   * @param rate         playback rate; clip-time deltas are divided by it to land
+   *                     on the context clock (mirrors the volumeEnvelope handling)
+   */
+  private createClipFadeGain(
+    context: BaseAudioContext,
+    scheduleTime: number,
+    posInClip: number,
+    remaining: number,
+    fadeIn: number,
+    fadeOut: number,
+    rate: number,
+  ): GainNode | null {
+    if (remaining <= 0) return null;
+    const clipDuration = posInClip + remaining;
+    const { fadeIn: fIn, fadeOut: fOut } = AudioEngine.clampFades(fadeIn, fadeOut, clipDuration);
+    if (fIn <= 0 && fOut <= 0) return null;
+
+    const toContextTime = (t: number) => scheduleTime + (t - posInClip) / rate;
+    const gainAt = (t: number) => {
+      let g = 1;
+      if (fIn > 0 && t < fIn) g *= Math.max(0, t) / fIn;
+      if (fOut > 0 && t > clipDuration - fOut) g *= Math.max(0, clipDuration - t) / fOut;
+      return Math.max(0.0001, g);
+    };
+
+    const fadeGain = context.createGain();
+    // Pin the correct gain at the start point (handles mid-fade starts).
+    fadeGain.gain.setValueAtTime(gainAt(posInClip), scheduleTime);
+    if (posInClip < fIn) {
+      fadeGain.gain.linearRampToValueAtTime(1, toContextTime(fIn));
+    }
+    if (fOut > 0) {
+      const fadeOutStart = clipDuration - fOut;
+      if (fadeOutStart > posInClip && fadeOutStart > fIn) {
+        // Hold unity gain until the fade-out begins so the final ramp does
+        // not start decaying right after the fade-in completes.
+        fadeGain.gain.setValueAtTime(1, toContextTime(fadeOutStart));
+      }
+      fadeGain.gain.linearRampToValueAtTime(0.0001, toContextTime(clipDuration));
+    }
+    return fadeGain;
+  }
+
   playClip(
     clipId: string,
     trackId: string,
@@ -441,7 +641,8 @@ class AudioEngine {
     duration: number = 0,
     bufferId?: string,
     volumeEnvelope?: { time: number; value: number }[],
-    deHummerEnabled?: boolean
+    deHummerEnabled?: boolean,
+    fades?: { fadeIn?: number; fadeOut?: number; clipOffset?: number }
   ) {
     const effectiveBufferId = bufferId || clipId;
     if (!this.context || !this.buffers.has(effectiveBufferId)) return;
@@ -483,7 +684,20 @@ class AudioEngine {
         envGain.connect(targetNode);
         targetNode = envGain;
       }
-      
+
+      if (fades && ((fades.fadeIn || 0) > 0 || (fades.fadeOut || 0) > 0)) {
+        const posInClip = Math.max(0, (fades.clipOffset || 0) + timeDelta);
+        const remaining = duration > 0 ? duration : buffer.duration - startOffset;
+        const fadeGain = this.createClipFadeGain(
+          this.context, targetTime, posInClip, remaining,
+          fades.fadeIn || 0, fades.fadeOut || 0, 1.0
+        );
+        if (fadeGain) {
+          fadeGain.connect(targetNode);
+          targetNode = fadeGain;
+        }
+      }
+
       source.connect(targetNode);
       if (startOffset < buffer.duration) {
         source.start(targetTime, startOffset, duration > 0 ? duration : undefined);
@@ -492,8 +706,6 @@ class AudioEngine {
       return;
     }
     
-    const totalFramesToExtract = duration > 0 ? Math.floor(duration * buffer.sampleRate) : Infinity;
-    const framesExtractedSoFar = 0;
     const sampleRate = this.context!.sampleRate;
 
     let targetNode: AudioNode = nodes.gain;
@@ -501,12 +713,16 @@ class AudioEngine {
       targetNode = applyDeHummerNode(this.context, targetNode);
     }
 
+    // Clip-time deltas are in project (buffer) time; the context clock runs
+    // in wall time, which differs by the playback rate.
+    const rate = this.playbackRate > 0 ? this.playbackRate : 1.0;
+
     if (volumeEnvelope && volumeEnvelope.length > 0) {
       const envGain = this.context.createGain();
-      const clipStartContextTime = targetTime - startOffset;
+      const clipStartContextTime = targetTime - startOffset / rate;
       envGain.gain.setValueAtTime(volumeEnvelope[0].value, targetTime);
       for (const pt of volumeEnvelope) {
-        const pointTime = clipStartContextTime + pt.time;
+        const pointTime = clipStartContextTime + pt.time / rate;
         if (pointTime >= targetTime) {
           envGain.gain.linearRampToValueAtTime(Math.max(0.0001, pt.value), pointTime);
         }
@@ -515,31 +731,72 @@ class AudioEngine {
       targetNode = envGain;
     }
 
+    if (fades && ((fades.fadeIn || 0) > 0 || (fades.fadeOut || 0) > 0)) {
+      const posInClip = Math.max(0, (fades.clipOffset || 0) + timeDelta);
+      const remaining = duration > 0 ? duration : buffer.duration - startOffset;
+      const fadeGain = this.createClipFadeGain(
+        this.context, targetTime, posInClip, remaining,
+        fades.fadeIn || 0, fades.fadeOut || 0, rate
+      );
+      if (fadeGain) {
+        fadeGain.connect(targetNode);
+        targetNode = fadeGain;
+      }
+    }
+
+    // Nothing to play — bail before constructing nodes so no worklet leaks.
+    if (startOffset >= buffer.duration) return;
+
+    // Tempo-shifted playback: the source plays at `playbackRate` (correct
+    // timeline speed, pitch shifted), and the soundtouch worklet corrects the
+    // pitch back by 1/rate. Scheduling stays sample-accurate on the source.
+    const source = this.context.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = this.playbackRate;
+
+    let soundtouchNode: AudioWorkletNode | undefined;
     try {
-      const soundtouchNode = new AudioWorkletNode(this.context, 'soundtouch-processor', {
+      soundtouchNode = new AudioWorkletNode(this.context, 'soundtouch-processor', {
         outputChannelCount: [2]
       });
       soundtouchNode.port.postMessage({ type: 'INIT', tempo: this.playbackRate, sampleRate: sampleRate });
-      
-      let source = this.context.createBufferSource();
-      source.buffer = buffer;
       source.connect(soundtouchNode);
       soundtouchNode.connect(targetNode);
-      
-      source.start(targetTime, startOffset, duration > 0 ? duration : undefined);
-      
-      this.activeSources.set(clipId, { node: source });
     } catch (e) {
-      console.error("SoundTouch AudioWorklet Error:", e);
-      return;
+      // Worklet failed to load — play tempo-correct but pitch-shifted rather
+      // than silently dropping the clip.
+      console.error("SoundTouch AudioWorklet Error (falling back to pitched playback):", e);
+      soundtouchNode = undefined;
+      source.connect(targetNode);
     }
+
+    source.start(targetTime, startOffset, duration > 0 ? duration : undefined);
+
+    // Release the worklet when the source finishes naturally, otherwise the
+    // processor keeps running on silence forever.
+    source.onended = () => {
+      if (this.activeSources.get(clipId)?.node === source) {
+        this.activeSources.delete(clipId);
+      }
+      try {
+        soundtouchNode?.port.postMessage({ type: 'STOP' });
+        soundtouchNode?.disconnect();
+      } catch (e) { /* already gone */ }
+    };
+
+    this.activeSources.set(clipId, { node: source, soundtouch: soundtouchNode });
   }
 
   setPlaybackRate(rate: number) {
     this.playbackRate = rate;
     this.activeSources.forEach((source) => {
-      if (source.node && (source.node as any).port) {
-        (source.node as any).port.postMessage({ type: 'SET_TEMPO', tempo: rate });
+      // Live-update playing sources: speed on the buffer source, matching
+      // pitch correction on the worklet (when one is attached).
+      if (source.node instanceof AudioBufferSourceNode) {
+        source.node.playbackRate.value = rate;
+      }
+      if (source.soundtouch?.port) {
+        source.soundtouch.port.postMessage({ type: 'SET_TEMPO', tempo: rate });
       }
     });
   }
@@ -577,18 +834,29 @@ class AudioEngine {
     this.scheduler();
   }
 
-  stopAll() {
-    this.activeSources.forEach((source, clipId) => {
-      try {
-        source.node.disconnect();
-        if ((source.node as any).onaudioprocess) {
-          (source.node as any).onaudioprocess = null;
-        }
-      } catch (e) {
-        // Already stopped
+  private releaseSource(source: { node: AudioNode, soundtouch?: AudioWorkletNode }) {
+    try {
+      if (source.node instanceof AudioBufferSourceNode) {
+        source.node.onended = null;
       }
+      source.node.disconnect();
+    } catch (e) {
+      // Already stopped
+    }
+    try {
+      source.soundtouch?.port.postMessage({ type: 'STOP' });
+      source.soundtouch?.disconnect();
+    } catch (e) {
+      // Already gone
+    }
+  }
+
+  stopAll() {
+    this.activeSources.forEach((source) => {
+      this.releaseSource(source);
     });
     this.activeSources.clear();
+    this.stopAllNotes();
     this.playStartTime = 0;
     
     if (this.metronomeTimerID !== null) {
@@ -601,14 +869,7 @@ class AudioEngine {
   stopClip(clipId: string) {
     const source = this.activeSources.get(clipId);
     if (source) {
-      try {
-        source.node.disconnect();
-        if ((source.node as any).onaudioprocess) {
-          (source.node as any).onaudioprocess = null;
-        }
-      } catch (e) {
-        // Already stopped
-      }
+      this.releaseSource(source);
       this.activeSources.delete(clipId);
     }
   }
@@ -646,7 +907,16 @@ class AudioEngine {
         if (buffer) {
           const source = offlineCtx.createBufferSource();
           source.buffer = buffer;
-          source.connect(trackGain);
+          let dest: AudioNode = trackGain;
+          const fadeGain = this.createClipFadeGain(
+            offlineCtx, clip.start, 0, clip.duration,
+            clip.fadeIn || 0, clip.fadeOut || 0, 1.0
+          );
+          if (fadeGain) {
+            fadeGain.connect(trackGain);
+            dest = fadeGain;
+          }
+          source.connect(dest);
           source.start(clip.start, clip.audioOffset || 0, clip.duration);
         }
       }
@@ -670,7 +940,16 @@ class AudioEngine {
       if (buffer) {
         const source = offlineCtx.createBufferSource();
         source.buffer = buffer;
-        source.connect(trackGain);
+        let dest: AudioNode = trackGain;
+        const fadeGain = this.createClipFadeGain(
+          offlineCtx, clip.start, 0, clip.duration,
+          clip.fadeIn || 0, clip.fadeOut || 0, 1.0
+        );
+        if (fadeGain) {
+          fadeGain.connect(trackGain);
+          dest = fadeGain;
+        }
+        source.connect(dest);
         source.start(clip.start, clip.audioOffset || 0, clip.duration);
       }
     }

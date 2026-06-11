@@ -239,8 +239,8 @@ export async function separateAudioStem(
       break;
     }
     case 'synth': {
-      let synthL = applyCascadedBiquadFilter(leftIn, 'highpass', 350, sampleRate, 4, 0.707);
-      let synthR = applyCascadedBiquadFilter(rightIn, 'highpass', 350, sampleRate, 4, 0.707);
+      const synthL = applyCascadedBiquadFilter(leftIn, 'highpass', 350, sampleRate, 4, 0.707);
+      const synthR = applyCascadedBiquadFilter(rightIn, 'highpass', 350, sampleRate, 4, 0.707);
       for (let i = 0; i < len; i++) {
         leftOut[i] = (synthL[i] - mid[i] * 0.45) * 1.2;
         rightOut[i] = (synthR[i] - mid[i] * 0.45) * 1.2;

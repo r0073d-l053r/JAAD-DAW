@@ -14,14 +14,14 @@ vi.mock('motion/react', () => ({
 
 describe('StudioBackground', () => {
   let mockContext: any;
-  let animationFrames: Function[] = [];
+  let animationFrames: Array<() => void> = [];
 
   beforeEach(() => {
     vi.clearAllMocks();
     animationFrames = [];
 
     // Mock requestAnimationFrame to store callbacks for manual ticks
-    vi.stubGlobal('requestAnimationFrame', vi.fn().mockImplementation((cb: Function) => {
+    vi.stubGlobal('requestAnimationFrame', vi.fn().mockImplementation((cb: () => void) => {
       animationFrames.push(cb);
       return animationFrames.length;
     }));

@@ -20,6 +20,7 @@ vi.mock('./firebase', () => ({
   db: { type: 'FirestoreDB' },
   storage: { type: 'FirebaseStorage' },
   isFirebaseAvailable: true,
+  ensureSignedIn: vi.fn().mockResolvedValue({ uid: 'test-user' }),
 }));
 
 // Mock firebase/firestore
@@ -46,6 +47,8 @@ vi.mock('firebase/firestore', () => ({
   }),
   collection: vi.fn().mockReturnValue({ type: 'CollectionReference' }),
   deleteDoc: vi.fn().mockResolvedValue(undefined),
+  query: vi.fn().mockImplementation((ref, ...constraints) => ({ type: 'Query', ref, constraints })),
+  where: vi.fn().mockImplementation((field, op, value) => ({ type: 'QueryConstraint', field, op, value })),
 }));
 
 // Mock firebase/storage
@@ -190,7 +193,8 @@ describe('syncUtils', () => {
 
   it('lists projects and gets detailed project metadata', async () => {
     const list = await listProjects();
-    expect(getDocs).toHaveBeenCalledTimes(1);
+    // One query for public templates, one for the signed-in user's projects
+    expect(getDocs).toHaveBeenCalledTimes(2);
     expect(list[0]).toEqual({ id: 'proj_1', projectName: 'KAELO' });
 
     const details = await getProjectCloud('proj_2');

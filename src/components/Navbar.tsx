@@ -166,7 +166,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
           attempts++;
           console.error(`Failed to upload project bundle ${targetId} (Attempt ${attempts}):`, e);
           if (attempts >= MAX_RETRIES) {
-            throw new Error(`Cannot upload project bundle at this time after ${MAX_RETRIES} attempts.`);
+            throw new Error(`Cannot upload project bundle at this time after ${MAX_RETRIES} attempts.`, { cause: e });
           }
           await new Promise(r => setTimeout(r, 1000 * attempts));
         }

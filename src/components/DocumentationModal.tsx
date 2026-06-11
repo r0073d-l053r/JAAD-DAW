@@ -2,7 +2,6 @@ import React, { useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { LiquidGlassPanel } from './LiquidGlass';
 import { X, BookOpen, ExternalLink, HelpCircle } from 'lucide-react';
-// @ts-ignore
 import docContentImport from '../../docs/doc.md?raw';
 
 // Fallback content in case the file doesn't load

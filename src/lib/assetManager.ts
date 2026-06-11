@@ -1,5 +1,52 @@
 import { get, set, keys, del } from 'idb-keyval';
 
+/** Fired on window when local storage is nearly full or a save fails. */
+export const STORAGE_WARNING_EVENT = 'jaad:storage-warning';
+
+export interface StorageWarningDetail {
+  severity: 'warning' | 'error';
+  message: string;
+  usage?: number;
+  quota?: number;
+}
+
+const QUOTA_WARNING_THRESHOLD = 0.8;
+let quotaWarningShown = false;
+
+const emitStorageWarning = (detail: StorageWarningDetail) => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(STORAGE_WARNING_EVENT, { detail }));
+};
+
+/**
+ * Returns the browser's storage usage estimate, or null when unsupported.
+ */
+export const getStorageEstimate = async (): Promise<{ usage: number; quota: number; fraction: number } | null> => {
+  if (typeof navigator === 'undefined' || !navigator.storage?.estimate) return null;
+  try {
+    const { usage = 0, quota = 0 } = await navigator.storage.estimate();
+    return { usage, quota, fraction: quota > 0 ? usage / quota : 0 };
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Warns (once per session) when the origin is close to its storage quota, so
+ * users hear about it before the browser starts evicting audio assets.
+ */
+export const checkStorageQuota = async () => {
+  if (quotaWarningShown) return;
+  const estimate = await getStorageEstimate();
+  if (!estimate || estimate.fraction < QUOTA_WARNING_THRESHOLD) return;
+  quotaWarningShown = true;
+  const usedMb = (estimate.usage / 1024 / 1024).toFixed(0);
+  const quotaMb = (estimate.quota / 1024 / 1024).toFixed(0);
+  const message = `Local storage is ${Math.round(estimate.fraction * 100)}% full (${usedMb} MB of ${quotaMb} MB). The browser may evict cached audio — save your project to the cloud or remove unused projects.`;
+  console.warn(`Asset Storage: ${message}`);
+  emitStorageWarning({ severity: 'warning', message, usage: estimate.usage, quota: estimate.quota });
+};
+
 /**
  * Checks if the Origin Private File System (OPFS) is supported by the current browser environment.
  */
@@ -28,6 +75,9 @@ const getOpfsRoot = async (): Promise<FileSystemDirectoryHandle | null> => {
  * Saves an audio file (Blob/File) using OPFS with a fallback to local IndexedDB.
  */
 export const saveAsset = async (id: string, file: Blob | File) => {
+  // Fire-and-forget: warn the user before storage pressure causes evictions.
+  void checkStorageQuota();
+
   const root = await getOpfsRoot();
   if (root) {
     try {
@@ -48,6 +98,10 @@ export const saveAsset = async (id: string, file: Blob | File) => {
     console.log(`Asset Storage (IndexedDB Fallback): Saved asset ${id}`);
   } catch (err) {
     console.error('Failed to save asset to IndexedDB:', err);
+    emitStorageWarning({
+      severity: 'error',
+      message: 'Failed to cache an audio file locally — storage may be full. Cloud sync still works, but offline playback of this file may fail.',
+    });
   }
 };
 

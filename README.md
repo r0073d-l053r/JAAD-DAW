@@ -45,6 +45,9 @@ Just Another AI DAW (JAAD) is a modern, web-browser-based Digital Audio Workstat
 - **Generative AI Copilot & Creation**: Natural language generation of audio stems, lyrics-to-vocals, and MIDI patterns directly onto the timeline, powered by Google Gemini.
 - **AI "Fix My Mix" Automator**: One-click intelligent analysis that applies corrective parametric EQ, multi-band compression, and mastering presets.
 - **Interactive Timeline & Mixer**: Complete DAW workspace with dynamic resizing, volume/panning faders, mute, solo, and real-time routing buses.
+- **Piano Roll MIDI Editor**: Full note editor for AI-generated and imported MIDI clips — draw, move, resize, and delete notes on a snapping beat grid with clickable preview keys, plus built-in synth playback on the timeline.
+- **Clip Fade Handles**: Drag the top corners of any clip for instant fade-in/fade-out, applied identically in live playback, track freeze, and all exports.
+- **Convolution Reverb**: True ConvolverNode reverb with synthesized room/hall/plate impulse responses, available as a mixer FX slot.
 - **Demo Protection & Onboarding**: Shielded read-only templates on public hosted builds with automatic copy-on-edit logic, complemented by a premium Glassmorphism onboarding Welcome Modal.
 - **Forced Cloud Sync Overlay**: Blocking Liquid Glass progress overlay with exponential backoff upload retry logic ensures your assets are safely backed up.
 - **Exporting Options**: Export your final project as a high-fidelity `.WAV` mixdown, individual multitrack stems in a `.ZIP` file, or a portable `.JAAD` bundle.
@@ -81,11 +84,15 @@ You need Node.js installed on your machine.
    *(Note: Ensure you are in the `JAAD-DAW` directory before running the following commands.)*
 
 2. Set up your environment variables:
-   Copy the example environment file and add your configuration (e.g. `GEMINI_API_KEY`).
+   Copy the example environment file and add your configuration.
 
    ```bash
    cp .env.example .env
    ```
+
+   > **Note on AI features:** `VITE_GEMINI_API_KEY` is baked into the compiled bundle, so only set it for private/self-hosted deployments. On public builds, users supply their own key in **Settings** (BYOK, stored in localStorage).
+
+   > **Note on cloud features:** Firestore/Storage security rules (`firestore.rules`, `storage.rules`) enforce per-user project ownership via Firebase **Anonymous Authentication** — enable the Anonymous provider in your Firebase console (Authentication → Sign-in method) and deploy the rules with `firebase deploy --only firestore:rules,storage`. Demo/template projects must have `isPublic: true` set on their Firestore documents to appear in everyone's project browser.
 
 3. Install dependencies:
 
