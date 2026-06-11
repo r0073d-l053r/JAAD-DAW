@@ -9,3 +9,5 @@ coverage/
 liquid-glass-package
 patchnotes.md
 .~lock.*#
+# Claude Code session scratch (launch config, debug frames, backups)
+.claude/
