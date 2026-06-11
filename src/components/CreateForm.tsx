@@ -576,8 +576,8 @@ export function CreateForm() {
         >
       <LiquidGlassPanel
         cornerRadius={isExpanded ? 32 : 9999}
-        overLight={true}
-        mode="standard"
+        blurAmount={32}
+        backgroundOpacity={0.2}
         className={`border transition-all duration-500 ${isDragOver ? "border-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.4)]" : "border-white/10 shadow-[0_0_60px_rgba(0,0,0,0.6)]"}`}
         contentClassName={`flex flex-col transition-all duration-500 ${isExpanded ? 'w-[900px]' : 'w-auto'}`}
         onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
@@ -859,7 +859,7 @@ export function CreateForm() {
                 <div className="flex items-center gap-2 px-1">
                   <h4 className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.3em]">Styles</h4>
                 </div>
-                <div className="flex-1 bg-black/50 rounded-[28px] border border-white/5 p-6 min-h-[300px] shadow-inner relative group/styles">
+                <div className="flex-1 bg-black/20 rounded-[28px] border border-white/5 p-6 min-h-[300px] shadow-inner relative group/styles">
                   <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover/styles:opacity-100 transition-opacity pointer-events-none" />
                   <textarea 
                     value={styles}
@@ -879,7 +879,7 @@ export function CreateForm() {
                   {activeTab === 'lyrics' && <Wand2 size={12} className="text-zinc-700 hover:text-primary cursor-pointer transition-colors" />}
                 </div>
                 
-                <div className="flex-1 bg-black/50 rounded-[28px] border border-white/5 p-8 min-h-[300px] shadow-inner relative group/right">
+                <div className="flex-1 bg-black/20 rounded-[28px] border border-white/5 p-8 min-h-[300px] shadow-inner relative group/right">
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover/right:opacity-100 transition-opacity pointer-events-none" />
                   
                   {activeTab === 'lyrics' ? (

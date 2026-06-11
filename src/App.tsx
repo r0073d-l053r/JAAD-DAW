@@ -363,7 +363,13 @@ function AppContent() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <WebGLBackground isDimmed={state.tracks.length > 0} />
+      <WebGLBackground
+        isDimmed={state.tracks.length > 0}
+        staticMode={
+          state.disableBackgroundAnimation ||
+          state.theme?.themeMode === 'performance'
+        }
+      />
       
       <div className="relative z-10 flex flex-col h-full w-full bg-transparent shadow-2xl">
         <Navbar setSyncProgress={setSyncProgress} />

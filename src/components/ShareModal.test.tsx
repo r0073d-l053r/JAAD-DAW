@@ -110,6 +110,24 @@ describe('ShareModal', () => {
     expect(screen.queryByText('http://localhost:5173/?project=test_project_123')).not.toBeNull();
   });
 
+  it('describes link access accurately instead of claiming encryption', () => {
+    vi.mocked(useApp).mockReturnValue({
+      state: {
+        hasManuallySaved: true,
+        projectId: 'test_project_123',
+        projectName: 'My Epic Song',
+      },
+    } as any);
+
+    render(<ShareModal isOpen={true} onClose={vi.fn()} onSaveToCloud={mockSaveToCloud} />);
+
+    // Footer badge states the real access model: anyone with the link can view.
+    expect(screen.queryByText(/Anyone With the Link Can View/i)).not.toBeNull();
+    // No copy should claim the share is encrypted (data is only TLS-in-transit
+    // and provider-at-rest encrypted, not end-to-end encrypted).
+    expect(screen.queryByText(/encrypted/i)).toBeNull();
+  });
+
   it('copies URL to clipboard and triggers animation status changes on click', async () => {
     vi.mocked(useApp).mockReturnValue({
       state: {

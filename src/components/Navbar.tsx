@@ -824,9 +824,12 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
 
               {!syncError && (
                  <div className="mt-8 pt-6 border-t border-white/5 w-full">
-                    <div className="flex items-center justify-center gap-2 text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">
+                    <div
+                      className="flex items-center justify-center gap-2 text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]"
+                      title="Data is encrypted in transit (HTTPS) and at rest by the cloud provider. Projects are not end-to-end encrypted."
+                    >
                        <div className="w-1 h-1 rounded-full bg-green-500 animate-ping" />
-                       Encryption Active
+                       Secured in Transit (HTTPS)
                     </div>
                  </div>
               )}

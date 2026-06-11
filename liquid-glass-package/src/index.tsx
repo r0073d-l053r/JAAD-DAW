@@ -142,6 +142,8 @@ const GlassContainer = forwardRef<
     glassSize?: { width: number; height: number }
     onClick?: () => void
     mode?: "standard" | "polar" | "prominent" | "shader"
+    /** Render as an in-flow block layout container instead of the demo's inline pill. */
+    staticLayout?: boolean
   }>
 >(
   (
@@ -164,6 +166,7 @@ const GlassContainer = forwardRef<
       glassSize = { width: 270, height: 69 },
       onClick,
       mode = "standard",
+      staticLayout = false,
     },
     ref,
   ) => {
@@ -194,9 +197,8 @@ const GlassContainer = forwardRef<
           style={{
             borderRadius: `${cornerRadius}px`,
             position: "relative",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "24px",
+            display: staticLayout ? "block" : "inline-flex",
+            ...(staticLayout ? {} : { alignItems: "center", gap: "24px" }),
             padding,
             overflow: "hidden",
             transition: "all 0.2s ease-in-out",
@@ -225,7 +227,8 @@ const GlassContainer = forwardRef<
             style={{
               position: "relative",
               zIndex: 1,
-              font: "500 20px/1 system-ui",
+              // The demo's pill font would stomp the host app's typography in layout mode.
+              ...(staticLayout ? {} : { font: "500 20px/1 system-ui" }),
               textShadow: overLight ? "0px 2px 12px rgba(0, 0, 0, 0)" : "0px 2px 12px rgba(0, 0, 0, 0.4)",
             }}
           >
@@ -256,6 +259,14 @@ interface LiquidGlassProps {
   overLight?: boolean
   mode?: "standard" | "polar" | "prominent" | "shader"
   onClick?: () => void
+  /**
+   * Render as an in-flow layout container: the glass sizes to its children in
+   * normal document flow and all effect layers pin to it with absolute
+   * positioning. The default (false) keeps the upstream demo behaviour — a
+   * floating pill centered via translate(-50%, -50%) — which breaks layout
+   * panels like menus, modals, and toolbars.
+   */
+  staticLayout?: boolean
 }
 
 export default function LiquidGlass({
@@ -275,6 +286,7 @@ export default function LiquidGlass({
   style = {},
   mode = "standard",
   onClick,
+  staticLayout = false,
 }: LiquidGlassProps) {
   const glassRef = useRef<HTMLDivElement>(null)
   const [isHovered, setIsHovered] = useState(false)
@@ -434,7 +446,9 @@ export default function LiquidGlass({
     return () => window.removeEventListener("resize", updateGlassSize)
   }, [])
 
-  const transformStyle = `translate(calc(-50% + ${calculateElasticTranslation().x}px), calc(-50% + ${calculateElasticTranslation().y}px)) ${isActive && Boolean(onClick) ? "scale(0.96)" : calculateDirectionalScale()}`
+  const transformStyle = staticLayout
+    ? "none"
+    : `translate(calc(-50% + ${calculateElasticTranslation().x}px), calc(-50% + ${calculateElasticTranslation().y}px)) ${isActive && Boolean(onClick) ? "scale(0.96)" : calculateDirectionalScale()}`
 
   const baseStyle = {
     ...style,
@@ -448,36 +462,42 @@ export default function LiquidGlass({
     left: baseStyle.left || "50%",
   }
 
-  return (
+  // Geometry shared by every effect layer (overlight darkeners + border rims).
+  // Floating mode (demo): explicitly sized + translated to overlap the pill.
+  // Static layout mode: pinned to the wrapper, which is sized by the glass
+  // container in normal flow — no measurements or transforms needed.
+  const layerGeometry: CSSProperties = staticLayout
+    ? { position: "absolute", inset: 0 }
+    : {
+        ...(positionStyles as CSSProperties),
+        height: glassSize.height,
+        width: glassSize.width,
+        transform: baseStyle.transform,
+        transition: baseStyle.transition,
+      }
+
+  const glassStack = (
     <>
       {/* Over light effect */}
       <div
         className={`bg-black transition-all duration-150 ease-in-out pointer-events-none ${overLight ? "opacity-20" : "opacity-0"}`}
         style={{
-          ...positionStyles,
-          height: glassSize.height,
-          width: glassSize.width,
+          ...layerGeometry,
           borderRadius: `${cornerRadius}px`,
-          transform: baseStyle.transform,
-          transition: baseStyle.transition,
         }}
       />
       <div
         className={`bg-black transition-all duration-150 ease-in-out pointer-events-none mix-blend-overlay ${overLight ? "opacity-100" : "opacity-0"}`}
         style={{
-          ...positionStyles,
-          height: glassSize.height,
-          width: glassSize.width,
+          ...layerGeometry,
           borderRadius: `${cornerRadius}px`,
-          transform: baseStyle.transform,
-          transition: baseStyle.transition,
         }}
       />
 
       <GlassContainer
         ref={glassRef}
-        className={className}
-        style={baseStyle}
+        className={staticLayout ? "" : className}
+        style={staticLayout ? { position: "relative" } : baseStyle}
         cornerRadius={cornerRadius}
         displacementScale={overLight ? displacementScale * 0.5 : displacementScale}
         blurAmount={blurAmount}
@@ -494,6 +514,7 @@ export default function LiquidGlass({
         overLight={overLight}
         onClick={onClick}
         mode={mode}
+        staticLayout={staticLayout}
       >
         {children}
       </GlassContainer>
@@ -501,12 +522,8 @@ export default function LiquidGlass({
       {/* Border layer 1 - extracted from glass container */}
       <span
         style={{
-          ...positionStyles,
-          height: glassSize.height,
-          width: glassSize.width,
+          ...layerGeometry,
           borderRadius: `${cornerRadius}px`,
-          transform: baseStyle.transform,
-          transition: baseStyle.transition,
           pointerEvents: "none",
           mixBlendMode: "screen",
           opacity: 0.2,
@@ -528,12 +545,8 @@ export default function LiquidGlass({
       {/* Border layer 2 - duplicate with mix-blend-overlay */}
       <span
         style={{
-          ...positionStyles,
-          height: glassSize.height,
-          width: glassSize.width,
+          ...layerGeometry,
           borderRadius: `${cornerRadius}px`,
-          transform: baseStyle.transform,
-          transition: baseStyle.transition,
           pointerEvents: "none",
           mixBlendMode: "overlay",
           padding: "1.5px",
@@ -556,11 +569,9 @@ export default function LiquidGlass({
         <>
           <div
             style={{
-              ...positionStyles,
-              height: glassSize.height,
-              width: glassSize.width + 1,
+              ...layerGeometry,
+              ...(staticLayout ? {} : { width: glassSize.width + 1 }),
               borderRadius: `${cornerRadius}px`,
-              transform: baseStyle.transform,
               pointerEvents: "none",
               transition: "all 0.2s ease-out",
               opacity: isHovered || isActive ? 0.5 : 0,
@@ -570,11 +581,9 @@ export default function LiquidGlass({
           />
           <div
             style={{
-              ...positionStyles,
-              height: glassSize.height,
-              width: glassSize.width + 1,
+              ...layerGeometry,
+              ...(staticLayout ? {} : { width: glassSize.width + 1 }),
               borderRadius: `${cornerRadius}px`,
-              transform: baseStyle.transform,
               pointerEvents: "none",
               transition: "all 0.2s ease-out",
               opacity: isActive ? 0.5 : 0,
@@ -584,13 +593,9 @@ export default function LiquidGlass({
           />
           <div
             style={{
-              ...baseStyle,
-              height: glassSize.height,
-              width: glassSize.width + 1,
+              ...layerGeometry,
+              ...(staticLayout ? {} : { width: glassSize.width + 1 }),
               borderRadius: `${cornerRadius}px`,
-              position: baseStyle.position,
-              top: baseStyle.top,
-              left: baseStyle.left,
               pointerEvents: "none",
               transition: "all 0.2s ease-out",
               opacity: isHovered ? 0.4 : isActive ? 0.8 : 0,
@@ -602,4 +607,16 @@ export default function LiquidGlass({
       )}
     </>
   )
+
+  if (staticLayout) {
+    // In-flow wrapper: the glass container sizes it from normal layout, and
+    // every absolutely-positioned effect layer pins to it (inset: 0).
+    return (
+      <div className={`relative ${className}`} style={style}>
+        {glassStack}
+      </div>
+    )
+  }
+
+  return glassStack
 }

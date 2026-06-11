@@ -17,6 +17,16 @@ vi.mock('react-dom', async () => {
 // Mock LiquidGlass component to bypass SVG filter layout processes
 vi.mock('./LiquidGlass', () => ({
   LiquidGlassPanel: ({ children, className }: any) => <div data-testid="liquid-glass" className={className}>{children}</div>,
+  DEFAULT_GLASS_SETTINGS: {
+    displacementScale: 100,
+    blurAmount: 10,
+    saturation: 140,
+    aberrationIntensity: 2,
+    cornerRadius: 20,
+    mode: 'standard',
+    overLight: false,
+    backgroundOpacity: 0.1,
+  },
 }));
 
 // Mock useApp hook from store
@@ -150,7 +160,7 @@ describe('SettingsModal', () => {
     // Navigate to Theme
     fireEvent.click(screen.getByRole('button', { name: 'Theme' }));
 
-    const checkbox = screen.getByLabelText('Enable high-fidelity background animations');
+    const checkbox = screen.getByLabelText('Animated background');
     fireEvent.click(checkbox);
 
     expect(mockDispatch).toHaveBeenCalledWith({ type: 'TOGGLE_BACKGROUND_ANIMATION' });

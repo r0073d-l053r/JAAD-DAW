@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { LiquidGlassPanel } from './LiquidGlass';
 import { useApp } from '../lib/store';
 import { isGitHubPagesBuild } from '../lib/syncUtils';
-import { X, Link, Check, Twitter, Mail, Share2, Lock, CloudUpload, AlertTriangle, Github } from 'lucide-react';
+import { X, Link, Check, Twitter, Mail, Share2, CloudUpload, AlertTriangle, Github } from 'lucide-react';
 
 // Discord brand icon SVG component
 function DiscordIcon({ size = 20, className = '' }: { size?: number; className?: string }) {
@@ -161,7 +161,7 @@ export function ShareModal({ isOpen, onClose, onSaveToCloud }: ShareModalProps) 
               /* ─── Saved State: Full Share UI ─── */
               <>
                 <p className="text-zinc-400 text-xs leading-relaxed text-center">
-                  Generate a secure deep-link to this project. Collaborators can load it instantly, listen, download assets, and contribute edits to the cloud.
+                  Generate a deep-link to this project. Anyone with the link can load it instantly, listen, download assets, and contribute edits to the cloud.
                 </p>
 
                 {/* Input URL Container */}
@@ -245,10 +245,13 @@ export function ShareModal({ isOpen, onClose, onSaveToCloud }: ShareModalProps) 
                     GitHub Preview Build · Cloud Features Disabled
                   </>
                 ) : isCloudSaved ? (
-                  <>
-                    <Lock size={10} className="text-green-500" />
-                    Cloud Sync Active & Encrypted
-                  </>
+                  <span
+                    className="flex items-center gap-1.5"
+                    title="Anyone who has this link can open the project. Data is encrypted in transit (HTTPS) and at rest by the cloud provider, but it is not end-to-end encrypted."
+                  >
+                    <Link size={10} className="text-green-500" />
+                    Cloud Sync Active · Anyone With the Link Can View
+                  </span>
                 ) : (
                   <>
                     <CloudUpload size={10} className="text-amber-500" />

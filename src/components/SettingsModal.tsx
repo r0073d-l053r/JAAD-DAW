@@ -2,20 +2,71 @@ import { useState, useRef, useEffect } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
-import { LiquidGlassPanel } from './LiquidGlass';
+import { LiquidGlassPanel, DEFAULT_GLASS_SETTINGS } from './LiquidGlass';
+import type { GlassEffectSettings } from './LiquidGlass';
 
-function GlassSelect({ 
-  label, 
-  options, 
-  value, 
+const ACCENT_COLORS: { name: string; value: string }[] = [
+  { name: 'Purple', value: '#af52de' }, // current primary
+  { name: 'Pink', value: '#ff2d55' },
+  { name: 'Blue', value: '#0a84ff' },
+  { name: 'Teal', value: '#64d2ff' },
+  { name: 'Green', value: '#30d158' },
+  { name: 'Orange', value: '#ff9f0a' },
+  { name: 'Yellow', value: '#ffd60a' },
+  { name: 'Red', value: '#ff453a' },
+];
+
+function GlassSlider({
+  label,
+  min,
+  max,
+  step,
+  value,
+  display,
   onChange,
-  className = ""
-}: { 
-  label: string, 
-  options: string[], 
-  value: string, 
+}: {
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  display?: string;
+  onChange: (val: number) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex justify-between items-center">
+        <span className="text-xs text-zinc-400">{label}</span>
+        <span className="text-xs font-mono text-zinc-500">{display ?? value}</span>
+      </div>
+      <input
+        type="range"
+        aria-label={label}
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="w-full h-1.5 accent-primary cursor-pointer"
+      />
+    </div>
+  );
+}
+
+function GlassSelect({
+  label,
+  options,
+  value,
+  onChange,
+  className = "",
+  ariaLabel
+}: {
+  label: string,
+  options: string[],
+  value: string,
   onChange: (val: string) => void,
-  className?: string
+  className?: string,
+  ariaLabel?: string
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -78,7 +129,23 @@ export function SettingsModal() {
   const [inputDevice, setInputDevice] = useState('Default System Microphone');
   const [bufferSize, setBufferSize] = useState('256 samples (Standard)');
   const [aiModel, setAiModel] = useState('Gemini 2.5 Pro (Default)');
-  const [appearance, setAppearance] = useState('Midnight (Default)');
+  // Tolerate store states without the theme slice (e.g. test mocks)
+  const theme = state.theme ?? { themeMode: 'liquid-glass' as const, accentColor: '#af52de', glassSettings: DEFAULT_GLASS_SETTINGS };
+  const glass = theme.glassSettings ?? DEFAULT_GLASS_SETTINGS;
+  const isPerformanceMode = theme.themeMode === 'performance';
+
+  const MODE_LABELS: Record<string, string> = {
+    standard: 'Standard',
+    polar: 'Polar',
+    prominent: 'Prominent',
+    shader: 'Shader (Experimental)',
+  };
+  const LABEL_TO_MODE: Record<string, 'standard' | 'polar' | 'prominent' | 'shader'> = {
+    'Standard': 'standard',
+    'Polar': 'polar',
+    'Prominent': 'prominent',
+    'Shader (Experimental)': 'shader',
+  };
 
   const [apiKeyVal, setApiKeyVal] = useState(() => {
     const saved = localStorage.getItem("user_gemini_api_key");
@@ -307,26 +374,124 @@ export function SettingsModal() {
                 <>
                   <h3 className="text-xl font-bold mb-8 text-white/95">Visual Aesthetics</h3>
                   <div className="space-y-8">
-                    <div className="space-y-3">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Appearance</label>
-                      <GlassSelect 
-                        label="Appearance" 
-                        options={['Midnight (Default)', 'OLED Black', 'Deep Sea', 'Cyberpunk']} 
-                        value={appearance}
-                        onChange={setAppearance}
-                      />
+                    {/* ── Liquid Glass ── */}
+                    <div className={`space-y-5 transition-opacity ${isPerformanceMode ? 'opacity-40 pointer-events-none' : ''}`}>
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Liquid Glass</label>
+                        <button
+                          onClick={() => dispatch({ type: 'UPDATE_GLASS_SETTINGS', payload: { ...DEFAULT_GLASS_SETTINGS } })}
+                          className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-primary px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/5 hover:border-primary/30 transition-all"
+                        >
+                          Reset to Defaults
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        <span className="text-xs text-zinc-400">Refraction Mode</span>
+                        <GlassSelect
+                          label="Refraction Mode"
+                          ariaLabel="Refraction Mode"
+                          options={['Standard', 'Polar', 'Prominent', 'Shader (Experimental)']}
+                          value={MODE_LABELS[glass.mode] ?? 'Standard'}
+                          onChange={(label) => dispatch({ type: 'UPDATE_GLASS_SETTINGS', payload: { mode: LABEL_TO_MODE[label] ?? 'standard' } })}
+                        />
+                      </div>
+
+                      <div className="space-y-4 bg-white/[0.03] p-4 rounded-xl border border-white/5">
+                        <GlassSlider
+                          label="Displacement Scale"
+                          min={0} max={200} step={1}
+                          value={glass.displacementScale}
+                          onChange={(v) => dispatch({ type: 'UPDATE_GLASS_SETTINGS', payload: { displacementScale: v } })}
+                        />
+                        <GlassSlider
+                          label="Blur Amount"
+                          min={0} max={60} step={1}
+                          value={glass.blurAmount}
+                          display={`${glass.blurAmount}px`}
+                          onChange={(v) => dispatch({ type: 'UPDATE_GLASS_SETTINGS', payload: { blurAmount: v } })}
+                        />
+                        <GlassSlider
+                          label="Saturation"
+                          min={100} max={300} step={5}
+                          value={glass.saturation}
+                          display={`${glass.saturation}%`}
+                          onChange={(v) => dispatch({ type: 'UPDATE_GLASS_SETTINGS', payload: { saturation: v } })}
+                        />
+                        <GlassSlider
+                          label="Chromatic Aberration"
+                          min={0} max={20} step={1}
+                          value={glass.aberrationIntensity}
+                          onChange={(v) => dispatch({ type: 'UPDATE_GLASS_SETTINGS', payload: { aberrationIntensity: v } })}
+                        />
+                        <GlassSlider
+                          label="Corner Radius"
+                          min={0} max={48} step={1}
+                          value={glass.cornerRadius}
+                          display={`${glass.cornerRadius}px`}
+                          onChange={(v) => dispatch({ type: 'UPDATE_GLASS_SETTINGS', payload: { cornerRadius: v } })}
+                        />
+                        <GlassSlider
+                          label="Background Opacity"
+                          min={0} max={0.5} step={0.01}
+                          value={glass.backgroundOpacity}
+                          display={glass.backgroundOpacity.toFixed(2)}
+                          onChange={(v) => dispatch({ type: 'UPDATE_GLASS_SETTINGS', payload: { backgroundOpacity: v } })}
+                        />
+                      </div>
+                      <p className="text-[10px] text-zinc-600 leading-relaxed">
+                        Refraction mode, displacement, aberration and saturation apply to every panel. Blur, opacity and corner radius scale each panel relative to its design. Changes apply live — this window is liquid glass.
+                      </p>
                     </div>
+
+                    {/* ── Performance ── */}
                     <div className="space-y-4 pt-6 border-t border-white/5">
                       <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Performance</label>
+
                       <div className="flex items-center space-x-3 text-sm text-zinc-300 bg-white/[0.03] p-4 rounded-xl border border-white/5">
-                        <input 
-                          type="checkbox" 
-                          id="bg-animation" 
-                          checked={!state.disableBackgroundAnimation} 
-                          onChange={() => dispatch({ type: 'TOGGLE_BACKGROUND_ANIMATION' })}
-                          className="w-4 h-4 rounded bg-white/10 border-white/20 text-primary focus:ring-primary" 
+                        <input
+                          type="checkbox"
+                          id="performance-mode"
+                          checked={isPerformanceMode}
+                          onChange={() => dispatch({ type: 'SET_THEME_MODE', payload: isPerformanceMode ? 'liquid-glass' : 'performance' })}
+                          className="w-4 h-4 rounded bg-white/10 border-white/20 text-primary focus:ring-primary"
                         />
-                        <label htmlFor="bg-animation" className="cursor-pointer">Enable high-fidelity background animations</label>
+                        <label htmlFor="performance-mode" className="cursor-pointer">
+                          Performance Mode — replace liquid glass with a dark matte finish
+                        </label>
+                      </div>
+
+                      <div className="space-y-2 bg-white/[0.03] p-4 rounded-xl border border-white/5">
+                        <span className="text-xs text-zinc-400">Accent Color</span>
+                        <div className="flex flex-wrap gap-3 pt-1" role="radiogroup" aria-label="Accent color">
+                          {ACCENT_COLORS.map((c) => (
+                            <button
+                              key={c.value}
+                              role="radio"
+                              aria-checked={theme.accentColor === c.value}
+                              aria-label={`Accent color ${c.name}`}
+                              title={c.name}
+                              onClick={() => dispatch({ type: 'SET_ACCENT_COLOR', payload: c.value })}
+                              className={`w-8 h-8 rounded-full transition-all border-2 ${
+                                theme.accentColor === c.value
+                                  ? 'border-white scale-110 shadow-[0_0_12px_rgba(255,255,255,0.4)]'
+                                  : 'border-transparent hover:scale-105 hover:border-white/40'
+                              }`}
+                              style={{ backgroundColor: c.value }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-3 text-sm text-zinc-300 bg-white/[0.03] p-4 rounded-xl border border-white/5">
+                        <input
+                          type="checkbox"
+                          id="bg-animation"
+                          checked={!state.disableBackgroundAnimation}
+                          onChange={() => dispatch({ type: 'TOGGLE_BACKGROUND_ANIMATION' })}
+                          className="w-4 h-4 rounded bg-white/10 border-white/20 text-primary focus:ring-primary"
+                        />
+                        <label htmlFor="bg-animation" className="cursor-pointer">Animated background</label>
                       </div>
                     </div>
                   </div>

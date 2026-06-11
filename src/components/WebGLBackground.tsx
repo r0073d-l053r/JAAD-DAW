@@ -3,11 +3,16 @@ import { audioEngine } from '../lib/audioEngine';
 
 interface WebGLBackgroundProps {
   isDimmed?: boolean;
+  /**
+   * When true (performance theme or background animations disabled), the
+   * animated WebGL shader never runs — a static dark gradient renders instead.
+   */
+  staticMode?: boolean;
 }
 
 const transferredCanvases = new WeakSet<HTMLCanvasElement>();
 
-export function WebGLBackground({ isDimmed = false }: WebGLBackgroundProps) {
+export function WebGLBackground({ isDimmed = false, staticMode = false }: WebGLBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const workerRef = useRef<Worker | null>(null);
 
@@ -18,6 +23,10 @@ export function WebGLBackground({ isDimmed = false }: WebGLBackgroundProps) {
   }, [isDimmed]);
 
   useEffect(() => {
+    // Static mode: no canvas is mounted and no GL work happens. The hook
+    // still runs unconditionally so hook order never changes.
+    if (staticMode) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -163,14 +172,25 @@ export function WebGLBackground({ isDimmed = false }: WebGLBackgroundProps) {
       gl.deleteShader(vertexShader);
       gl.deleteShader(fragmentShader);
     };
-  }, []);
+  }, [staticMode]);
 
   return (
     <div className="fixed inset-0 z-[-1] bg-black overflow-hidden pointer-events-none">
-      <canvas
-        ref={canvasRef}
-        className="w-full h-full pointer-events-none transition-opacity duration-1000"
-      />
+      {staticMode ? (
+        <div
+          data-testid="static-background"
+          className="w-full h-full pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(180deg, #0b0a12 0%, #060509 55%, #000000 100%)',
+          }}
+        />
+      ) : (
+        <canvas
+          ref={canvasRef}
+          className="w-full h-full pointer-events-none transition-opacity duration-1000"
+        />
+      )}
       {/* Restore original overlays for depth and legibility */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/60 pointer-events-none" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)] pointer-events-none" />

@@ -7,6 +7,57 @@ import {
   normalizeAudioBuffer,
   silenceAudioBufferRange,
 } from "./audioUtils";
+import {
+  GlassEffectSettings,
+  GlassThemeContext,
+  DEFAULT_GLASS_SETTINGS,
+} from "../components/LiquidGlass";
+
+export type ThemeMode = "liquid-glass" | "performance";
+
+export interface ThemeState {
+  themeMode: ThemeMode;
+  accentColor: string;
+  glassSettings: GlassEffectSettings;
+}
+
+export const DEFAULT_ACCENT_COLOR = "#af52de"; // matches --color-primary in index.css
+
+const THEME_STORAGE_KEY = "jaad_theme_v1";
+
+function defaultThemeState(): ThemeState {
+  return {
+    themeMode: "liquid-glass",
+    accentColor: DEFAULT_ACCENT_COLOR,
+    glassSettings: { ...DEFAULT_GLASS_SETTINGS },
+  };
+}
+
+/** Load persisted theme settings; tolerate missing/corrupt entries. */
+function loadStoredTheme(): ThemeState {
+  const fallback = defaultThemeState();
+  try {
+    const raw = localStorage.getItem(THEME_STORAGE_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return fallback;
+    return {
+      themeMode: parsed.themeMode === "performance" ? "performance" : "liquid-glass",
+      accentColor:
+        typeof parsed.accentColor === "string" && parsed.accentColor
+          ? parsed.accentColor
+          : fallback.accentColor,
+      glassSettings: {
+        ...DEFAULT_GLASS_SETTINGS,
+        ...(parsed.glassSettings && typeof parsed.glassSettings === "object"
+          ? parsed.glassSettings
+          : {}),
+      },
+    };
+  } catch {
+    return fallback;
+  }
+}
 
 export interface Lane {
   id: string;
@@ -106,6 +157,7 @@ interface AppState {
   stemSeparatorClipId: string | null;
   pianoRollClipId: string | null;
   showLiveAnalyzers: boolean;
+  theme: ThemeState;
   activeContextMenu: {
     type: "clip" | "selection";
     clipId?: string;
@@ -272,7 +324,10 @@ export type Action =
         duration: number;
       };
     }
-  | { type: "TOGGLE_DEHUMMER"; payload: { trackId: string } };
+  | { type: "TOGGLE_DEHUMMER"; payload: { trackId: string } }
+  | { type: "SET_THEME_MODE"; payload: ThemeMode }
+  | { type: "SET_ACCENT_COLOR"; payload: string }
+  | { type: "UPDATE_GLASS_SETTINGS"; payload: Partial<GlassEffectSettings> };
 
 export interface AppStateWithHistory extends AppState {
   past: Track[][];
@@ -331,6 +386,7 @@ export const initialState: AppStateWithHistory = {
   stemSeparatorClipId: null,
   pianoRollClipId: null,
   showLiveAnalyzers: false,
+  theme: loadStoredTheme(),
   activeContextMenu: null,
 };
 
@@ -1594,7 +1650,26 @@ export function appReducer(
       };
     }
     case "LOAD_PROJECT":
-      return action.payload;
+      // Theme is device-local (persisted via localStorage), not part of a
+      // project payload — keep the current theme when swapping projects.
+      return { ...action.payload, theme: action.payload.theme ?? state.theme };
+    // Theme actions deliberately do NOT snapshot undo history (saveHistory):
+    // they are pure UI preferences, not project edits.
+    case "SET_THEME_MODE":
+      return { ...state, theme: { ...state.theme, themeMode: action.payload } };
+    case "SET_ACCENT_COLOR":
+      return {
+        ...state,
+        theme: { ...state.theme, accentColor: action.payload },
+      };
+    case "UPDATE_GLASS_SETTINGS":
+      return {
+        ...state,
+        theme: {
+          ...state.theme,
+          glassSettings: { ...state.theme.glassSettings, ...action.payload },
+        },
+      };
     case "SELECT_ALL_CLIPS": {
       const allClips: string[] = [];
       for (const t of state.tracks) {
@@ -2288,6 +2363,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     stateRef.current = state;
   }, [state]);
 
+  // Persist theme settings. Theme actions replace state.theme by reference,
+  // so this effect only fires on theme changes — unrelated dispatches never
+  // touch localStorage.
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(state.theme));
+    } catch {
+      // Quota/privacy-mode failures are non-fatal for a UI preference.
+    }
+  }, [state.theme]);
+
+  // Apply the accent color as the --color-primary CSS variable on :root
+  // immediately (covers both startup restore and SET_ACCENT_COLOR).
+  React.useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--color-primary",
+      state.theme.accentColor,
+    );
+  }, [state.theme.accentColor]);
+
+  // Store-driven defaults for LiquidGlassPanel. Memoized on the theme slice
+  // so panels don't re-render from unrelated state changes.
+  const glassThemeValue = React.useMemo(
+    () => ({
+      glassSettings: state.theme.glassSettings,
+      performanceMode: state.theme.themeMode === "performance",
+    }),
+    [state.theme],
+  );
+
   // Update online/offline status
   React.useEffect(() => {
     const handleOnline = () =>
@@ -2385,7 +2490,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>
-      {children}
+      <GlassThemeContext.Provider value={glassThemeValue}>
+        {children}
+      </GlassThemeContext.Provider>
     </AppContext.Provider>
   );
 }
