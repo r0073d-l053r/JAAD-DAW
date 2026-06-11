@@ -48,6 +48,7 @@ Just Another AI DAW (JAAD) is a modern, web-browser-based Digital Audio Workstat
 - **Piano Roll MIDI Editor**: Full note editor for AI-generated and imported MIDI clips — draw, move, resize, and delete notes on a snapping beat grid with clickable preview keys, plus built-in synth playback on the timeline.
 - **Clip Fade Handles**: Drag the top corners of any clip for instant fade-in/fade-out, applied identically in live playback, track freeze, and all exports.
 - **Convolution Reverb**: True ConvolverNode reverb with synthesized room/hall/plate impulse responses, available as a mixer FX slot.
+- **Liquid Glass Theme Engine**: Live-tunable glass rendering (Standard/Polar/Prominent/Shader refraction modes, displacement, blur, saturation, chromatic aberration sliders with an in-settings live preview), plus a solid matte **Performance Mode** with accent colors — auto-selected on first run for reduced-motion users and low-core machines.
 - **Demo Protection & Onboarding**: Shielded read-only templates on public hosted builds with automatic copy-on-edit logic, complemented by a premium Glassmorphism onboarding Welcome Modal.
 - **Forced Cloud Sync Overlay**: Blocking Liquid Glass progress overlay with exponential backoff upload retry logic ensures your assets are safely backed up.
 - **Exporting Options**: Export your final project as a high-fidelity `.WAV` mixdown, individual multitrack stems in a `.ZIP` file, or a portable `.JAAD` bundle.
@@ -116,6 +117,13 @@ You need Node.js installed on your machine.
    ```
 
 6. Open your browser and navigate to `http://localhost:3000`.
+
+### Securing your Firebase backend
+
+If you connect your own Firebase project, follow
+[docs/firebase-deploy-checklist.md](./docs/firebase-deploy-checklist.md) —
+the shipped security rules and anonymous auth are inactive until the
+Anonymous provider is enabled and the rules are deployed.
 
 ### Running with Docker
 

@@ -23,10 +23,10 @@ This directory serves as the source of truth for the architectural evolution of 
 | ID | Title | Status | Primary Component | Last Updated |
 | :--- | :--- | :---: | :--- | :--- |
 | **0001** | [Adopt Architecture Decision Records](0001-record-architecture-decisions.md) | 🟢 Accepted | Architecture / Docs | 2026-05-20 |
-| **0002** | [Web Audio API Real-time FX Pipeline](0002-web-audio-api-fx-pipeline.md) | 🟡 Proposed | DSP / Audio Engine | 2026-05-20 |
-| **0003** | [Generative AI Music Composition Pipelines](0003-generative-ai-composition.md) | 🟡 Proposed | AI Copilot / Gemini API | 2026-05-20 |
+| **0002** | [Web Audio API Real-time FX Pipeline](0002-web-audio-api-fx-pipeline.md) | 🟢 Accepted | DSP / Audio Engine | 2026-06-11 |
+| **0003** | [Generative AI Music Composition Pipelines](0003-generative-ai-composition.md) | 🟢 Accepted | AI Copilot / Gemini API | 2026-06-11 |
 | **0004** | [Real-time Multiplayer Collaboration Engine](0004-real-time-collaboration.md) | 🟡 Proposed | Sync / Networking | 2026-05-20 |
-| **0005** | [Professional DSP Tools & Outer Platform Bridges](0005-professional-tools-and-dsp.md) | 🟡 Proposed | DSP / Visuals / Cloud | 2026-05-20 |
+| **0005** | [Professional DSP Tools & Outer Platform Bridges](0005-professional-tools-and-dsp.md) | 🟢 Accepted | DSP / Visuals / Cloud | 2026-06-11 |
 | **0006** | [Cloud Headless Rendering & Remote App Ecosystem](0006-cloud-rendering-and-ecosystem.md) | 🟡 Proposed | Render Engine / Mobile | 2026-05-20 |
 
 ---
