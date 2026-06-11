@@ -227,7 +227,10 @@ export function LiquidGlassPanel({
           exact graph) visibly refracts. Channels x=R / y=B with NEGATIVE
           scale; aberration multiplies per-channel scale (rainbow edge fringe
           that grows with the slider); the map keeps its aspect via slice; a
-          clean centre copy is composited back so only the edge band warps. */}
+          clean centre copy is composited back so only the edge band warps.
+          At displacement 0 the SVG graph and warp layer are skipped entirely —
+          the slider's zero position is a true (and GPU-free) off switch. */}
+      {displacementScale !== 0 && (
       <svg style={{ position: 'absolute', width: size.width, height: size.height, pointerEvents: 'none' }} aria-hidden="true">
         <defs>
           <filter id={filterId} x="-35%" y="-35%" width="170%" height="170%" colorInterpolationFilters="sRGB">
@@ -293,6 +296,7 @@ export function LiquidGlassPanel({
           </filter>
         </defs>
       </svg>
+      )}
 
       {/* ── Glass clip box (PANEL CONTRACT clause 1) ──
           Fills the root via inset:0; carries the frost, tint and shadow. The
@@ -324,6 +328,7 @@ export function LiquidGlassPanel({
             same frost mid-panel, so legibility is unchanged. Where a Chromium
             build can't combine the two, this layer contributes nothing and
             the clip box's frost below keeps the panel legible. */}
+        {displacementScale !== 0 && (
         <div
           style={{
             position: 'absolute',
@@ -335,6 +340,7 @@ export function LiquidGlassPanel({
             zIndex: 0,
           }}
         />
+        )}
 
         {/* Diagonal sheen */}
         <div

@@ -16,8 +16,14 @@ export function WebGLBackground({ isDimmed = false, staticMode = false }: WebGLB
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const workerRef = useRef<Worker | null>(null);
 
+  // OS-level accessibility setting always wins over app settings.
+  const prefersReducedMotion =
+    typeof window !== 'undefined' &&
+    (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false);
+  const effectiveStatic = staticMode || prefersReducedMotion;
+
   const isDimmedRef = useRef(isDimmed);
-  
+
   useEffect(() => {
     isDimmedRef.current = isDimmed;
   }, [isDimmed]);
@@ -25,7 +31,7 @@ export function WebGLBackground({ isDimmed = false, staticMode = false }: WebGLB
   useEffect(() => {
     // Static mode: no canvas is mounted and no GL work happens. The hook
     // still runs unconditionally so hook order never changes.
-    if (staticMode) return;
+    if (effectiveStatic) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -172,11 +178,11 @@ export function WebGLBackground({ isDimmed = false, staticMode = false }: WebGLB
       gl.deleteShader(vertexShader);
       gl.deleteShader(fragmentShader);
     };
-  }, [staticMode]);
+  }, [effectiveStatic]);
 
   return (
     <div className="fixed inset-0 z-[-1] bg-black overflow-hidden pointer-events-none">
-      {staticMode ? (
+      {effectiveStatic ? (
         <div
           data-testid="static-background"
           className="w-full h-full pointer-events-none"

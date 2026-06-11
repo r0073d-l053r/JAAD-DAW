@@ -61,4 +61,73 @@ describe('LiquidGlassPanel', () => {
     expect(mockClick).toHaveBeenCalledTimes(1);
     expect(mockDragOver).toHaveBeenCalledTimes(1);
   });
+
+  // ── PANEL CONTRACT (guards regressions that shipped this project) ──
+  // Each assertion below corresponds to a bug users actually hit. If one of
+  // these fails after a refactor, the refactor reintroduced that bug.
+
+  it('CONTRACT: glass clip box fills the root via inset 0 (never sized by content)', () => {
+    // Regression guard: sidebar panels shrank to content height when the
+    // glass was sized by its children instead of the styled root.
+    const { container } = render(
+      <LiquidGlassPanel className="h-full">
+        <div style={{ height: 10 }}>tiny content</div>
+      </LiquidGlassPanel>
+    );
+    const root = container.firstChild as HTMLElement;
+    const clipBox = Array.from(root.children).find(
+      (el) => (el as HTMLElement).style.overflow === 'hidden'
+    ) as HTMLElement;
+    expect(clipBox).toBeTruthy();
+    expect(clipBox.style.position).toBe('absolute');
+    expect(clipBox.style.inset).toBe('0px');
+  });
+
+  it('CONTRACT: content renders OUTSIDE the overflow:hidden clip box (popups must overflow)', () => {
+    // Regression guard: dropdown menus vanished when content was clipped
+    // inside the glass body.
+    const { container } = render(
+      <LiquidGlassPanel>
+        <div data-testid="content">menu items</div>
+      </LiquidGlassPanel>
+    );
+    const content = screen.getByTestId('content');
+    let ancestor = content.parentElement;
+    while (ancestor && ancestor !== container) {
+      expect((ancestor as HTMLElement).style.overflow).not.toBe('hidden');
+      ancestor = ancestor.parentElement;
+    }
+  });
+
+  it('CONTRACT: upstream filter graph — negative scale, R/B channels, slice aspect, clean centre', () => {
+    // Regression guard: "improving" these from embedded-preview probes broke
+    // refraction in real Chrome. They must match liquid-glass-package/src.
+    const { container } = render(
+      <LiquidGlassPanel displacementScale={100} aberrationIntensity={2}>
+        <div>glass</div>
+      </LiquidGlassPanel>
+    );
+    const dm = container.querySelector('filter feDisplacementMap');
+    expect(dm).toBeTruthy();
+    expect(Number(dm!.getAttribute('scale'))).toBeLessThan(0);
+    expect(dm!.getAttribute('xChannelSelector')).toBe('R');
+    expect(dm!.getAttribute('yChannelSelector')).toBe('B');
+    const img = container.querySelector('filter feImage');
+    expect(img!.getAttribute('preserveAspectRatio')).toBe('xMidYMid slice');
+    // clean-centre composite present (keeps mid-panel frost intact)
+    expect(container.querySelector('filter feOffset')).toBeTruthy();
+  });
+
+  it('CONTRACT: displacement 0 removes the SVG graph and warp layer entirely', () => {
+    const { container } = render(
+      <LiquidGlassPanel displacementScale={0}>
+        <div>flat glass</div>
+      </LiquidGlassPanel>
+    );
+    expect(container.querySelector('svg filter')).toBeNull();
+    const withFilterUrl = Array.from(container.querySelectorAll('div')).filter((el) =>
+      ((el as HTMLElement).style.filter || '').includes('url(')
+    );
+    expect(withFilterUrl.length).toBe(0);
+  });
 });

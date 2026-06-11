@@ -33,12 +33,32 @@ function defaultThemeState(): ThemeState {
   };
 }
 
+/**
+ * First run only (nothing persisted yet): default to the matte Performance
+ * theme when the user prefers reduced motion or the machine looks weak —
+ * heavy backdrop-filters and the animated background are the wrong default
+ * there. The user can switch to Liquid Glass in Settings at any time.
+ */
+function firstRunThemeState(): ThemeState {
+  const base = defaultThemeState();
+  try {
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+    const weakHardware = (navigator.hardwareConcurrency ?? 8) <= 4;
+    if (reducedMotion || weakHardware) {
+      return { ...base, themeMode: "performance" };
+    }
+  } catch {
+    // matchMedia/navigator unavailable (tests, SSR) — keep the default.
+  }
+  return base;
+}
+
 /** Load persisted theme settings; tolerate missing/corrupt entries. */
 function loadStoredTheme(): ThemeState {
   const fallback = defaultThemeState();
   try {
     const raw = localStorage.getItem(THEME_STORAGE_KEY);
-    if (!raw) return fallback;
+    if (!raw) return firstRunThemeState();
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return fallback;
     return {

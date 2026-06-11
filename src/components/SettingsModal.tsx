@@ -173,11 +173,10 @@ export function SettingsModal() {
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center">
+      {/* No pinned visual props: the Settings window itself follows the
+          Theme sliders 1:1, so it doubles as a live preview while dragging. */}
       <LiquidGlassPanel
-        cornerRadius={20}
         blurAmount={20}
-        saturation={180}
-        backgroundOpacity={0.10}
         className="w-[600px] h-[450px]"
         style={{ animation: 'liquidGlassIn 0.3s ease-out' }}
       >
@@ -384,6 +383,29 @@ export function SettingsModal() {
                         >
                           Reset to Defaults
                         </button>
+                      </div>
+
+                      {/* Live preview over a high-contrast pattern: slider and
+                          mode changes are obvious here even when the app sits
+                          on a dark, flat background. The preview panel pins NO
+                          visual props, so it tracks the global settings 1:1. */}
+                      <div className="relative h-36 rounded-2xl overflow-hidden border border-white/10">
+                        <div
+                          aria-hidden="true"
+                          className="absolute inset-0"
+                          style={{ background: 'conic-gradient(from 45deg at 50% 50%, #ff2d55, #ff9f0a, #ffd60a, #30d158, #0a84ff, #af52de, #ff2d55)' }}
+                        />
+                        <div
+                          aria-hidden="true"
+                          className="absolute inset-0"
+                          style={{ background: 'repeating-linear-gradient(115deg, rgba(0,0,0,0.5) 0 12px, transparent 12px 30px)' }}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center p-5">
+                          <LiquidGlassPanel className="w-full max-w-[280px]" contentClassName="px-5 py-4 text-center">
+                            <div className="text-sm font-black text-white tracking-tight">Liquid Glass</div>
+                            <div className="text-[10px] text-zinc-200">Live preview — drag the sliders</div>
+                          </LiquidGlassPanel>
+                        </div>
                       </div>
 
                       <div className="space-y-2">
