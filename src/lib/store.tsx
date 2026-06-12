@@ -29,7 +29,7 @@ export interface ThemeState {
 
 export const DEFAULT_ACCENT_COLOR = "#af52de"; // matches --color-primary in index.css
 
-const THEME_STORAGE_KEY = "jaad_theme_v1";
+const THEME_STORAGE_KEY = "jaad_theme_v2";
 
 function defaultThemeState(): ThemeState {
   return {
