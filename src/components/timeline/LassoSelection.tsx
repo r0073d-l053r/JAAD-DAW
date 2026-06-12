@@ -32,9 +32,10 @@ export function useLassoSelection({ timelineRef, clickTimeoutRef }: UseLassoSele
     // Only handle left click
     if (e.button !== 0) return;
 
-    // Don't start lasso if clicking on ruler, playhead, or other control elements
+    // Don't start lasso if clicking on ruler, playhead, automation lanes, or other control elements
     if ((e.target as HTMLElement).closest('.ruler-zone') ||
         (e.target as HTMLElement).closest('.playhead-handle') ||
+        (e.target as HTMLElement).closest('.automation-lane') ||
         (e.target as HTMLElement).closest('.selection-action')) return;
 
     // Check for double click manually

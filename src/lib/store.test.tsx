@@ -367,3 +367,149 @@ describe('Store reducer clip edge cases', () => {
     expect(next.timeSelection).toBeNull();
   });
 });
+
+describe('Track automation reducer actions', () => {
+  const baseState = (): AppStateWithHistory => ({
+    ...initialState,
+    tracks: [makeTrack('t1'), makeTrack('t2')],
+    past: [],
+    future: [],
+  });
+
+  it('ADD_AUTOMATION_POINT creates the curve, keeps it sorted, clamps values, and is undoable', () => {
+    let state = baseState();
+
+    state = appReducer(state, {
+      type: 'ADD_AUTOMATION_POINT',
+      payload: { trackId: 't1', param: 'volume', time: 4, value: 0.5 },
+    });
+    state = appReducer(state, {
+      type: 'ADD_AUTOMATION_POINT',
+      payload: { trackId: 't1', param: 'volume', time: 1, value: 1.7 }, // clamped to 1
+    });
+    state = appReducer(state, {
+      type: 'ADD_AUTOMATION_POINT',
+      payload: { trackId: 't1', param: 'pan', time: -2, value: -3 }, // time floored to 0, value clamped to -1
+    });
+
+    const t1 = state.tracks[0];
+    expect(t1.automation?.volume).toEqual([
+      { time: 1, value: 1 },
+      { time: 4, value: 0.5 },
+    ]);
+    expect(t1.automation?.pan).toEqual([{ time: 0, value: -1 }]);
+    // Other tracks untouched
+    expect(state.tracks[1].automation).toBeUndefined();
+    // Each add is one undoable history entry
+    expect(state.past).toHaveLength(3);
+
+    const undone = appReducer(state, { type: 'UNDO' });
+    expect(undone.tracks[0].automation?.pan).toEqual([]);
+    expect(undone.tracks[0].automation?.volume).toHaveLength(2);
+  });
+
+  it('ADD_AUTOMATION_POINT on an unknown track is a no-op that does not pollute history', () => {
+    const state = baseState();
+    const next = appReducer(state, {
+      type: 'ADD_AUTOMATION_POINT',
+      payload: { trackId: 'nope', param: 'volume', time: 1, value: 0.5 },
+    });
+    expect(next).toBe(state);
+  });
+
+  it('MOVE_AUTOMATION_POINT updates a breakpoint, re-sorts on time changes, and is undoable', () => {
+    let state = baseState();
+    state = appReducer(state, {
+      type: 'ADD_AUTOMATION_POINT',
+      payload: { trackId: 't1', param: 'volume', time: 1, value: 0.2 },
+    });
+    state = appReducer(state, {
+      type: 'ADD_AUTOMATION_POINT',
+      payload: { trackId: 't1', param: 'volume', time: 5, value: 0.8 },
+    });
+
+    // Drag the first point (index 0) past the second one, with an out-of-range value
+    const moved = appReducer(state, {
+      type: 'MOVE_AUTOMATION_POINT',
+      payload: { trackId: 't1', param: 'volume', index: 0, time: 9, value: 2 },
+    });
+
+    expect(moved.tracks[0].automation?.volume).toEqual([
+      { time: 5, value: 0.8 },
+      { time: 9, value: 1 }, // value clamped, re-sorted to the end
+    ]);
+    expect(moved.past.length).toBe(state.past.length + 1);
+
+    const undone = appReducer(moved, { type: 'UNDO' });
+    expect(undone.tracks[0].automation?.volume).toEqual([
+      { time: 1, value: 0.2 },
+      { time: 5, value: 0.8 },
+    ]);
+  });
+
+  it('MOVE_AUTOMATION_POINT with an out-of-bounds index is a no-op', () => {
+    let state = baseState();
+    state = appReducer(state, {
+      type: 'ADD_AUTOMATION_POINT',
+      payload: { trackId: 't1', param: 'pan', time: 2, value: 0.5 },
+    });
+
+    const oob = appReducer(state, {
+      type: 'MOVE_AUTOMATION_POINT',
+      payload: { trackId: 't1', param: 'pan', index: 3, time: 4, value: 0 },
+    });
+    expect(oob).toBe(state);
+
+    const negative = appReducer(state, {
+      type: 'MOVE_AUTOMATION_POINT',
+      payload: { trackId: 't1', param: 'pan', index: -1, time: 4, value: 0 },
+    });
+    expect(negative).toBe(state);
+  });
+
+  it('DELETE_AUTOMATION_POINT removes only the targeted breakpoint and is undoable', () => {
+    let state = baseState();
+    state = appReducer(state, {
+      type: 'ADD_AUTOMATION_POINT',
+      payload: { trackId: 't1', param: 'pan', time: 1, value: -0.5 },
+    });
+    state = appReducer(state, {
+      type: 'ADD_AUTOMATION_POINT',
+      payload: { trackId: 't1', param: 'pan', time: 3, value: 0.5 },
+    });
+
+    const next = appReducer(state, {
+      type: 'DELETE_AUTOMATION_POINT',
+      payload: { trackId: 't1', param: 'pan', index: 0 },
+    });
+    expect(next.tracks[0].automation?.pan).toEqual([{ time: 3, value: 0.5 }]);
+
+    const undone = appReducer(next, { type: 'UNDO' });
+    expect(undone.tracks[0].automation?.pan).toHaveLength(2);
+
+    // Out-of-bounds delete is a no-op
+    const oob = appReducer(next, {
+      type: 'DELETE_AUTOMATION_POINT',
+      payload: { trackId: 't1', param: 'pan', index: 5 },
+    });
+    expect(oob).toBe(next);
+  });
+
+  it('TOGGLE_AUTOMATION_LANES flips the UI flag without saving undo history', () => {
+    const state = baseState();
+    const shown = appReducer(state, {
+      type: 'TOGGLE_AUTOMATION_LANES',
+      payload: 't1',
+    });
+    expect(shown.tracks[0].showAutomation).toBe(true);
+    expect(shown.tracks[1].showAutomation).toBeUndefined();
+    expect(shown.past).toHaveLength(0); // UI-only toggle must not pollute undo
+
+    const hidden = appReducer(shown, {
+      type: 'TOGGLE_AUTOMATION_LANES',
+      payload: 't1',
+    });
+    expect(hidden.tracks[0].showAutomation).toBe(false);
+    expect(hidden.past).toHaveLength(0);
+  });
+});

@@ -343,11 +343,41 @@ export function TrackList() {
           
           {/* Technical Metadata Labels */}
           <div className="flex space-x-1 mt-3 pl-2">
-            <button className="text-[8px] bg-zinc-950 border border-zinc-800 text-zinc-600 font-mono font-bold tracking-tighter hover:text-primary px-1.5 py-0.5 rounded transition">AUTO</button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                dispatch({ type: 'TOGGLE_AUTOMATION_LANES', payload: track.id });
+              }}
+              title={track.showAutomation ? 'Hide Automation Lanes' : 'Show Automation Lanes (Volume + Pan)'}
+              className={`text-[8px] font-mono font-bold tracking-tighter px-1.5 py-0.5 rounded transition border ${track.showAutomation ? 'bg-primary/10 border-primary/20 text-primary' : 'bg-zinc-950 border-zinc-800 text-zinc-600 hover:text-primary'}`}
+            >AUTO</button>
             <button className="text-[8px] bg-zinc-950 border border-zinc-800 text-zinc-600 font-mono font-bold tracking-tighter hover:text-primary px-1.5 py-0.5 rounded transition">VST3</button>
             <button className="text-[8px] bg-primary/10 border border-primary/20 text-primary/70 font-mono font-bold tracking-tighter hover:text-primary px-1.5 py-0.5 rounded transition">SYNC</button>
           </div>
         </div>
+
+        {/* Automation Lane Headers — heights mirror the Timeline automation lanes */}
+        <AnimatePresence>
+          {track.showAutomation && (['volume', 'pan'] as const).map((param) => (
+            <motion.div
+              key={`${track.id}-auto-${param}`}
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 40, opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="flex items-center border-b border-white/5 bg-[#0e0e11] relative overflow-hidden shrink-0"
+            >
+              <div className="w-1 self-stretch opacity-30" style={{ backgroundColor: track.color }} />
+              <div className="flex-1 flex items-center justify-between px-3 h-full">
+                <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-500 uppercase">
+                  {param === 'volume' ? 'Vol Automation' : 'Pan Automation'}
+                </span>
+                <span className="text-[9px] font-mono text-zinc-600">
+                  {(track.automation?.[param] ?? []).length} pts
+                </span>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
 
         {/* Alternate Lanes */}
         <AnimatePresence>

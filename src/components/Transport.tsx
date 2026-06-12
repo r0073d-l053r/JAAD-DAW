@@ -174,6 +174,15 @@ export function Transport() {
           }
         });
       });
+
+      // Re-schedule track automation ramps from the new transport position.
+      // (Curve edits during playback are re-scheduled by the App.tsx
+      // updateTrackSettings effect, which runs on every tracks change.)
+      const anySolo = state.tracks.some(t => t.solo);
+      state.tracks.forEach(track => {
+        const isActuallyMuted = track.muted || (anySolo && !track.solo);
+        audioEngine.updateTrackSettings(track.id, track.volume, track.pan, isActuallyMuted, track.automation);
+      });
     } else if (!state.isPlaying && prevIsPlaying.current) {
       // STOP PLAYBACK
       audioEngine.stopAll();

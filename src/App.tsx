@@ -251,7 +251,7 @@ function AppContent() {
         audioEngine.setupTrackRouting(track.id, track.volume, track.pan);
       }
       
-      audioEngine.updateTrackSettings(track.id, track.volume, track.pan, isActuallyMuted);
+      audioEngine.updateTrackSettings(track.id, track.volume, track.pan, isActuallyMuted, track.automation);
     });
   }, [state.tracks]);
 

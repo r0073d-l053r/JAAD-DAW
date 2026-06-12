@@ -374,6 +374,17 @@ export const updateProjectCloud = async (projectId: string, projectName: string,
     isFrozen: track.isFrozen || false,
     frozenBufferId: track.frozenBufferId || null,
     showLanes: track.showLanes || false,
+    showAutomation: track.showAutomation || false,
+    automation: {
+      volume: (track.automation?.volume || []).map((p) => ({
+        time: p.time,
+        value: p.value,
+      })),
+      pan: (track.automation?.pan || []).map((p) => ({
+        time: p.time,
+        value: p.value,
+      })),
+    },
     clips: track.clips.map(clip => ({
       id: clip.id,
       bufferId: clip.bufferId || clip.id,

@@ -1,5 +1,12 @@
 import { CloudVstBridge } from './cloudVstBridge';
 import { applyDeHummerNode } from './audioUtils';
+import {
+  TrackAutomation,
+  AUTOMATION_RANGES,
+  sampleAutomation,
+  combineAutomation,
+  scheduleAutomationCurve,
+} from './automationUtils';
 
 class AudioEngine {
   context: AudioContext | null = null;
@@ -435,11 +442,84 @@ class AudioEngine {
     }
   }
 
-  updateTrackSettings(trackId: string, volume: number, pan: number, muted: boolean) {
+  /**
+   * Applies fader volume/pan/mute to a track's nodes. When `automation`
+   * curves are present they MULTIPLY with the volume fader (and offset the
+   * pan knob) rather than replacing it:
+   * - stopped: the static value is the curve sampled at the transport position
+   * - playing: linearRampToValueAtTime segments are scheduled from the
+   *   current position onward (callers re-invoke on seek/edit, which cancels
+   *   and re-schedules the ramps)
+   */
+  updateTrackSettings(
+    trackId: string,
+    volume: number,
+    pan: number,
+    muted: boolean,
+    automation?: TrackAutomation,
+  ) {
     if (!this.trackNodes.has(trackId)) return;
     const nodes = this.trackNodes.get(trackId)!;
-    nodes.gain.gain.value = muted ? 0 : volume;
-    nodes.panner.pan.value = pan;
+    const volPoints = automation?.volume ?? [];
+    const panPoints = automation?.pan ?? [];
+
+    // Clear any previously scheduled ramps before setting/scheduling values.
+    if (this.context) {
+      try {
+        nodes.gain.gain.cancelScheduledValues(this.context.currentTime);
+        nodes.panner.pan.cancelScheduledValues(this.context.currentTime);
+      } catch {
+        // Mocked/partial AudioParam in tests — static assignment still works.
+      }
+    }
+
+    const playing = !!this.context && this.isPlaying && this.playStartTime > 0;
+    if (playing && (volPoints.length > 0 || panPoints.length > 0)) {
+      // Anchor at the later of "now" and the (possibly future) playback start.
+      const rate = this.playbackRate > 0 ? this.playbackRate : 1.0;
+      const anchorCtx = Math.max(this.context!.currentTime, this.playStartTime);
+      const anchorProject =
+        this.playPositionAtStart + (anchorCtx - this.playStartTime) * rate;
+
+      if (muted) {
+        nodes.gain.gain.value = 0;
+      } else {
+        scheduleAutomationCurve(
+          nodes.gain.gain,
+          volPoints,
+          anchorProject,
+          anchorCtx,
+          rate,
+          AUTOMATION_RANGES.volume.defaultValue,
+          (v) => combineAutomation('volume', volume, v),
+        );
+      }
+      scheduleAutomationCurve(
+        nodes.panner.pan,
+        panPoints,
+        anchorProject,
+        anchorCtx,
+        rate,
+        AUTOMATION_RANGES.pan.defaultValue,
+        (v) => combineAutomation('pan', pan, v),
+      );
+      return;
+    }
+
+    // Stopped (or no curves): static values, sampled at the transport position.
+    const position = this.getCurrentTime();
+    nodes.gain.gain.value = muted
+      ? 0
+      : combineAutomation(
+          'volume',
+          volume,
+          sampleAutomation(volPoints, position, AUTOMATION_RANGES.volume.defaultValue),
+        );
+    nodes.panner.pan.value = combineAutomation(
+      'pan',
+      pan,
+      sampleAutomation(panPoints, position, AUTOMATION_RANGES.pan.defaultValue),
+    );
   }
 
   addCloudVstBridge(trackId: string) {
@@ -893,12 +973,13 @@ class AudioEngine {
 
     for (const track of tracks) {
       if (track.muted) continue;
-      
+
       const trackGain = offlineCtx.createGain();
       const trackPanner = offlineCtx.createStereoPanner();
       trackGain.gain.value = track.volume;
       trackPanner.pan.value = track.pan;
-      
+      AudioEngine.applyAutomationToOfflineNodes(track, trackGain, trackPanner);
+
       trackGain.connect(trackPanner);
       trackPanner.connect(masterGain);
 
@@ -925,13 +1006,42 @@ class AudioEngine {
     return await offlineCtx.startRendering();
   }
 
+  /**
+   * Schedules a track's automation curves onto offline gain/panner nodes so
+   * WAV/stem exports render automation exactly like live playback (project
+   * time 0 maps to context time 0, rate 1).
+   */
+  private static applyAutomationToOfflineNodes(
+    track: any,
+    trackGain: GainNode,
+    trackPanner: StereoPannerNode,
+  ) {
+    const volPoints = track.automation?.volume ?? [];
+    const panPoints = track.automation?.pan ?? [];
+    if (volPoints.length > 0) {
+      scheduleAutomationCurve(
+        trackGain.gain, volPoints, 0, 0, 1.0,
+        AUTOMATION_RANGES.volume.defaultValue,
+        (v: number) => combineAutomation('volume', track.volume, v),
+      );
+    }
+    if (panPoints.length > 0) {
+      scheduleAutomationCurve(
+        trackPanner.pan, panPoints, 0, 0, 1.0,
+        AUTOMATION_RANGES.pan.defaultValue,
+        (v: number) => combineAutomation('pan', track.pan, v),
+      );
+    }
+  }
+
   async renderTrack(track: any, duration: number): Promise<AudioBuffer> {
     const offlineCtx = new OfflineAudioContext(2, Math.ceil(duration * 44100), 44100);
     const trackGain = offlineCtx.createGain();
     const trackPanner = offlineCtx.createStereoPanner();
     trackGain.gain.value = track.volume;
     trackPanner.pan.value = track.pan;
-    
+    AudioEngine.applyAutomationToOfflineNodes(track, trackGain, trackPanner);
+
     trackGain.connect(trackPanner);
     trackPanner.connect(offlineCtx.destination);
 

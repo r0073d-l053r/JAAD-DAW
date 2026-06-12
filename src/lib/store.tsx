@@ -12,6 +12,12 @@ import {
   GlassThemeContext,
   DEFAULT_GLASS_SETTINGS,
 } from "../components/LiquidGlass";
+import {
+  AutomationParam,
+  TrackAutomation,
+  clampAutomationValue,
+  sortAutomationPoints,
+} from "./automationUtils";
 
 export type ThemeMode = "liquid-glass" | "performance";
 
@@ -97,6 +103,10 @@ export interface Track {
   clips: Clip[];
   lanes: Lane[];
   showLanes: boolean;
+  /** Per-track automation curves (sorted by time). Serializable; synced via syncUtils. */
+  automation?: TrackAutomation;
+  /** UI-only flag: automation lanes expanded under the track (like showLanes). */
+  showAutomation?: boolean;
   isFrozen?: boolean;
   frozenBufferId?: string;
   deHummerEnabled?: boolean;
@@ -345,6 +355,30 @@ export type Action =
       };
     }
   | { type: "TOGGLE_DEHUMMER"; payload: { trackId: string } }
+  | { type: "TOGGLE_AUTOMATION_LANES"; payload: string }
+  | {
+      type: "ADD_AUTOMATION_POINT";
+      payload: {
+        trackId: string;
+        param: AutomationParam;
+        time: number;
+        value: number;
+      };
+    }
+  | {
+      type: "MOVE_AUTOMATION_POINT";
+      payload: {
+        trackId: string;
+        param: AutomationParam;
+        index: number;
+        time: number;
+        value: number;
+      };
+    }
+  | {
+      type: "DELETE_AUTOMATION_POINT";
+      payload: { trackId: string; param: AutomationParam; index: number };
+    }
   | { type: "SET_THEME_MODE"; payload: ThemeMode }
   | { type: "SET_ACCENT_COLOR"; payload: string }
   | { type: "UPDATE_GLASS_SETTINGS"; payload: Partial<GlassEffectSettings> };
@@ -583,6 +617,80 @@ export function appReducer(
         if (t.id !== trackId) return t;
         return { ...t, deHummerEnabled: !t.deHummerEnabled };
       });
+      return saveHistory(state, newTracks);
+    }
+    case "TOGGLE_AUTOMATION_LANES": {
+      const newTracks = state.tracks.map((t) =>
+        t.id === action.payload ? { ...t, showAutomation: !t.showAutomation } : t,
+      );
+      return { ...state, tracks: newTracks }; // UI toggle — no history (mirrors TOGGLE_LANES)
+    }
+    case "ADD_AUTOMATION_POINT": {
+      const { trackId, param, time, value } = action.payload;
+      if (!state.tracks.some((t) => t.id === trackId)) return state;
+      const newTracks = state.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const automation: TrackAutomation = {
+          volume: [...(t.automation?.volume ?? [])],
+          pan: [...(t.automation?.pan ?? [])],
+        };
+        automation[param] = sortAutomationPoints([
+          ...automation[param],
+          {
+            time: Math.max(0, time),
+            value: clampAutomationValue(param, value),
+          },
+        ]);
+        return { ...t, automation };
+      });
+      return saveHistory(state, newTracks);
+    }
+    case "MOVE_AUTOMATION_POINT": {
+      const { trackId, param, index, time, value } = action.payload;
+      let changed = false;
+      const newTracks = state.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const points = t.automation?.[param] ?? [];
+        if (index < 0 || index >= points.length) return t;
+        changed = true;
+        const updated = points.map((p, i) =>
+          i === index
+            ? {
+                time: Math.max(0, time),
+                value: clampAutomationValue(param, value),
+              }
+            : p,
+        );
+        return {
+          ...t,
+          automation: {
+            volume: t.automation?.volume ?? [],
+            pan: t.automation?.pan ?? [],
+            [param]: sortAutomationPoints(updated),
+          },
+        };
+      });
+      if (!changed) return state;
+      return saveHistory(state, newTracks);
+    }
+    case "DELETE_AUTOMATION_POINT": {
+      const { trackId, param, index } = action.payload;
+      let changed = false;
+      const newTracks = state.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const points = t.automation?.[param] ?? [];
+        if (index < 0 || index >= points.length) return t;
+        changed = true;
+        return {
+          ...t,
+          automation: {
+            volume: t.automation?.volume ?? [],
+            pan: t.automation?.pan ?? [],
+            [param]: points.filter((_, i) => i !== index),
+          },
+        };
+      });
+      if (!changed) return state;
       return saveHistory(state, newTracks);
     }
     case "TOGGLE_PLAY":

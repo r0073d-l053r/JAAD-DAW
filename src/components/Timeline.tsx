@@ -8,6 +8,7 @@ import { useAudioImport } from '../lib/useAudioImport';
 import { ClipItem } from './ClipItem';
 import { Playhead } from './timeline/Playhead';
 import { TimelineRuler, MarkerGuidelines, TempoAutomationLane, MarkerEditModal } from './timeline/TimelineRuler';
+import { AutomationLane } from './timeline/AutomationLane';
 import { useLassoSelection, LassoOverlay, TimeSelectionOverlay } from './timeline/LassoSelection';
 
 export function Timeline() {
@@ -321,6 +322,17 @@ export function Timeline() {
                   <ClipItem key={clip.id} clip={clip} track={track} trackId={track.id} />
                 ))}
               </div>
+
+              {/* Automation Lanes (volume + pan), expanded via the AUTO badge */}
+              <AnimatePresence>
+                {track.showAutomation && (['volume', 'pan'] as const).map((param) => (
+                  <AutomationLane
+                    key={`${track.id}-auto-${param}`}
+                    track={track}
+                    param={param}
+                  />
+                ))}
+              </AnimatePresence>
 
               {/* Alternate Lanes */}
               <AnimatePresence>
