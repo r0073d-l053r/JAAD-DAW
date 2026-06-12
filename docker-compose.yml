@@ -20,10 +20,12 @@ services:
       - "8080:8080"
     volumes:
       - ./vst:/vst
+    environment:
+      - PYTHONUNBUFFERED=1
     restart: unless-stopped
     container_name: jaad-dsp
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import websockets; import asyncio; asyncio.run(websockets.connect('ws://localhost:8080'))\" || exit 1"]
+      test: ["CMD", "python3", "-c", "import socket; s = socket.socket(); s.connect(('127.0.0.1', 8080))"]
       interval: 10s
       timeout: 5s
       retries: 3
