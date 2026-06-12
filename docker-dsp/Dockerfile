@@ -5,7 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install base dependencies and enable 32-bit architecture for Wine
 RUN dpkg --add-architecture i386 && \
     apt-get update && \
-    apt-get install -y \
+    apt-get install -y --no-install-recommends \
     wget \
     curl \
     gnupg2 \
@@ -19,17 +19,19 @@ RUN dpkg --add-architecture i386 && \
     python3-numpy \
     wine \
     wine64 \
-    wine32
+    wine32 && \
+    rm -rf /var/lib/apt/lists/*
 
 # Add KXStudio repositories for Carla and win bridges
 RUN wget https://launchpad.net/~kxstudio-debian/+archive/kxstudio/+files/kxstudio-repos_11.0.3_all.deb && \
     dpkg -i kxstudio-repos_11.0.3_all.deb && \
     rm kxstudio-repos_11.0.3_all.deb && \
     apt-get update && \
-    apt-get install -y \
+    apt-get install -y --no-install-recommends \
     carla-git \
     carla-bridge-win64 \
-    carla-bridge-win32
+    carla-bridge-win32 && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install Python packages
 RUN pip3 install websockets JACK-Client python-osc numpy
