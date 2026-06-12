@@ -30,6 +30,12 @@ jobs:
 
       - name: Start Docker containers
         run: |
+          docker compose up -d dsp
+          echo "Waiting 5s for dsp to start..."
+          sleep 5
+          echo "DSP logs:"
+          docker compose logs dsp
+          echo "Starting the rest of the stack..."
           docker compose up -d
 
       - name: Verify service health
