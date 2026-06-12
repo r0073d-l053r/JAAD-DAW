@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, ChevronDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { LiquidGlassPanel, DEFAULT_GLASS_SETTINGS } from './LiquidGlass';
@@ -169,18 +170,30 @@ export function SettingsModal() {
     setIsKeySaved(true);
   };
 
-  if (!state.settingsOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center">
-      {/* No pinned visual props: the Settings window itself follows the
-          Theme sliders 1:1, so it doubles as a live preview while dragging. */}
-      <LiquidGlassPanel
-        blurAmount={20}
-        className="w-[600px] h-[450px]"
-        style={{ animation: 'liquidGlassIn 0.3s ease-out' }}
-      >
-        <div className="flex flex-col h-[450px] overflow-hidden rounded-[20px]">
+    <AnimatePresence>
+      {state.settingsOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        >
+          <div className="flex items-center gap-6">
+            <motion.div
+              layout
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+            >
+              {/* No pinned visual props: the Settings window itself follows the
+                  Theme sliders 1:1, so it doubles as a live preview while dragging. */}
+              <LiquidGlassPanel
+                blurAmount={20}
+                className="w-[600px] h-[450px]"
+              >
+                <div className="flex flex-col h-[450px] overflow-hidden rounded-[20px]">
           <div className="h-14 border-b border-white/10 flex items-center justify-between px-6 bg-white/[0.03]">
             <h2 className="font-semibold tracking-wide text-white/90 flex items-center space-x-2 text-lg">
               Settings
@@ -385,28 +398,6 @@ export function SettingsModal() {
                         </button>
                       </div>
 
-                      {/* Live preview over a high-contrast pattern: slider and
-                          mode changes are obvious here even when the app sits
-                          on a dark, flat background. The preview panel pins NO
-                          visual props, so it tracks the global settings 1:1. */}
-                      <div className="relative h-36 rounded-2xl overflow-hidden border border-white/10">
-                        <div
-                          aria-hidden="true"
-                          className="absolute inset-0"
-                          style={{ background: 'conic-gradient(from 45deg at 50% 50%, #ff2d55, #ff9f0a, #ffd60a, #30d158, #0a84ff, #af52de, #ff2d55)' }}
-                        />
-                        <div
-                          aria-hidden="true"
-                          className="absolute inset-0"
-                          style={{ background: 'repeating-linear-gradient(115deg, rgba(0,0,0,0.5) 0 12px, transparent 12px 30px)' }}
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center p-5">
-                          <LiquidGlassPanel className="w-full max-w-[280px]" contentClassName="px-5 py-4 text-center">
-                            <div className="text-sm font-black text-white tracking-tight">Liquid Glass</div>
-                            <div className="text-[10px] text-zinc-200">Live preview — drag the sliders</div>
-                          </LiquidGlassPanel>
-                        </div>
-                      </div>
 
                       <div className="space-y-2">
                         <span className="text-xs text-zinc-400">Refraction Mode</span>
@@ -523,6 +514,69 @@ export function SettingsModal() {
           </div>
         </div>
       </LiquidGlassPanel>
-    </div>
+    </motion.div>
+
+            {/* Test Bench Window */}
+            <AnimatePresence>
+              {activeTab === 'Theme' && (
+                <motion.div
+                  key="theme-test-bench"
+                  initial={{ opacity: 0, x: 40, scale: 0.95 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: 40, scale: 0.95 }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+                  className="w-[360px] h-[450px]"
+                >
+                  <LiquidGlassPanel
+                    blurAmount={20}
+                    className="w-full h-full"
+                  >
+                    <div className="flex flex-col h-full rounded-[20px] overflow-hidden">
+                      <div className="h-14 border-b border-white/10 flex items-center px-6 bg-white/[0.03]">
+                        <h3 className="font-semibold tracking-wide text-white/90 text-sm uppercase">
+                          Liquid Glass Test Bench
+                        </h3>
+                      </div>
+                      <div className="flex-1 p-6 flex flex-col justify-center items-center relative overflow-hidden bg-black/20">
+                        {/* Live preview over a high-contrast pattern: slider and
+                            mode changes are obvious here even when the app sits
+                            on a dark, flat background. The preview panel pins NO
+                            visual props, so it tracks the global settings 1:1. */}
+                        <div
+                          aria-hidden="true"
+                          className="absolute inset-0"
+                          style={{
+                            background:
+                              'conic-gradient(from 45deg at 50% 50%, #ff2d55, #ff9f0a, #ffd60a, #30d158, #0a84ff, #af52de, #ff2d55)',
+                          }}
+                        />
+                        <div
+                          aria-hidden="true"
+                          className="absolute inset-0"
+                          style={{
+                            background:
+                              'repeating-linear-gradient(115deg, rgba(0,0,0,0.5) 0 12px, transparent 12px 30px)',
+                          }}
+                        />
+                        <div className="relative z-10 w-full max-w-[280px]">
+                          <LiquidGlassPanel className="w-full" contentClassName="px-5 py-6 text-center">
+                            <div className="text-sm font-black text-white tracking-tight">
+                              Liquid Glass
+                            </div>
+                            <div className="text-[10px] text-zinc-200 mt-1">
+                              Live preview — drag the sliders to test
+                            </div>
+                          </LiquidGlassPanel>
+                        </div>
+                      </div>
+                    </div>
+                  </LiquidGlassPanel>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
