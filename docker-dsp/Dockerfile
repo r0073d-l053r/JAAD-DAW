@@ -23,9 +23,9 @@ RUN dpkg --add-architecture i386 && \
     rm -rf /var/lib/apt/lists/*
 
 # Add KXStudio repositories for Carla and win bridges
-RUN wget https://launchpad.net/~kxstudio-debian/+archive/kxstudio/+files/kxstudio-repos_11.0.3_all.deb && \
-    dpkg -i kxstudio-repos_11.0.3_all.deb && \
-    rm kxstudio-repos_11.0.3_all.deb && \
+RUN wget https://launchpad.net/~kxstudio-debian/+archive/kxstudio/+files/kxstudio-repos_11.2.0_all.deb && \
+    dpkg -i kxstudio-repos_11.2.0_all.deb && \
+    rm kxstudio-repos_11.2.0_all.deb && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
     carla-git \
