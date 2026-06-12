@@ -30,12 +30,6 @@ jobs:
 
       - name: Start Docker containers
         run: |
-          docker compose up -d dsp
-          echo "Waiting 5s for dsp to start..."
-          sleep 5
-          echo "DSP logs:"
-          docker compose logs dsp
-          echo "Starting the rest of the stack..."
           docker compose up -d
 
       - name: Verify service health
@@ -56,9 +50,14 @@ jobs:
             sleep 5
           done
           echo "Error: Services failed to become healthy in time."
-          docker compose ps
-          docker compose logs
           exit 1
+
+      - name: Dump docker logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs dsp
+          docker compose logs jaad
 
       - name: Shutdown Docker containers
         if: always()
