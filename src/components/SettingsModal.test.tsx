@@ -18,10 +18,10 @@ vi.mock('react-dom', async () => {
 vi.mock('./LiquidGlass', () => ({
   LiquidGlassPanel: ({ children, className }: any) => <div data-testid="liquid-glass" className={className}>{children}</div>,
   DEFAULT_GLASS_SETTINGS: {
-    displacementScale: 100,
+    displacementScale: 120,
     blurAmount: 10,
     saturation: 140,
-    aberrationIntensity: 2,
+    aberrationIntensity: 3,
     cornerRadius: 20,
     mode: 'standard',
     overLight: false,

@@ -39,10 +39,10 @@ export interface GlassEffectSettings {
 
 /** Canonical defaults — the user-approved baseline look. blurAmount is px. */
 export const DEFAULT_GLASS_SETTINGS: GlassEffectSettings = {
-  displacementScale: 100,
+  displacementScale: 120,
   blurAmount: 10,
   saturation: 140,
-  aberrationIntensity: 2,
+  aberrationIntensity: 3,
   cornerRadius: 20,
   mode: 'standard',
   overLight: false,
@@ -266,7 +266,7 @@ export function LiquidGlassPanel({
 
             <feDisplacementMap
               in="SourceGraphic" in2="DISPLACEMENT_MAP"
-              scale={displacementScale * ((mode === 'shader' ? 1 : -1) - aberrationIntensity * 0.05)}
+              scale={displacementScale * ((mode === 'shader' ? 1 : -1) - aberrationIntensity * 0.12)}
               xChannelSelector="R" yChannelSelector="B"
               result="GREEN_DISPLACED"
             />
@@ -274,7 +274,7 @@ export function LiquidGlassPanel({
 
             <feDisplacementMap
               in="SourceGraphic" in2="DISPLACEMENT_MAP"
-              scale={displacementScale * ((mode === 'shader' ? 1 : -1) - aberrationIntensity * 0.1)}
+              scale={displacementScale * ((mode === 'shader' ? 1 : -1) - aberrationIntensity * 0.25)}
               xChannelSelector="R" yChannelSelector="B"
               result="BLUE_DISPLACED"
             />
@@ -283,7 +283,7 @@ export function LiquidGlassPanel({
             <feBlend in="GREEN_CHANNEL" in2="BLUE_CHANNEL" mode="screen" result="GB_COMBINED" />
             <feBlend in="RED_CHANNEL" in2="GB_COMBINED" mode="screen" result="RGB_COMBINED" />
 
-            <feGaussianBlur in="RGB_COMBINED" stdDeviation={Math.max(0.1, 0.5 - aberrationIntensity * 0.1)} result="ABERRATED_BLURRED" />
+            <feGaussianBlur in="RGB_COMBINED" stdDeviation={Math.max(0.1, 0.3 - aberrationIntensity * 0.06)} result="ABERRATED_BLURRED" />
 
             <feComposite in="ABERRATED_BLURRED" in2="EDGE_MASK" operator="in" result="EDGE_ABERRATION" />
 
@@ -342,14 +342,58 @@ export function LiquidGlassPanel({
         />
         )}
 
-        {/* Diagonal sheen */}
+        {/* Diagonal sheen — slightly amplifies whatever is behind it */}
         <div
           style={{
             position: 'absolute',
             inset: 0,
             borderRadius: `${cornerRadius}px`,
-            background: `linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.05) 100%)`,
+            background: `linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.08) 100%)`,
+            backdropFilter: 'brightness(1.05)',
+            WebkitBackdropFilter: 'brightness(1.05)',
             zIndex: 1,
+          }}
+        />
+
+        {/* ── Ambient edge glow ──
+            Two ring layers that sample the page backdrop (WebGL background
+            blobs) via backdrop-filter, brighten/saturate the result, and
+            render it as a border-only ring using the mask-composite trick.
+            As the lava-lamp blobs drift past panel edges the glow colour
+            shifts in real-time — pure CSS, no JS colour sampling. */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            borderRadius: `${cornerRadius}px`,
+            padding: '3px',
+            mixBlendMode: 'screen',
+            opacity: 0.7,
+            WebkitMask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
+            WebkitMaskComposite: 'xor',
+            maskComposite: 'exclude',
+            backdropFilter: 'blur(2px) saturate(200%) brightness(1.6)',
+            WebkitBackdropFilter: 'blur(2px) saturate(200%) brightness(1.6)',
+            background: 'transparent',
+            zIndex: 2,
+          }}
+        />
+        {/* Soft outer halo — wider, blurrier, dimmer */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: '-2px',
+            borderRadius: `${cornerRadius + 2}px`,
+            padding: '5px',
+            mixBlendMode: 'screen',
+            opacity: 0.35,
+            WebkitMask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
+            WebkitMaskComposite: 'xor',
+            maskComposite: 'exclude',
+            backdropFilter: 'blur(8px) saturate(180%) brightness(1.4)',
+            WebkitBackdropFilter: 'blur(8px) saturate(180%) brightness(1.4)',
+            background: 'transparent',
+            zIndex: 2,
           }}
         />
 
@@ -362,14 +406,14 @@ export function LiquidGlassPanel({
             borderRadius: `${cornerRadius}px`,
             padding: '1.5px',
             mixBlendMode: 'screen',
-            opacity: 0.4,
+            opacity: 0.55,
             WebkitMask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
             WebkitMaskComposite: 'xor',
             maskComposite: 'exclude',
             boxShadow:
               '0 0 0 0.5px rgba(255, 255, 255, 0.5) inset, 0 1px 3px rgba(255, 255, 255, 0.25) inset, 0 1px 4px rgba(0, 0, 0, 0.35)',
             background: `linear-gradient(135deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.12) 33%, rgba(255,255,255,0.4) 66%, rgba(255,255,255,0) 100%)`,
-            zIndex: 2,
+            zIndex: 3,
           }}
         />
         <div
@@ -385,7 +429,7 @@ export function LiquidGlassPanel({
             boxShadow:
               '0 0 0 0.5px rgba(255, 255, 255, 0.5) inset, 0 1px 3px rgba(255, 255, 255, 0.25) inset, 0 1px 4px rgba(0, 0, 0, 0.35)',
             background: `linear-gradient(135deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.32) 33%, rgba(255,255,255,0.6) 66%, rgba(255,255,255,0) 100%)`,
-            zIndex: 3,
+            zIndex: 4,
           }}
         />
       </div>
