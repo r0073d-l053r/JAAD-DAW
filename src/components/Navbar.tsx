@@ -390,8 +390,6 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
       { label: 'Export .WAV Mixdown...', action: () => handleExportWav() },
       { label: 'Export Multitrack (ZIP)...', action: () => handleExportStems() },
       { label: 'Export to Media Library', action: () => alert('Coming soon to J.A.A.S.!') },
-      { divider: true, label: '' },
-      { label: 'Exit', action: () => alert('Close app warning') },
     ],
     'Edit': [
       { label: 'Undo', shortcut: 'Ctrl+Z', action: () => { dispatch({ type: 'UNDO' }); setOpenMenu(null); } },
