@@ -65,17 +65,11 @@ self.onmessage = async (e) => {
     }
   }
   
-  // Apply track volume and pan
-  const vol = track.volume ?? 1;
-  const pan = track.pan ?? 0;
-  const leftGain = vol * (1 - Math.max(0, pan));
-  const rightGain = vol * (1 - Math.max(0, -pan));
-  
-  for (let i = 0; i < length; i++) {
-    output[0][i] *= leftGain;
-    output[1][i] *= rightGain;
-  }
-  
+  // Deliberately NOT applying track.volume/track.pan here: frozen buffers
+  // play back through the track's live gain/panner nodes (playClip →
+  // updateTrackSettings), which already apply fader, pan, mute/solo and
+  // automation. Baking them in too would apply them twice.
+
   // Transfer the buffers back
   self.postMessage({ 
     trackId: track.id, 
