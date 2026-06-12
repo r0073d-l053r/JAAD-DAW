@@ -525,19 +525,19 @@ export function SettingsModal() {
                   animate={{ opacity: 1, x: 0, scale: 1 }}
                   exit={{ opacity: 0, x: 40, scale: 0.95 }}
                   transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-                  className="w-[360px] h-[450px]"
+                  className="w-[320px]"
                 >
                   <LiquidGlassPanel
                     blurAmount={20}
-                    className="w-full h-full"
+                    className="w-full"
                   >
-                    <div className="flex flex-col h-full rounded-[20px] overflow-hidden">
+                    <div className="flex flex-col rounded-[20px] overflow-hidden">
                       <div className="h-14 border-b border-white/10 flex items-center px-6 bg-white/[0.03]">
                         <h3 className="font-semibold tracking-wide text-white/90 text-sm uppercase">
                           Liquid Glass Test Bench
                         </h3>
                       </div>
-                      <div className="flex-1 p-6 flex flex-col justify-center items-center relative overflow-hidden bg-black/20">
+                      <div className="h-48 p-6 flex flex-col justify-center items-center relative overflow-hidden bg-black/20">
                         {/* Live preview over a high-contrast pattern: slider and
                             mode changes are obvious here even when the app sits
                             on a dark, flat background. The preview panel pins NO
