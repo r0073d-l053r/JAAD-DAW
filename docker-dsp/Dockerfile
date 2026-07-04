@@ -33,13 +33,27 @@ RUN wget https://launchpad.net/~kxstudio-debian/+archive/kxstudio/+files/kxstudi
     carla-bridge-win32 && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python packages
-RUN pip3 install websockets JACK-Client python-osc numpy
+# Install Python packages (pinned for reproducible, auditable builds).
+RUN pip3 install --no-cache-dir \
+    "websockets==13.1" \
+    "JACK-Client==0.5.4" \
+    "python-osc==1.8.3"
 
 WORKDIR /app
 
 COPY start.sh server.py ./
 RUN chmod +x start.sh
+
+# Run as a non-root user so a bug in the (network-facing) bridge or a loaded
+# plugin can't act as root inside the container. Wine/JACK(dummy)/Xvfb all run
+# fine unprivileged given a writable HOME.
+RUN useradd --create-home --home-dir /home/jaad --shell /usr/sbin/nologin jaad && \
+    chown -R jaad:jaad /app
+ENV HOME=/home/jaad \
+    WINEPREFIX=/home/jaad/.wine \
+    XDG_RUNTIME_DIR=/home/jaad/.run
+RUN mkdir -p /home/jaad/.run && chown -R jaad:jaad /home/jaad
+USER jaad
 
 EXPOSE 8080
 

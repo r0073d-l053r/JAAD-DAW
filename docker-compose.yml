@@ -17,11 +17,20 @@ services:
     build:
       context: ./docker-dsp
     ports:
-      - "8080:8080"
+      # Bind to loopback only so the VST bridge is not exposed on every host
+      # interface. Front it with an authenticated reverse proxy to expose it.
+      - "127.0.0.1:8080:8080"
     volumes:
-      - ./vst:/vst
+      # Mount plugins read-only; the bridge only needs to load them.
+      - ./vst:/vst:ro
     environment:
       - PYTHONUNBUFFERED=1
+      # Origin-checked but token-less by default so it starts out of the box.
+      # For any non-local deployment, set a strong JAAD_DSP_TOKEN instead and
+      # configure it in the app (localStorage 'jaad_dsp_token'), then remove this.
+      - JAAD_DSP_ALLOW_NO_AUTH=1
+      # Comma-separated browser origins allowed to connect.
+      - JAAD_DSP_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
     restart: unless-stopped
     container_name: jaad-dsp
     healthcheck:

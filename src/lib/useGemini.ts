@@ -29,9 +29,32 @@ const isRetryableError = (err: unknown): boolean => {
  * Calls generateContent with exponential backoff on rate limits (429),
  * server errors (5xx), and transient network failures.
  */
+/**
+ * Safely extract a JSON value from a model response. Tries a direct parse first
+ * (works when responseMimeType: 'application/json' is honored), then falls back
+ * to extracting the first {...} or [...] block. Returns `fallback` instead of
+ * throwing on any malformed/empty output.
+ */
+function safeJsonFromModel<T>(text: string | undefined, fallback: T): T {
+  if (!text) return fallback;
+  const trimmed = text.trim();
+  const candidates = [trimmed];
+  const block = trimmed.match(/\{[\s\S]*\}/) ?? trimmed.match(/\[[\s\S]*\]/);
+  if (block) candidates.push(block[0]);
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate) as T;
+    } catch {
+      /* try next candidate */
+    }
+  }
+  console.warn('Gemini AI: could not parse JSON from model response.');
+  return fallback;
+}
+
 async function generateWithRetry(
   ai: GoogleGenAI,
-  params: { model: string; contents: any }
+  params: { model: string; contents: any; config?: any }
 ) {
   let delay = 1000;
   for (let attempt = 1; ; attempt++) {
@@ -232,13 +255,9 @@ Provide professional actionable mixing or mastering advice. Make your advice tec
           
           Current Tracks: ${JSON.stringify(tracks.map(t => ({ id: t.id, name: t.name, volume: t.volume, pan: t.pan })))}`
         ],
+        config: { responseMimeType: 'application/json' },
       });
-      const text = response.text.trim();
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-      return null;
+      return safeJsonFromModel<any>(response.text, null);
     } catch (err) {
       console.error(err);
       setError(describeError(err, 'Failed to get mix suggestions'));
@@ -290,13 +309,10 @@ Provide professional actionable mixing or mastering advice. Make your advice tec
           Return ONLY a JSON array of note objects with "note" (MIDI number 0-127), "start" (beats), and "duration" (beats).
           Example: [{"note": 60, "start": 0, "duration": 0.5}, {"note": 62, "start": 0.5, "duration": 0.5}]`
         ],
+        config: { responseMimeType: 'application/json' },
       });
-      const text = response.text.trim();
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-      return [];
+      const parsed = safeJsonFromModel<any[]>(response.text, []);
+      return Array.isArray(parsed) ? parsed : [];
     } catch (err) {
       console.error(err);
       setError(describeError(err, 'Failed to generate MIDI'));

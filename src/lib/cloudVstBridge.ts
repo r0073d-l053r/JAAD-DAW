@@ -79,15 +79,27 @@ export class CloudVstBridge {
     this.connect();
   }
 
-  public connect(url: string = 'ws://localhost:8080') {
+  public connect(url?: string) {
     if (this.socket) {
       this.socket.close();
     }
 
     this.setStatus('connecting');
 
+    // Resolve the sidecar URL and optional shared token from local settings so
+    // hardened deployments (JAAD_DSP_TOKEN set on the server) can authenticate.
+    // Defaults preserve the original local behavior (ws://localhost:8080, no token).
+    const storedUrl =
+      typeof localStorage !== 'undefined' ? localStorage.getItem('jaad_dsp_url') : null;
+    let target = url ?? storedUrl ?? 'ws://localhost:8080';
+    const token =
+      typeof localStorage !== 'undefined' ? localStorage.getItem('jaad_dsp_token') : null;
+    if (token) {
+      target += (target.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token);
+    }
+
     try {
-      this.socket = new WebSocket(url);
+      this.socket = new WebSocket(target);
       this.socket.binaryType = 'arraybuffer';
 
       this.socket.onopen = () => {
