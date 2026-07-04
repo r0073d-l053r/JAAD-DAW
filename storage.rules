@@ -1,26 +1,42 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Audio assets are content-addressed by ID and referenced from shared
-    // projects, so reads stay open to anyone with the asset ID. Writes
-    // require a signed-in (anonymous) user so they can be attributed,
-    // throttled, and revoked.
-    match /assets/{assetId} {
-      allow read: if true;
-      allow write: if request.auth != null;
+    // Size caps bound denial-of-wallet / storage-bomb abuse. Tune to your plan.
+    // Individual audio assets: 500 MB. Zipped project bundles/backups: 2 GB.
+    function underSize(maxBytes) {
+      return request.resource.size < maxBytes;
     }
 
-    // Project bundles (.jaad). Readable via share links; writable only by
-    // signed-in users.
+    // Audio assets are content-addressed by ID and referenced from shared
+    // projects, so reads stay open to anyone with the asset ID. Writes require a
+    // signed-in (anonymous) user AND are IMMUTABLE: an asset may be created once
+    // but never overwritten or deleted. This stops an attacker from replacing the
+    // audio of someone else's shared project by guessing an asset ID.
+    match /assets/{assetId} {
+      allow read: if true;
+      allow create: if request.auth != null && underSize(500 * 1024 * 1024);
+      allow update, delete: if false;
+    }
+
+    // Project bundles (.jaad). Readable via share links. Writable only by a
+    // signed-in user, capped in size, and restricted to zip payloads. The
+    // project ID embedded in the file name is an unguessable CSPRNG token
+    // (see Navbar project-ID generation), which is the ownership boundary here:
+    // bundles are uploaded before the Firestore project doc exists on first save,
+    // so we cannot gate on Firestore ownership without breaking first save.
     match /projects/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null
+                   && underSize(2 * 1024 * 1024 * 1024)
+                   && request.resource.contentType == 'application/zip';
     }
 
     // Project backups follow the same policy as bundles.
     match /backups/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null
+                   && underSize(2 * 1024 * 1024 * 1024)
+                   && request.resource.contentType == 'application/zip';
     }
 
     // Everything else is denied by default.

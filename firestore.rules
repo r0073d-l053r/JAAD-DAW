@@ -12,20 +12,31 @@ service cloud.firestore {
                       || resource.data.isPublic == true);
 
       // Creating a project requires claiming ownership with your own uid.
+      // Clients may not self-publish (isPublic templates are admin-managed),
+      // which prevents spamming everyone's public project browser.
       allow create: if request.auth != null
-                    && request.resource.data.ownerId == request.auth.uid;
-
-      // Only the owner may update. Legacy documents written before ownership
-      // existed (no ownerId field) may be claimed by the first writer.
-      allow update: if request.auth != null
                     && request.resource.data.ownerId == request.auth.uid
-                    && (resource.data.ownerId == request.auth.uid
-                        || !('ownerId' in resource.data));
+                    && request.resource.data.isPublic != true;
 
-      // Only the owner may delete (legacy docs deletable until claimed).
+      // Only the current owner may update, ownership cannot be transferred, and
+      // a client may not flip a project to public. Public templates
+      // (isPublic == true) are immutable through client rules — manage them via
+      // the Admin SDK / console so they can't be vandalized or hijacked.
+      //
+      // NOTE: the previous "legacy claim" allowance (any user could claim a doc
+      // with no ownerId) has been removed — it let anonymous users take over or
+      // delete ownerless docs. Pre-ownership documents must be backfilled with an
+      // ownerId out-of-band before they can be edited (see firebase-deploy-checklist).
+      allow update: if request.auth != null
+                    && resource.data.ownerId == request.auth.uid
+                    && request.resource.data.ownerId == request.auth.uid
+                    && resource.data.isPublic != true
+                    && request.resource.data.isPublic != true;
+
+      // Only the owner may delete; public templates are protected.
       allow delete: if request.auth != null
-                    && (resource.data.ownerId == request.auth.uid
-                        || !('ownerId' in resource.data));
+                    && resource.data.ownerId == request.auth.uid
+                    && resource.data.isPublic != true;
     }
 
     // All other collections are denied by default.

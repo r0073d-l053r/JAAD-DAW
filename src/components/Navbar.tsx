@@ -87,7 +87,15 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
     }
 
     if (isNew || targetId === '') {
-      targetId = 'p_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+      // The project ID is the capability that protects shared reads (Firestore
+      // `allow get: if true`, open Storage reads). Use a CSPRNG token, not a
+      // guessable timestamp + Math.random(), so links can't be brute-forced and
+      // IDs don't collide.
+      targetId = 'p_' + (
+        crypto?.randomUUID?.() ??
+        Array.from(crypto.getRandomValues(new Uint8Array(16)))
+          .map((b) => b.toString(16).padStart(2, '0')).join('')
+      );
       dispatch({ type: 'SET_PROJECT_ID', payload: targetId });
     }
 
