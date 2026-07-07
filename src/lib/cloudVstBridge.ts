@@ -54,6 +54,10 @@ export class CloudVstBridge {
   private maxQueueSize = 8;
   private pingTimestamp = 0;
 
+  // In-flight drag-and-drop plugin upload (resolved by the server's reply).
+  private pendingUpload: { resolve: (name: string) => void; reject: (e: Error) => void } | null =
+    null;
+
   // Trackable parameters
   public parameters: Record<string, VstParameter> = {
     cutoff: { name: 'Cutoff', value: 0.8, min: 20, max: 20000, unit: 'Hz' },
@@ -219,6 +223,51 @@ export class CloudVstBridge {
     }
   }
 
+  /**
+   * Drag-and-drop upload: stream a plugin file to the sidecar over the existing
+   * WebSocket (base64 in a JSON control message — reuses the origin/token auth
+   * and needs no extra port). Resolves with the stored filename, which the
+   * caller then passes to loadPlugin(). Server validates extension/size/path.
+   */
+  public uploadPlugin(file: File): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      if (!(this.socket && this.socket.readyState === WebSocket.OPEN)) {
+        reject(new Error('Not connected to the DSP bridge'));
+        return;
+      }
+      if (this.pendingUpload) {
+        reject(new Error('Another upload is already in progress'));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Could not read the file'));
+      reader.onload = () => {
+        const result = String(reader.result || '');
+        const comma = result.indexOf(','); // strip the data: URL prefix
+        const b64 = comma >= 0 ? result.slice(comma + 1) : result;
+
+        const timer = setTimeout(() => {
+          if (this.pendingUpload) {
+            this.pendingUpload = null;
+            reject(new Error('Upload timed out'));
+          }
+        }, 180000);
+        this.pendingUpload = {
+          resolve: (name) => { clearTimeout(timer); resolve(name); },
+          reject: (e) => { clearTimeout(timer); reject(e); },
+        };
+        try {
+          this.socket!.send(JSON.stringify({ type: 'upload_plugin', name: file.name, data: b64 }));
+        } catch (e) {
+          clearTimeout(timer);
+          this.pendingUpload = null;
+          reject(e as Error);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
   private handleControlMessage(raw: string) {
     let msg: any;
     try {
@@ -252,6 +301,14 @@ export class CloudVstBridge {
         Object.values(this.parameters).find((p) => p.index === Number(msg.key)) ??
         this.parameters[String(msg.key)];
       if (entry) entry.value = msg.value;
+    } else if (msg.type === 'upload_complete') {
+      const p = this.pendingUpload;
+      this.pendingUpload = null;
+      p?.resolve(String(msg.name || ''));
+    } else if (msg.type === 'upload_error') {
+      const p = this.pendingUpload;
+      this.pendingUpload = null;
+      p?.reject(new Error(String(msg.error || 'upload failed')));
     }
     // 'pong' and anything else: ignored (latency is measured on the binary path).
   }
