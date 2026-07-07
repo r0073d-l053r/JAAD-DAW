@@ -41,6 +41,12 @@ export default defineConfig(({ mode }) => {
               if (id.includes('@google/genai')) return 'genai';
               if (id.includes('firebase')) return 'firebase';
               if (id.includes('essentia.js')) return 'essentia';
+              // On-device stem separation (ADR-0010) is dynamic-imported. Let
+              // Rollup split it naturally (return undefined) instead of naming
+              // a manual chunk — named manual chunks get <link rel=modulepreload>
+              // in index.html and putting them in 'vendor' loads them eagerly;
+              // both would make every visitor download ~400KB they may never use.
+              if (id.includes('onnxruntime-web') || id.includes('demucs-web')) return undefined;
               return 'vendor';
             }
           }

@@ -20,6 +20,14 @@ import {
   setStemServerUrl,
   DEMUCS_STEM_MAP,
 } from "../lib/stemServer";
+import {
+  detectBrowserStemsSupport,
+  isBrowserModelCached,
+  downloadBrowserModel,
+  separateInBrowser,
+  BROWSER_STEM_MAP,
+  BROWSER_MODEL_SIZE_MB,
+} from "../lib/browserStems";
 
 const STEM_INSTRUMENTS = [
   { name: "Vocals", icon: <Mic size={14} />, color: "#E91E63", defaultChecked: true },
@@ -77,17 +85,43 @@ export const StemSeparator: React.FC = () => {
   const [serverAvailable, setServerAvailable] = useState<boolean | null>(null);
   const [serverUrl, setServerUrlState] = useState<string>(getStemServerUrl());
 
+  // On-device tier (WebGPU / threaded-WASM Demucs) — used when no server.
+  const browserSupport = detectBrowserStemsSupport();
+  const [modelCached, setModelCached] = useState<boolean | null>(null);
+  const [modelDownloadPct, setModelDownloadPct] = useState<number | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     setServerAvailable(null);
     checkStemServer().then((ok) => {
       if (!cancelled) setServerAvailable(ok);
     });
+    isBrowserModelCached().then((ok) => {
+      if (!cancelled) setModelCached(ok);
+    });
     return () => {
       cancelled = true;
     };
     // Re-probe when the panel opens or the server URL changes.
   }, [clipId, serverUrl]);
+
+  const handleDownloadModel = async () => {
+    setModelDownloadPct(0);
+    try {
+      await downloadBrowserModel((pct) => setModelDownloadPct(pct));
+      setModelCached(true);
+    } catch (err) {
+      console.error("On-device model download failed:", err);
+      setCurrentStep(err instanceof Error ? `Error: ${err.message}` : "Model download failed.");
+    } finally {
+      setModelDownloadPct(null);
+    }
+  };
+
+  // Which tier will actually run for AI-capable stems?
+  const useServer = serverAvailable === true;
+  const useBrowser = !useServer && browserSupport.supported && modelCached === true;
+  const browserReady = !useServer && browserSupport.supported;
 
   const handleToggleStem = (name: string) => {
     setSelectedStems((prev) =>
@@ -159,16 +193,19 @@ export const StemSeparator: React.FC = () => {
       return;
     }
 
-    // Split the selection: Demucs-capable stems go to the AI server when it's
-    // reachable; everything else uses the local filter approximation.
-    const useServer = serverAvailable === true;
-    const aiStems = useServer ? selectedStems.filter((s) => DEMUCS_STEM_MAP[s]) : [];
+    // Tier split (ADR-0010): server Demucs first; else on-device WebGPU/WASM
+    // Demucs; everything else falls to the local filter approximation.
+    const aiStems = useServer
+      ? selectedStems.filter((s) => DEMUCS_STEM_MAP[s])
+      : useBrowser
+        ? selectedStems.filter((s) => BROWSER_STEM_MAP[s])
+        : [];
     const filterStems = selectedStems.filter((s) => !aiStems.includes(s));
     const aiShare = aiStems.length > 0 ? (filterStems.length > 0 ? 80 : 100) : 0;
 
     try {
-      // --- AI path: real source separation via the Demucs sidecar -----------
-      if (aiStems.length > 0) {
+      // --- Tier 1: self-hosted Demucs server --------------------------------
+      if (useServer && aiStems.length > 0) {
         setCurrentStep("Encoding source audio...");
         const sourceWav = audioBufferToWav(originalBuffer);
 
@@ -185,11 +222,24 @@ export const StemSeparator: React.FC = () => {
         }
       }
 
+      // --- Tier 2: on-device Demucs (WebGPU / threaded WASM) -----------------
+      if (useBrowser && aiStems.length > 0) {
+        const deviceStems = await separateInBrowser(originalBuffer, aiStems, (pct, step) => {
+          setCurrentStep(step);
+          setProgress(Math.round((pct / 100) * aiShare));
+        });
+        for (const { instrument, buffer } of deviceStems) {
+          setCurrentStep(`Placing ${instrument} on the timeline...`);
+          const wavBlob = audioBufferToWav(buffer);
+          await placeStemOnTrack(instrument, buffer, wavBlob, true);
+        }
+      }
+
       // --- Filter path: local approximation for non-Demucs selections -------
       for (let i = 0; i < filterStems.length; i++) {
         const stem = filterStems[i];
         setCurrentStep(
-          useServer ? `Isolating ${stem} (filter approximation)...` : `Isolating ${stem}...`
+          aiStems.length > 0 ? `Isolating ${stem} (filter approximation)...` : `Isolating ${stem}...`
         );
         // Let the event loop refresh the browser UI before the next heavy DSP pass
         await new Promise((res) => setTimeout(res, 50));
@@ -293,10 +343,40 @@ export const StemSeparator: React.FC = () => {
                 {serverAvailable === null ? "Probing" : serverAvailable ? "AI Ready" : "Offline"}
               </span>
             </div>
-            {serverAvailable === false && (
+            {/* On-device tier (WebGPU / threaded-WASM Demucs) when no server */}
+            {browserReady && (
+              <div className="flex items-center space-x-2 pt-1 border-t border-white/5">
+                <div
+                  className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                    modelDownloadPct !== null
+                      ? "bg-yellow-400 animate-pulse"
+                      : useBrowser
+                        ? "bg-[#00C2FF] shadow-[0_0_6px_#00C2FF]"
+                        : "bg-zinc-600"
+                  }`}
+                />
+                <span className="flex-1 text-[10px] text-zinc-400">
+                  {modelDownloadPct !== null
+                    ? `Downloading on-device AI model... ${modelDownloadPct}%`
+                    : useBrowser
+                      ? `On-device AI ready (${browserSupport.webgpu ? "WebGPU" : "WASM threads"}) — Vocals/Drums/Bass run on this machine`
+                      : `This device can run Demucs locally via ${browserSupport.webgpu ? "WebGPU" : "WASM threads"}`}
+                </span>
+                {!useBrowser && modelDownloadPct === null && modelCached !== null && (
+                  <button
+                    disabled={isProcessing}
+                    onClick={handleDownloadModel}
+                    className="text-[9px] font-bold uppercase px-2 py-1 rounded-md bg-[#00C2FF]/10 border border-[#00C2FF]/30 text-[#00C2FF] hover:bg-[#00C2FF]/20 transition-colors"
+                  >
+                    Get model ({BROWSER_MODEL_SIZE_MB}MB, one-time)
+                  </button>
+                )}
+              </div>
+            )}
+            {serverAvailable === false && !browserReady && (
               <p className="text-[9px] text-zinc-500 leading-relaxed">
-                No Demucs server found — Vocals/Drums/Bass/Guitar/Keyboard will use the local
-                filter approximation. Start one with{" "}
+                No Demucs server found and this browser lacks WebGPU/threads — AI-capable stems
+                will use the local filter approximation. Start a server with{" "}
                 <code className="text-zinc-400">docker compose -f docker-compose.stems.yml up -d</code>
               </p>
             )}
@@ -338,9 +418,14 @@ export const StemSeparator: React.FC = () => {
                     </div>
                     <div className="flex-1 min-w-0 flex items-center gap-1.5">
                       <p className="text-xs font-medium truncate">{inst.name}</p>
-                      {serverAvailable && DEMUCS_STEM_MAP[inst.name] && (
-                        <span className="text-[8px] font-black text-[#00E871] bg-[#00E871]/10 border border-[#00E871]/30 rounded px-1 py-px flex-shrink-0">
+                      {useServer && DEMUCS_STEM_MAP[inst.name] && (
+                        <span className="text-[8px] font-black text-[#00E871] bg-[#00E871]/10 border border-[#00E871]/30 rounded px-1 py-px flex-shrink-0" title="Separated by the self-hosted Demucs server">
                           AI
+                        </span>
+                      )}
+                      {useBrowser && BROWSER_STEM_MAP[inst.name] && (
+                        <span className="text-[8px] font-black text-[#00C2FF] bg-[#00C2FF]/10 border border-[#00C2FF]/30 rounded px-1 py-px flex-shrink-0" title={`Separated on this device via ${browserSupport.webgpu ? "WebGPU" : "WASM threads"}`}>
+                          AI·GPU
                         </span>
                       )}
                     </div>
@@ -450,13 +535,18 @@ export const StemSeparator: React.FC = () => {
           </div>
         </div>
 
-        {/* Mode badge footer — honest about AI vs. approximation */}
+        {/* Mode badge footer — honest about which tier is active */}
         <div className="px-4 py-2.5 bg-zinc-950 flex items-center justify-center space-x-1.5 text-[10px] text-zinc-500 font-semibold">
-          <ShieldCheck size={12} className={serverAvailable ? "text-[#00E871]" : "text-zinc-500"} />
+          <ShieldCheck
+            size={12}
+            className={useServer ? "text-[#00E871]" : useBrowser ? "text-[#00C2FF]" : "text-zinc-500"}
+          />
           <span>
-            {serverAvailable
-              ? "DEMUCS AI SOURCE SEPARATION · SELF-HOSTED"
-              : "LOCAL FILTER APPROXIMATION MODE (no AI server)"}
+            {useServer
+              ? "DEMUCS AI SOURCE SEPARATION · SELF-HOSTED SERVER"
+              : useBrowser
+                ? `DEMUCS AI ON THIS DEVICE · ${browserSupport.webgpu ? "WEBGPU" : "WASM THREADS"}`
+                : "LOCAL FILTER APPROXIMATION MODE (no AI tier available)"}
           </span>
         </div>
       </motion.div>
