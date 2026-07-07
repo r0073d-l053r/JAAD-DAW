@@ -1,6 +1,7 @@
 import asyncio
 import websockets
 import json
+import base64
 import numpy as np
 import jack
 import queue
@@ -26,8 +27,17 @@ input_queue = queue.Queue(maxsize=20)
 output_queue = queue.Queue(maxsize=20)
 
 # --- Security configuration -------------------------------------------------
-# Directory that plugins may be loaded from. Anything outside it is rejected.
+# Directory that plugins may be loaded from (and uploaded to). Anything outside
+# it is rejected.
 VST_DIR = os.path.realpath(os.environ.get("JAAD_VST_DIR", "/vst"))
+
+# Drag-and-drop plugin uploads. Cap the size and restrict extensions; the
+# WebSocket max message size below is derived from this (base64 is ~1.34x).
+MAX_PLUGIN_MB = int(os.environ.get("JAAD_MAX_PLUGIN_MB", "64"))
+MAX_PLUGIN_BYTES = MAX_PLUGIN_MB * 1024 * 1024
+ALLOWED_PLUGIN_EXT = (".dll", ".vst3", ".so")
+# Headroom for base64 expansion (4/3) plus the small JSON envelope.
+WS_MAX_SIZE = int(MAX_PLUGIN_BYTES * 4 / 3) + 65536
 
 # Shared secret required to connect. If unset, the bridge refuses to start
 # unless JAAD_DSP_ALLOW_NO_AUTH=1 is explicitly set (local/dev escape hatch).
@@ -106,6 +116,38 @@ def safe_plugin_path(path):
     return candidate
 
 
+def save_uploaded_plugin(name, b64data):
+    """Validate and write a drag-and-dropped plugin into VST_DIR. Returns the
+    stored basename, or raises ValueError with a user-facing reason."""
+    if not name or not isinstance(name, str):
+        raise ValueError("missing filename")
+    # Strip any path components a client might send; only a bare filename lands.
+    base = os.path.basename(name)
+    if base != name or base in ("", ".", ".."):
+        raise ValueError("invalid filename")
+    if not base.lower().endswith(ALLOWED_PLUGIN_EXT):
+        raise ValueError("only .dll, .vst3, or .so plugins are allowed")
+    try:
+        raw = base64.b64decode(b64data or "", validate=True)
+    except Exception:
+        raise ValueError("corrupt upload data")
+    if len(raw) == 0:
+        raise ValueError("empty file")
+    if len(raw) > MAX_PLUGIN_BYTES:
+        raise ValueError(f"plugin exceeds the {MAX_PLUGIN_MB}MB limit")
+    # Belt-and-suspenders: the resolved destination must stay inside VST_DIR.
+    dest = os.path.realpath(os.path.join(VST_DIR, base))
+    if dest != VST_DIR and not dest.startswith(VST_DIR + os.sep):
+        raise ValueError("path escapes the plugin directory")
+    os.makedirs(VST_DIR, exist_ok=True)
+    tmp = dest + ".part"
+    with open(tmp, "wb") as f:
+        f.write(raw)
+    os.replace(tmp, dest)  # atomic: no half-written plugin is ever loadable
+    print(f"⬆️ Saved uploaded plugin: {dest} ({len(raw)} bytes)")
+    return base
+
+
 def jack_process(frames):
     try:
         in_data = input_queue.get_nowait()
@@ -165,6 +207,14 @@ async def handle_connection(websocket):
                     data = json.loads(message)
                     if data.get('type') == 'ping':
                         await websocket.send(json.dumps({'type': 'pong', 'id': data.get('id')}))
+                    elif data.get('type') == 'upload_plugin':
+                        # Drag-and-drop: write the plugin into /vst, then the
+                        # client follows up with a normal load_plugin by name.
+                        try:
+                            saved = save_uploaded_plugin(data.get('name'), data.get('data'))
+                            await websocket.send(json.dumps({'type': 'upload_complete', 'name': saved}))
+                        except Exception as e:
+                            await websocket.send(json.dumps({'type': 'upload_error', 'error': str(e)}))
                     elif data.get('type') == 'load_plugin':
                         params = load_carla_plugin(data.get('path'))
                         # Broadcast the plugin's real parameters so every client
@@ -346,7 +396,8 @@ async def main():
     host = os.environ.get("JAAD_DSP_HOST", "0.0.0.0")
     print(f"🚀 JAAD Headless VST/DSP Sidecar running on {host}:8080")
     print(f"   Allowed origins: {sorted(ALLOWED_ORIGINS)} · plugin dir: {VST_DIR}")
-    async with websockets.serve(handle_connection, host, 8080):
+    # max_size raised so a base64-encoded plugin upload fits in one message.
+    async with websockets.serve(handle_connection, host, 8080, max_size=WS_MAX_SIZE):
         await asyncio.Future()
 
 if __name__ == "__main__":

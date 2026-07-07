@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, useDragControls } from 'motion/react';
-import { X, Cpu, Wifi, WifiOff, RefreshCw, Layers, Monitor } from 'lucide-react';
+import { X, Cpu, Wifi, WifiOff, RefreshCw, Layers, Monitor, UploadCloud } from 'lucide-react';
 import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { LiquidGlassPanel } from './LiquidGlass';
@@ -22,9 +22,45 @@ export const VstBridgeEditor: React.FC = () => {
   const [pluginPath, setPluginPath] = useState<string>('');
   const [showGui, setShowGui] = useState<boolean>(false);
 
+  // Drag-and-drop plugin upload
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState('');
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingFileRef = useRef<File | null>(null);
+
   const trackId = state.vstEditorTrackId;
   const track = state.tracks.find(t => t.id === trackId);
   const bridgeRef = useRef<any>(null);
+
+  // Upload a plugin over the (connected) bridge, then load it by name.
+  const runUpload = useCallback(async (file: File) => {
+    if (!trackId) return;
+    const bridge = audioEngine.cloudVstBridges.get(trackId);
+    if (!bridge) { setUploadMsg('Not connected to the bridge.'); return; }
+    setIsUploading(true);
+    setUploadMsg(`Uploading ${file.name}…`);
+    try {
+      const name = await bridge.uploadPlugin(file);
+      setPluginPath(name);
+      setUploadMsg(`Uploaded — loading ${name}…`);
+      bridge.loadPlugin(name);
+      setTimeout(() => setUploadMsg(`Loaded ${name}`), 500);
+    } catch (e) {
+      setUploadMsg(`Upload failed: ${(e as Error).message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  }, [trackId]);
+
+  // If a file was dropped before the bridge was connected, upload once it is.
+  useEffect(() => {
+    if (status === 'connected' && pendingFileRef.current) {
+      const f = pendingFileRef.current;
+      pendingFileRef.current = null;
+      runUpload(f);
+    }
+  }, [status, runUpload]);
 
   // Poll VST status, latency metrics, and parameters
   useEffect(() => {
@@ -69,6 +105,23 @@ export const VstBridgeEditor: React.FC = () => {
     setStatus('disconnected');
     setLatency(0);
     setShowGui(false);
+  };
+
+  // Drag-drop / file-picker entry point: validate, then upload — connecting
+  // first (and deferring the upload to the effect above) if needed.
+  const startUpload = (file: File) => {
+    if (!/\.(dll|vst3|so)$/i.test(file.name)) {
+      setUploadMsg('Only .dll, .vst3, or .so plugin files are supported.');
+      return;
+    }
+    const bridge = audioEngine.cloudVstBridges.get(trackId);
+    if (!bridge || status !== 'connected') {
+      pendingFileRef.current = file;
+      setUploadMsg(`Connecting to upload ${file.name}…`);
+      handleConnect();
+      return;
+    }
+    runUpload(file);
   };
 
   const handleLoadPlugin = () => {
@@ -278,11 +331,32 @@ export const VstBridgeEditor: React.FC = () => {
           </div>
         </div>
 
-        {/* Plugin load + live GUI (noVNC) */}
+        {/* Plugin load (type a name, or drag-and-drop / browse to upload) + GUI */}
         <div
           onPointerDown={(e) => e.stopPropagation()}
-          className="bg-[#05030e]/80 p-4 space-y-2.5 border-b border-[#231242]/50"
+          onDragOver={(e) => { e.preventDefault(); if (!dragOver) setDragOver(true); }}
+          onDragLeave={(e) => { e.preventDefault(); setDragOver(false); }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const f = e.dataTransfer.files?.[0];
+            if (f) startUpload(f);
+          }}
+          className={`bg-[#05030e]/80 p-4 space-y-2.5 border-b border-[#231242]/50 transition-all ${
+            dragOver ? 'ring-2 ring-inset ring-[#a882fa] bg-[#a882fa]/10' : ''
+          }`}
         >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".dll,.vst3,.so"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) startUpload(f);
+              e.target.value = '';
+            }}
+          />
           <div className="flex gap-2">
             <input
               type="text"
@@ -299,6 +373,27 @@ export const VstBridgeEditor: React.FC = () => {
               Load
             </button>
           </div>
+
+          {/* Drag-and-drop upload zone */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className={`w-full flex items-center justify-center gap-2 border border-dashed rounded-lg px-3 py-2 text-[11px] font-mono transition ${
+              dragOver
+                ? 'border-[#a882fa] text-purple-200'
+                : 'border-[#30165a] hover:border-[#a882fa]/60 text-purple-300/70'
+            } disabled:opacity-50`}
+          >
+            <UploadCloud size={13} className={isUploading ? 'animate-pulse' : ''} />
+            {isUploading
+              ? (uploadMsg || 'Uploading…')
+              : dragOver
+                ? 'Drop plugin to upload to the server'
+                : 'Drag & drop a .dll / .vst3 — or click to browse'}
+          </button>
+          {uploadMsg && !isUploading && (
+            <p className="text-[10px] text-purple-300/70 text-center font-mono truncate">{uploadMsg}</p>
+          )}
           <button
             onClick={() => setShowGui((v) => !v)}
             disabled={status !== 'connected'}

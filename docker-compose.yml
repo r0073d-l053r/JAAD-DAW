@@ -24,8 +24,11 @@ services:
       # proxy it if you need remote access.
       - "127.0.0.1:6080:6080"
     volumes:
-      # Mount plugins read-only; the bridge only needs to load them.
-      - ./vst:/vst:ro
+      # Plugins live here. Read-write so the drag-and-drop upload feature can
+      # save a .dll/.vst3 into it (uploads are extension- and size-checked and
+      # path-sanitized server-side). Make ./vst writable by the container's
+      # non-root uid (1000) — e.g. `mkdir -p vst && chmod 777 vst`.
+      - ./vst:/vst
     environment:
       - PYTHONUNBUFFERED=1
       # Origin-checked but token-less by default so it starts out of the box.

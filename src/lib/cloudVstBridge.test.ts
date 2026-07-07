@@ -111,12 +111,61 @@ describe('CloudVstBridge', () => {
 
   it('should calculate rolling average network latency correctly', () => {
     const bridge = new CloudVstBridge(mockContext, 'track-1', mockDestinationNode);
-    
+
     // Inject mock connection status and pings
     bridge.status = 'connected';
-    
+
     // Simulate RTT updates
     bridge.latencyMs = 45;
     expect(bridge.latencyMs).toBe(45);
+  });
+
+  describe('drag-and-drop plugin upload', () => {
+    class MockFileReader {
+      result: string | null = null;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      readAsDataURL() {
+        // base64('ABC') = 'QUJD'
+        this.result = 'data:application/octet-stream;base64,QUJD';
+        this.onload?.();
+      }
+    }
+
+    const connectedBridge = () => {
+      (MockWebSocket as any).OPEN = 1;
+      vi.stubGlobal('FileReader', MockFileReader);
+      const bridge = new CloudVstBridge(mockContext, 'track-1', mockDestinationNode);
+      const socket = (bridge as any).socket;
+      socket.readyState = 1;
+      socket.send.mockClear?.();
+      return { bridge, socket };
+    };
+
+    it('sends the plugin as base64 and resolves with the saved name', async () => {
+      const { bridge, socket } = connectedBridge();
+      const p = bridge.uploadPlugin(new File(['ABC'], 'Reverb.dll'));
+
+      const sent = JSON.parse(socket.send.mock.calls.at(-1)[0]);
+      expect(sent.type).toBe('upload_plugin');
+      expect(sent.name).toBe('Reverb.dll');
+      expect(sent.data).toBe('QUJD');
+
+      socket.onmessage({ data: JSON.stringify({ type: 'upload_complete', name: 'Reverb.dll' }) });
+      await expect(p).resolves.toBe('Reverb.dll');
+    });
+
+    it('rejects with the server-supplied reason on upload_error', async () => {
+      const { bridge, socket } = connectedBridge();
+      const p = bridge.uploadPlugin(new File(['ABC'], 'huge.dll'));
+      socket.onmessage({ data: JSON.stringify({ type: 'upload_error', error: 'plugin exceeds the 64MB limit' }) });
+      await expect(p).rejects.toThrow('64MB');
+    });
+
+    it('rejects immediately when the bridge is not connected', async () => {
+      const { bridge } = connectedBridge();
+      (bridge as any).socket.readyState = 3; // CLOSED
+      await expect(bridge.uploadPlugin(new File(['ABC'], 'p.dll'))).rejects.toThrow('Not connected');
+    });
   });
 });
