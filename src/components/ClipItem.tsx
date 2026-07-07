@@ -521,47 +521,6 @@ export const ClipItem = React.memo(function ClipItem({
               >
                 Duplicate
               </button>
-              <div className="h-px bg-white/10 my-1 w-full" />
-              <button
-                className="w-full text-left px-4 py-2 text-sm text-[#FF9800] hover:bg-white/10 transition-colors"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  alert("Remixing section (drag to create form)");
-                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
-                }}
-              >
-                Remix section
-              </button>
-              <button
-                className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  alert("Healing edits on section");
-                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
-                }}
-              >
-                Heal Edits
-              </button>
-              <button
-                className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  alert("Removing FX from section");
-                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
-                }}
-              >
-                Remove FX
-              </button>
-              <button
-                className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  alert("Downloading section as .WAV");
-                  dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
-                }}
-              >
-                Download .WAV
-              </button>
             </div>,
             document.body,
           )}
