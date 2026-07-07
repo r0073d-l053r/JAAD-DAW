@@ -6,9 +6,11 @@ import { useGemini } from './useGemini';
 // Correctly declare spyers and classes inside Vitest's hoisted block to prevent initialization errors
 const hoistedMocks = vi.hoisted(() => {
   const mockGenerateContent = vi.fn();
+  const mockGenerateContentStream = vi.fn();
   class MockGoogleGenAI {
     models = {
       generateContent: mockGenerateContent,
+      generateContentStream: mockGenerateContentStream,
     };
     config: { apiKey: string };
     constructor(config: { apiKey: string }) {
@@ -18,11 +20,17 @@ const hoistedMocks = vi.hoisted(() => {
       return this.config.apiKey;
     }
   }
-  return { MockGoogleGenAI, mockGenerateContent };
+  return { MockGoogleGenAI, mockGenerateContent, mockGenerateContentStream };
 });
 
 vi.mock('@google/genai', () => ({
   GoogleGenAI: hoistedMocks.MockGoogleGenAI,
+}));
+
+// generateMusicClip calls audioEngine.loadAudio (which touches AudioContext);
+// stub it so the hook test stays headless.
+vi.mock('./audioEngine', () => ({
+  audioEngine: { loadAudio: vi.fn().mockResolvedValue(8) },
 }));
 
 describe('useGemini', () => {
@@ -201,5 +209,87 @@ describe('useGemini', () => {
     });
 
     expect(midi).toEqual([{ note: 60, start: 0, duration: 1 }]);
+  });
+
+  it('generates a style sheet from a description using the flash model', async () => {
+    hoistedMocks.mockGenerateContent.mockResolvedValue({
+      text: 'synthwave, retro, 80s, analog pads, 100 bpm\nWarm sub-bass, wide plate reverb.',
+    });
+
+    const { result } = renderHook(() => useGemini());
+
+    let sheet: string | null = null;
+    await act(async () => {
+      sheet = await result.current.generateStyleSheet('80s synthwave, driving');
+    });
+
+    expect(sheet).toContain('synthwave');
+    expect(hoistedMocks.mockGenerateContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'gemini-3-flash-preview',
+        contents: expect.stringContaining('80s synthwave'),
+      })
+    );
+  });
+
+  it('generates structured lyrics containing section tags', async () => {
+    hoistedMocks.mockGenerateContent.mockResolvedValue({
+      text: '[Verse 1]\nPacking up the car at dawn\n[Chorus]\nI am gone, I am gone',
+    });
+
+    const { result } = renderHook(() => useGemini());
+
+    let lyrics: string | null = null;
+    await act(async () => {
+      lyrics = await result.current.generateLyrics('leaving home at eighteen');
+    });
+
+    expect(lyrics).toContain('[Chorus]');
+    expect(hoistedMocks.mockGenerateContent).toHaveBeenCalledWith(
+      expect.objectContaining({ contents: expect.stringContaining('leaving home') })
+    );
+  });
+
+  it('generates a real music clip from the Lyria stream into a WAV File', async () => {
+    async function* fakeStream() {
+      yield {
+        candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/wav', data: btoa('AUDIODATA') } }] } }],
+      };
+    }
+    hoistedMocks.mockGenerateContentStream.mockReturnValue(fakeStream());
+
+    const { result } = renderHook(() => useGemini());
+
+    let out: any = null;
+    await act(async () => {
+      out = await result.current.generateMusicClip('lofi piano loop 90 bpm', 'test');
+    });
+
+    expect(out).not.toBeNull();
+    expect(out.file).toBeInstanceOf(File);
+    expect(out.duration).toBe(8);
+    expect(hoistedMocks.mockGenerateContentStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'lyria-3-clip-preview',
+        contents: expect.stringContaining('lofi piano loop'),
+      })
+    );
+  });
+
+  it('returns null from generateMusicClip when the stream yields no audio', async () => {
+    async function* emptyStream() {
+      yield { candidates: [{ content: { parts: [{ text: 'no audio here' }] } }] };
+    }
+    hoistedMocks.mockGenerateContentStream.mockReturnValue(emptyStream());
+
+    const { result } = renderHook(() => useGemini());
+
+    let out: any = 'unset';
+    await act(async () => {
+      out = await result.current.generateMusicClip('a prompt that produces no audio');
+    });
+
+    expect(out).toBeNull();
+    expect(result.current.error).toContain('No audio');
   });
 });
