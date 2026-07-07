@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   checkStemServer,
+  resolveStemServer,
   separateViaServer,
   getStemServerUrl,
   DEMUCS_STEM_MAP,
@@ -23,6 +24,38 @@ describe('stemServer client', () => {
     expect(getStemServerUrl()).toBe('http://localhost:8000');
     localStorage.setItem('jaad_stems_url', 'http://10.0.0.5:8000');
     expect(getStemServerUrl()).toBe('http://10.0.0.5:8000');
+  });
+
+  it('resolveStemServer falls back to the same-origin /stems proxy and persists it', async () => {
+    // Reproduces the musebot HTTPS case: default localhost:8000 is unreachable
+    // from a remote device, but the nginx same-origin proxy answers.
+    vi.stubGlobal('location', { origin: 'https://musebot.tail7ff9e.ts.net' });
+    mockFetch
+      .mockRejectedValueOnce(new Error('ERR_CONNECTION_REFUSED')) // localhost:8000
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) }); // /stems
+
+    const resolved = await resolveStemServer();
+    expect(resolved).toBe('https://musebot.tail7ff9e.ts.net/stems');
+    expect(mockFetch.mock.calls[1][0]).toBe('https://musebot.tail7ff9e.ts.net/stems/health');
+    // Persisted so the upload/poll/download flow uses the working URL too.
+    expect(localStorage.getItem('jaad_stems_url')).toBe('https://musebot.tail7ff9e.ts.net/stems');
+    vi.unstubAllGlobals();
+    vi.stubGlobal('fetch', mockFetch);
+  });
+
+  it('resolveStemServer prefers the configured URL when it is healthy', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
+    const resolved = await resolveStemServer();
+    expect(resolved).toBe('http://localhost:8000');
+    expect(mockFetch).toHaveBeenCalledTimes(1); // no fallback probe needed
+  });
+
+  it('resolveStemServer returns null when nothing answers', async () => {
+    vi.stubGlobal('location', { origin: 'https://musebot.tail7ff9e.ts.net' });
+    mockFetch.mockRejectedValue(new Error('down'));
+    expect(await resolveStemServer()).toBeNull();
+    vi.unstubAllGlobals();
+    vi.stubGlobal('fetch', mockFetch);
   });
 
   it('checkStemServer returns true only for a healthy response', async () => {

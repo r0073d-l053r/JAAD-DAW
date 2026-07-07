@@ -14,7 +14,7 @@ import { saveAsset } from "../lib/assetManager";
 import { uploadAssetCloud } from "../lib/syncUtils";
 import { LiquidGlassPanel } from "./LiquidGlass";
 import {
-  checkStemServer,
+  resolveStemServer,
   separateViaServer,
   getStemServerUrl,
   setStemServerUrl,
@@ -93,8 +93,12 @@ export const StemSeparator: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     setServerAvailable(null);
-    checkStemServer().then((ok) => {
-      if (!cancelled) setServerAvailable(ok);
+    // Auto-resolve: configured URL first, then the same-origin /stems reverse
+    // proxy — so nginx/Tailscale deployments work with zero configuration.
+    resolveStemServer().then((resolved) => {
+      if (cancelled) return;
+      setServerAvailable(resolved !== null);
+      if (resolved && resolved !== serverUrl) setServerUrlState(resolved);
     });
     isBrowserModelCached().then((ok) => {
       if (!cancelled) setModelCached(ok);
