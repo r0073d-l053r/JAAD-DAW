@@ -3,14 +3,16 @@ import { Wand2, Layers, SplitSquareHorizontal } from './Icons';
 import { useGemini } from '../lib/useGemini';
 import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
+import { saveAsset } from '../lib/assetManager';
+import { uploadAssetCloud } from '../lib/syncUtils';
 import { LiquidGlassPanel } from './LiquidGlass';
 
 export function AICopilot() {
   const { state, dispatch } = useApp();
-  const { requestMixingAdvice, getMasteringSettings, detectBPM, generateMIDI, isGenerating, error } = useGemini();
+  const { requestMixingAdvice, getMasteringSettings, detectBPM, generateMIDI, generateStyleSheet, generateLyrics, generateMusicClip, isGenerating, error } = useGemini();
   const [prompt, setPrompt] = useState('');
   const [history, setHistory] = useState<Array<{role: string, content: string}>>([
-    { role: 'assistant', content: 'Hi! I am your AI audio assistant. Ask me for mixing advice, mastering settings, or track separation.' }
+    { role: 'assistant', content: 'Hi! I am your AI audio assistant. I can generate tracks, write a style sheet or lyrics, detect tempo, separate stems, and give mixing or mastering advice. Type an idea and use a button, or just ask.' }
   ]);
 
   const [isGeneratingLocal, setIsGeneratingLocal] = useState(false);
@@ -71,11 +73,14 @@ export function AICopilot() {
        } else {
          responseStr = "I couldn't generate a valid MIDI pattern from that prompt.";
        }
-    } else if (userMsg.toLowerCase().includes('noise') || userMsg.toLowerCase().includes('denoise')) {
-       setIsGeneratingLocal(true);
-       await new Promise(r => setTimeout(r, 1500));
-       setIsGeneratingLocal(false);
-       responseStr = "I've applied AI Denoiser to the selected track.";
+    } else if (userMsg.toLowerCase().includes('lyric')) {
+       const theme = userMsg.replace(/.*?lyric[s]?\s*(about|for|on|:)?\s*/i, '').trim() || userMsg;
+       const result = await generateLyrics(theme);
+       responseStr = result || "I couldn't generate lyrics for that.";
+    } else if (userMsg.toLowerCase().includes('style')) {
+       const desc = userMsg.replace(/.*?style\s*(sheet)?\s*(about|for|on|:)?\s*/i, '').trim() || userMsg;
+       const result = await generateStyleSheet(desc);
+       responseStr = result || "I couldn't generate a style sheet for that.";
     } else {
       const simplifiedTracks = state.tracks.map(t => ({ name: t.name, vol: t.volume, pan: t.pan }));
       const advice = await requestMixingAdvice(simplifiedTracks, userMsg);
@@ -144,31 +149,91 @@ export function AICopilot() {
               <SplitSquareHorizontal size={16} className="text-blue-400" />
               <span className="text-[10px] text-gray-300">Stem Separation</span>
             </button>
-            <button 
+            <button
               onClick={async () => {
-                 setPrompt('Generating realistic vocal track...');
-                 setIsGeneratingLocal(true);
-                 await new Promise(r => setTimeout(r, 2000));
-                 setIsGeneratingLocal(false);
-                 setHistory(prev => [...prev, { role: 'assistant', content: "I've generated a vocal track for you and placed it into a new track. (Mock)" }]);
+                 const desc = prompt.trim();
+                 if (!desc) {
+                   setHistory(prev => [...prev, { role: 'assistant', content: "Type what you'd like me to generate first (e.g. \"lofi piano loop, 90 bpm\"), then tap Generate Track." }]);
+                   return;
+                 }
+                 setPrompt('');
+                 setHistory(prev => [...prev, { role: 'user', content: `Generate a track: ${desc}` }]);
+                 const result = await generateMusicClip(`Generate a high-fidelity audio track. ${desc}`, 'copilot');
+                 if (!result) {
+                   setHistory(prev => [...prev, { role: 'assistant', content: "I couldn't generate that track — check your Gemini API key in Settings and try again." }]);
+                   return;
+                 }
+                 await saveAsset(result.clipId, result.file);
+                 uploadAssetCloud(result.clipId, result.file).catch(() => {});
+                 const trackId = 'ai_' + Date.now();
                  dispatch({
                    type: 'ADD_TRACK',
                    payload: {
-                     id: 'ai_' + Date.now(),
-                     name: 'AI Vocals',
+                     id: trackId,
+                     name: 'AI Generated',
                      volume: 0.8,
                      pan: 0,
                      muted: false,
                      solo: false,
                      color: '#ff00ff',
-                     clips: [{ id: 'c_gen', start: state.currentTime, duration: 10, audioData: 'AI Synthesized Vocal' }]
+                     clips: [],
+                     lanes: [],
+                     showLanes: false,
                    }
                  });
+                 dispatch({
+                   type: 'ADD_CLIP',
+                   payload: {
+                     trackId,
+                     clip: {
+                       id: result.clipId,
+                       bufferId: result.clipId,
+                       start: state.currentTime,
+                       duration: result.duration,
+                       audioData: desc.slice(0, 40),
+                     }
+                   }
+                 });
+                 setHistory(prev => [...prev, { role: 'assistant', content: `Done — generated "${desc}" and placed it on a new track.` }]);
               }}
               className="bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.08] rounded-lg p-2 flex flex-col items-center justify-center gap-1 transition backdrop-blur-sm"
             >
               <Layers size={16} className="text-pink-400" />
               <span className="text-[10px] text-gray-300">Generate Track</span>
+            </button>
+            <button
+              onClick={async () => {
+                 const desc = prompt.trim();
+                 if (!desc) {
+                   setHistory(prev => [...prev, { role: 'assistant', content: "Describe the vibe first (e.g. \"dark synthwave, 80 bpm, analog\"), then tap Style Sheet." }]);
+                   return;
+                 }
+                 setPrompt('');
+                 setHistory(prev => [...prev, { role: 'user', content: `Style sheet: ${desc}` }]);
+                 const result = await generateStyleSheet(desc);
+                 setHistory(prev => [...prev, { role: 'assistant', content: result || "I couldn't generate a style sheet for that." }]);
+              }}
+              className="bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.08] rounded-lg p-2 flex flex-col items-center justify-center gap-1 transition backdrop-blur-sm"
+            >
+              <Wand2 size={16} className="text-amber-400" />
+              <span className="text-[10px] text-gray-300">Style Sheet</span>
+            </button>
+            <button
+              onClick={async () => {
+                 const theme = prompt.trim();
+                 if (!theme) {
+                   setHistory(prev => [...prev, { role: 'assistant', content: "Give me a theme first (e.g. \"leaving home at eighteen\"), then tap Write Lyrics." }]);
+                   return;
+                 }
+                 setPrompt('');
+                 setHistory(prev => [...prev, { role: 'user', content: `Write lyrics: ${theme}` }]);
+                 const result = await generateLyrics(theme);
+                 setHistory(prev => [...prev, { role: 'assistant', content: result || "I couldn't generate lyrics for that." }]);
+              }}
+              className="bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.08] rounded-lg p-2 flex flex-col items-center justify-center gap-1 transition backdrop-blur-sm"
+            >
+              <Wand2 size={16} className="text-emerald-400" />
+              <span className="text-[10px] text-gray-300">Write Lyrics</span>
             </button>
           </div>
 
