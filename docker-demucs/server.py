@@ -12,7 +12,10 @@ Security posture mirrors the DSP sidecar:
 
 import asyncio
 import os
+import re
 import shutil
+import subprocess
+import sys
 import tempfile
 import uuid
 
@@ -47,7 +50,6 @@ app.add_middleware(
 #             dir: tempdir, stems: {name: path}, error: str}
 jobs: dict = {}
 _job_lock = asyncio.Lock()  # one separation at a time (model is heavy)
-_separators: dict = {}      # model name -> loaded Separator (cached)
 
 
 def _check_auth(authorization: str | None):
@@ -58,43 +60,58 @@ def _check_auth(authorization: str | None):
         raise HTTPException(status_code=401, detail="auth not configured")
 
 
-def _get_separator(model: str, progress_cb):
-    """Load (and cache) a Demucs separator. Import here so the API can report a
-    clean error if demucs/torch are missing rather than dying at startup."""
-    from demucs.api import Separator
+def _cuda_available() -> bool:
+    try:
+        import torch
 
-    if model not in _separators:
-        _separators[model] = Separator(model=model)
-    sep = _separators[model]
-    sep.update_parameter(callback=progress_cb)
-    return sep
+        return torch.cuda.is_available()
+    except Exception:
+        return False
+
+
+_PCT_RE = re.compile(r"(\d+)%")
 
 
 def _run_separation(job_id: str, wav_path: str, model: str):
-    """Blocking: runs in a worker thread. Writes stems next to the input."""
-    from demucs.api import save_audio
-
+    """Blocking (runs in a worker thread): drive the Demucs CLI. The CLI is the
+    stable interface across demucs 4.x — the `demucs.api` module is not present
+    in all 4.0.x builds. Writes stems to <out>/<model>/<track>/<stem>.wav."""
     job = jobs[job_id]
+    out_dir = os.path.join(os.path.dirname(wav_path), "out")
+    device = "cuda" if _cuda_available() else "cpu"
 
-    def progress_cb(data: dict):
-        try:
-            length = float(data.get("audio_length") or 0) or 1.0
-            offset = float(data.get("segment_offset") or 0)
-            models = float(data.get("models") or 1) or 1.0
-            idx = float(data.get("model_idx_in_bag") or 0)
-            job["progress"] = min(0.99, (idx + min(offset / length, 1.0)) / models)
-        except Exception:
-            pass  # progress is best-effort; never fail the job over it
+    cmd = [sys.executable, "-m", "demucs", "-n", model, "-d", device, "-o", out_dir, wav_path]
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
 
-    separator = _get_separator(model, progress_cb)
-    _origin, separated = separator.separate_audio_file(wav_path)
+    # Best-effort progress from Demucs' stderr percentage bar (tqdm uses \r, so
+    # read in chunks, not lines). Never fail the job over progress parsing.
+    window = ""
+    while True:
+        chunk = proc.stderr.read(128)
+        if not chunk:
+            break
+        window = (window + chunk)[-256:]
+        matches = _PCT_RE.findall(window)
+        if matches:
+            try:
+                job["progress"] = min(0.99, int(matches[-1]) / 100.0)
+            except ValueError:
+                pass
+    proc.wait()
+    if proc.returncode != 0:
+        raise RuntimeError(f"demucs CLI exited with code {proc.returncode}")
 
-    stems: dict = {}
-    out_dir = os.path.dirname(wav_path)
-    for name, tensor in separated.items():
-        out_path = os.path.join(out_dir, f"{name}.wav")
-        save_audio(tensor, out_path, samplerate=separator.samplerate)
-        stems[name] = out_path
+    base = os.path.splitext(os.path.basename(wav_path))[0]
+    stem_dir = os.path.join(out_dir, model, base)
+    if not os.path.isdir(stem_dir):
+        raise RuntimeError(f"demucs produced no output directory at {stem_dir}")
+    stems = {
+        os.path.splitext(f)[0]: os.path.join(stem_dir, f)
+        for f in sorted(os.listdir(stem_dir))
+        if f.endswith(".wav")
+    }
+    if not stems:
+        raise RuntimeError("demucs produced no stem files")
 
     job["stems"] = stems
     job["progress"] = 1.0
