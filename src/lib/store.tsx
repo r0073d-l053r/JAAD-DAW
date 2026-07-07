@@ -188,6 +188,8 @@ interface AppState {
   pianoRollClipId: string | null;
   showLiveAnalyzers: boolean;
   theme: ThemeState;
+  /** Track selected via its header; targeted by the Track menu's Delete/Duplicate. */
+  activeTrackId: string | null;
   activeContextMenu: {
     type: "clip" | "selection";
     clipId?: string;
@@ -269,6 +271,8 @@ export type Action =
   | { type: "RESTORE_SELECTION" }
   | { type: "DELETE_TRACK"; payload: string }
   | { type: "DUPLICATE_TRACK"; payload: string }
+  | { type: "SET_ACTIVE_TRACK"; payload: string | null }
+  | { type: "TOGGLE_ALL_AUTOMATION_LANES" }
   | { type: "ADD_LANE"; payload: { trackId: string } }
   | { type: "DELETE_LANE"; payload: { trackId: string; laneId: string } }
   | { type: "DELETE_LANES"; payload: { trackId: string; laneIds: string[] } }
@@ -441,6 +445,7 @@ export const initialState: AppStateWithHistory = {
   pianoRollClipId: null,
   showLiveAnalyzers: false,
   theme: loadStoredTheme(),
+  activeTrackId: null,
   activeContextMenu: null,
 };
 
@@ -625,6 +630,15 @@ export function appReducer(
       );
       return { ...state, tracks: newTracks }; // UI toggle — no history (mirrors TOGGLE_LANES)
     }
+    case "TOGGLE_ALL_AUTOMATION_LANES": {
+      // Global View-menu toggle: if any track shows automation, hide all; else show all.
+      const anyShown = state.tracks.some((t) => t.showAutomation);
+      const newTracks = state.tracks.map((t) => ({ ...t, showAutomation: !anyShown }));
+      return { ...state, tracks: newTracks }; // UI toggle — no history
+    }
+    case "SET_ACTIVE_TRACK": {
+      return { ...state, activeTrackId: action.payload };
+    }
     case "ADD_AUTOMATION_POINT": {
       const { trackId, param, time, value } = action.payload;
       if (!state.tracks.some((t) => t.id === trackId)) return state;
@@ -733,7 +747,10 @@ export function appReducer(
         lanes: action.payload.lanes || [],
         showLanes: action.payload.showLanes ?? false,
       };
-      return saveHistory(state, [...state.tracks, trackWithLanes]);
+      return {
+        ...saveHistory(state, [...state.tracks, trackWithLanes]),
+        activeTrackId: trackWithLanes.id,
+      };
     }
     case "UPDATE_TRACK": {
       const { id, changes } = action.payload;
@@ -1775,6 +1792,7 @@ export function appReducer(
         projectId: "",
         isDefaultName: true,
         hasManuallySaved: false,
+        activeTrackId: null,
       };
     }
     case "LOAD_PROJECT":
@@ -2179,7 +2197,11 @@ export function appReducer(
     }
     case "DELETE_TRACK": {
       const newTracks = state.tracks.filter((t) => t.id !== action.payload);
-      return saveHistory(state, newTracks);
+      const activeTrackId =
+        state.activeTrackId === action.payload
+          ? newTracks[0]?.id ?? null
+          : state.activeTrackId;
+      return { ...saveHistory(state, newTracks), activeTrackId };
     }
     case "DUPLICATE_TRACK": {
       const trackToClone = state.tracks.find((t) => t.id === action.payload);
@@ -2203,7 +2225,10 @@ export function appReducer(
           })),
         })),
       };
-      return saveHistory(state, [...state.tracks, newTrack]);
+      return {
+        ...saveHistory(state, [...state.tracks, newTrack]),
+        activeTrackId: newTrack.id,
+      };
     }
     case "ADD_LANE": {
       const newTracks = state.tracks.map((t) => {

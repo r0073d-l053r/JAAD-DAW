@@ -513,3 +513,94 @@ describe('Track automation reducer actions', () => {
     expect(hidden.past).toHaveLength(0);
   });
 });
+
+describe('Active track selection (Track menu targeting)', () => {
+  const twoTrackState = (): AppStateWithHistory => ({
+    ...initialState,
+    tracks: [makeTrack('t1'), makeTrack('t2')],
+    activeTrackId: null,
+    past: [],
+    future: [],
+  });
+
+  it('SET_ACTIVE_TRACK sets the active track id', () => {
+    const state = appReducer(twoTrackState(), { type: 'SET_ACTIVE_TRACK', payload: 't2' });
+    expect(state.activeTrackId).toBe('t2');
+    expect(state.past).toHaveLength(0); // selection is not an undoable edit
+  });
+
+  it('ADD_TRACK makes the new track active', () => {
+    const state = appReducer(twoTrackState(), { type: 'ADD_TRACK', payload: makeTrack('t3') });
+    expect(state.activeTrackId).toBe('t3');
+  });
+
+  it('DUPLICATE_TRACK makes the copy active', () => {
+    const state = appReducer({ ...twoTrackState(), activeTrackId: 't1' }, {
+      type: 'DUPLICATE_TRACK',
+      payload: 't1',
+    });
+    expect(state.tracks).toHaveLength(3);
+    const copy = state.tracks[state.tracks.length - 1];
+    expect(copy.id).not.toBe('t1');
+    expect(state.activeTrackId).toBe(copy.id);
+  });
+
+  it('DELETE_TRACK reassigns active to the first remaining track when the active one is deleted', () => {
+    const state = appReducer({ ...twoTrackState(), activeTrackId: 't2' }, {
+      type: 'DELETE_TRACK',
+      payload: 't2',
+    });
+    expect(state.tracks.map((t) => t.id)).toEqual(['t1']);
+    expect(state.activeTrackId).toBe('t1');
+  });
+
+  it('DELETE_TRACK leaves active null when the last track is deleted', () => {
+    let state: AppStateWithHistory = {
+      ...initialState,
+      tracks: [makeTrack('only')],
+      activeTrackId: 'only',
+      past: [],
+      future: [],
+    };
+    state = appReducer(state, { type: 'DELETE_TRACK', payload: 'only' });
+    expect(state.tracks).toHaveLength(0);
+    expect(state.activeTrackId).toBeNull();
+  });
+
+  it('DELETE_TRACK keeps active untouched when a different track is deleted', () => {
+    const state = appReducer({ ...twoTrackState(), activeTrackId: 't1' }, {
+      type: 'DELETE_TRACK',
+      payload: 't2',
+    });
+    expect(state.activeTrackId).toBe('t1');
+  });
+});
+
+describe('TOGGLE_ALL_AUTOMATION_LANES (global View toggle)', () => {
+  it('shows all lanes when none are shown, then hides all — without touching undo history', () => {
+    const base: AppStateWithHistory = {
+      ...initialState,
+      tracks: [makeTrack('t1'), makeTrack('t2')],
+      past: [],
+      future: [],
+    };
+    const shown = appReducer(base, { type: 'TOGGLE_ALL_AUTOMATION_LANES' });
+    expect(shown.tracks.every((t) => t.showAutomation === true)).toBe(true);
+    expect(shown.past).toHaveLength(0); // UI-only toggle, no history
+
+    const hidden = appReducer(shown, { type: 'TOGGLE_ALL_AUTOMATION_LANES' });
+    expect(hidden.tracks.every((t) => t.showAutomation === false)).toBe(true);
+    expect(hidden.past).toHaveLength(0);
+  });
+
+  it('hides all when even one track already shows automation', () => {
+    const mixed: AppStateWithHistory = {
+      ...initialState,
+      tracks: [makeTrack('t1'), { ...makeTrack('t2'), showAutomation: true }],
+      past: [],
+      future: [],
+    };
+    const result = appReducer(mixed, { type: 'TOGGLE_ALL_AUTOMATION_LANES' });
+    expect(result.tracks.every((t) => t.showAutomation === false)).toBe(true);
+  });
+});

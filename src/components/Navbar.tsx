@@ -397,7 +397,6 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
       { divider: true, label: '' },
       { label: 'Export .WAV Mixdown...', action: () => handleExportWav() },
       { label: 'Export Multitrack (ZIP)...', action: () => handleExportStems() },
-      { label: 'Export to Media Library', action: () => alert('Coming soon to J.A.A.S.!') },
     ],
     'Edit': [
       { label: 'Undo', shortcut: 'Ctrl+Z', action: () => { dispatch({ type: 'UNDO' }); setOpenMenu(null); } },
@@ -410,11 +409,9 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
       { divider: true, label: '' },
       { label: 'Select All', shortcut: 'Ctrl+A', action: () => { dispatch({ type: 'SELECT_ALL_CLIPS' }); setOpenMenu(null); } },
       { label: 'Split Clip', shortcut: 'S', action: () => { dispatch({ type: 'SPLIT_CLIP' }); setOpenMenu(null); } },
-      { label: 'Heal Edits', action: () => { alert("Healing edits..."); setOpenMenu(null); } },
       { label: 'Cleanup Stems', shortcut: 'Ctrl+Shift+S', action: () => { cleanUpStemsAsync(state, dispatch); setOpenMenu(null); } },
       { divider: true, label: '' },
       { label: 'Toggle Snap', action: () => { dispatch({ type: 'TOGGLE_SNAP' }); setOpenMenu(null); } },
-      { label: 'Toggle Warp Mode', action: () => { alert("Warp mode enabled (adjust timing visually)."); setOpenMenu(null); } },
     ],
     'Track': [
       { label: 'Add Audio Track', action: () => { 
@@ -426,17 +423,16 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
         setOpenMenu(null); 
       }},
       { divider: true, label: '' },
-      { label: 'Duplicate Selected Track', action: () => { 
-        alert('Select track feature needed to delete/duplicate');
-        setOpenMenu(null); 
+      { label: 'Duplicate Track', action: () => {
+        const id = state.activeTrackId ?? state.tracks[state.tracks.length - 1]?.id;
+        if (id) dispatch({ type: 'DUPLICATE_TRACK', payload: id });
+        setOpenMenu(null);
       }},
-      { label: 'Delete Selected Track', action: () => { 
-        alert('Select track feature needed to delete/duplicate');
-        setOpenMenu(null); 
+      { label: 'Delete Track', action: () => {
+        const id = state.activeTrackId ?? state.tracks[state.tracks.length - 1]?.id;
+        if (id) dispatch({ type: 'DELETE_TRACK', payload: id });
+        setOpenMenu(null);
       }},
-      { divider: true, label: '' },
-      { label: 'Rename Track', action: () => alert('Select a track to rename via its header') },
-      { label: 'Track Color', action: () => alert('Select a track to change color via its header') },
     ],
     'View': [
       { label: 'Toggle Mixer', shortcut: 'Tab', action: () => { dispatch({ type: 'SET_VIEW_MODE', payload: state.viewMode === 'timeline' ? 'mixer' : 'timeline' }); setOpenMenu(null); } },
@@ -449,7 +445,7 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
       { label: 'Zoom Out', shortcut: 'Ctrl+-', action: () => { dispatch({ type: 'SET_ZOOM', payload: state.zoomLevel / 1.2 }); setOpenMenu(null); } },
       { label: 'Fit to Screen', action: () => { dispatch({ type: 'SET_ZOOM', payload: 20 }); setOpenMenu(null); } },
       { divider: true, label: '' },
-      { label: 'Show/Hide Automation Lanes', action: () => alert('Automation lanes visibility toggled') },
+      { label: 'Show/Hide Automation Lanes', action: () => { dispatch({ type: 'TOGGLE_ALL_AUTOMATION_LANES' }); setOpenMenu(null); } },
       { label: 'Toggle Fullscreen', shortcut: 'F11', action: () => {
          if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen();
@@ -726,21 +722,6 @@ export function Navbar({ setSyncProgress }: { setSyncProgress: (p: number) => vo
                 <div className="flex flex-col items-end">
                   <span className="text-[10px] text-green-400 font-mono">~{formatFileSize(estimateWavSize(getProjectDuration()) * state.tracks.length * 0.7)}</span>
                   <span className="text-[9px] text-zinc-600 font-mono">.zip</span>
-                </div>
-              </button>
-
-              <div className="h-px bg-white/5 my-2" />
-              
-              <button 
-                disabled
-                className="w-full text-left px-4 py-2.5 text-sm text-zinc-600 cursor-not-allowed group/jaas relative"
-              >
-                <div className="flex items-center gap-3 grayscale">
-                  <div className="w-1.5 h-1.5 rounded-full bg-zinc-700" />
-                  <span>Export to J.A.A.S. Library</span>
-                </div>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover/jaas:opacity-100 transition-opacity">
-                   <span className="text-[8px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded border border-white/5">COMING SOON</span>
                 </div>
               </button>
               </LiquidGlassPanel>

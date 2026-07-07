@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp, Track, Clip } from '../lib/store';
 import { Volume2, Sliders, Timer } from './Icons';
-import { MoreHorizontal, Trash2, Download, Scissors, Layers, Wand2, ArrowUp, ChevronDown, ChevronRight, Snowflake, RotateCcw } from 'lucide-react';
+import { MoreHorizontal, Trash2, Download, Scissors, Layers, ArrowUp, ChevronDown, ChevronRight, Snowflake, RotateCcw } from 'lucide-react';
 import { audioEngine } from '../lib/audioEngine';
 import { saveAsset } from '../lib/assetManager';
 import { uploadAssetCloud } from '../lib/syncUtils';
@@ -133,7 +133,8 @@ export function TrackList() {
               dispatch({ type: 'REORDER_TRACKS', payload: { sourceId, targetId: track.id } });
             }
           }}
-          className="h-28 shrink-0 border-b border-white/5 flex flex-col p-3 bg-white/5 hover:bg-white/10 relative group transition-colors duration-300 cursor-grab active:cursor-grabbing"
+          onClick={() => dispatch({ type: 'SET_ACTIVE_TRACK', payload: track.id })}
+          className={`h-28 shrink-0 border-b border-white/5 flex flex-col p-3 hover:bg-white/10 relative group transition-colors duration-300 cursor-grab active:cursor-grabbing ${state.activeTrackId === track.id ? 'bg-primary/15' : 'bg-white/5'}`}
         >
           <div className="absolute left-0 top-0 bottom-0 w-1 shadow-[0_0_10px_rgba(255,255,255,0.1)]" style={{ backgroundColor: track.color }} />
           
@@ -238,17 +239,6 @@ export function TrackList() {
                       >
                         {track.showLanes ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                         <span>{track.showLanes ? "Hide Alternates" : "Show Alternates"}</span>
-                      </button>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          alert("Removed background FX from track.");
-                          setOpenMenuId(null);
-                        }}
-                        className="w-full text-left px-3 py-2 text-xs hover:bg-white/10 text-zinc-300 flex items-center space-x-2 transition-colors"
-                      >
-                        <Wand2 size={12} />
-                        <span>Remove FX</span>
                       </button>
                       <button 
                         onClick={(e) => {
