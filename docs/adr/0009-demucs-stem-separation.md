@@ -38,10 +38,12 @@ guarded, loopback-bound):
    "(approx)". Footer states the active mode plainly ("DEMUCS AI SOURCE
    SEPARATION · SELF-HOSTED" vs "LOCAL FILTER APPROXIMATION MODE"). The old
    always-on "AI" framing is gone.
-5. **Distribution**: `docker-compose.stems.yml` is **separate** from the main
-   compose file so the ~2.5GB torch image never enters Docker CI or default
-   `docker-compose up`. GPU users uncomment the `gpus` block and switch the
-   Dockerfile's torch index to CUDA for ~10–30× speedups.
+5. **Distribution**: the stems service is **opt-in** so the ~2.5GB torch image
+   never enters Docker CI or default `docker-compose up`. *(Originally a
+   separate `docker-compose.stems.yml`; unified 2026-07 into the main
+   `docker-compose.yml` under `profiles: ["stems"]`, with CI's bake pinned to
+   explicit `jaad dsp` targets — bake ignores profiles.)* GPU users uncomment
+   the `gpus` block and switch the torch index to CUDA for ~10–30× speedups.
 
 ## Alternatives Considered
 
@@ -67,7 +69,7 @@ guarded, loopback-bound):
   `demucs==4.0.1` — verify on upgrade.
 
 ## Verification checklist (one-time, on the AI server)
-1. `docker compose -f docker-compose.stems.yml up -d --build` (first run downloads weights).
+1. `docker compose --profile stems up -d --build` (first run downloads weights).
 2. `curl http://localhost:8000/health` → `{"ok": true, ...}`.
 3. In JAAD → right-click a full-mix clip → Stem Separation Studio → confirm the
    green **AI Ready** dot and AI badges.

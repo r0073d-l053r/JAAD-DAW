@@ -25,8 +25,11 @@ jobs:
         run: mkdir -p vst
 
       - name: Build Docker images
+        # Explicit targets (jaad dsp): bake does not understand compose profiles,
+        # so without them it would also build the opt-in "stems" service — a
+        # ~2.5GB torch image we deliberately keep out of CI.
         run: |
-          docker buildx bake -f docker-compose.yml --set *.cache-from=type=gha --set *.cache-to=type=gha,mode=max --load
+          docker buildx bake -f docker-compose.yml jaad dsp --set *.cache-from=type=gha --set *.cache-to=type=gha,mode=max --load
 
       - name: Start Docker containers
         run: |

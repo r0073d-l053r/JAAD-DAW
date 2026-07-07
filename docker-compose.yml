@@ -43,3 +43,49 @@ services:
       retries: 3
       start_period: 15s
 
+  # AI stem separation (Demucs) — OPT-IN via the "stems" profile because the
+  # torch image is ~2.5GB and model weights download on first run:
+  #
+  #   docker compose --profile stems up -d --build     # everything incl. stems
+  #   docker compose up -d                             # app + dsp only
+  #
+  # (Or set COMPOSE_PROFILES=stems in a .env to make it default on a host.)
+  # Point JAAD at it via the Stem Separation Studio server field, or
+  # localStorage 'jaad_stems_url'. Default: http://localhost:8000
+  # NOTE: Docker CI builds explicit bake targets (jaad dsp) — bake ignores
+  # profiles, so keep stems out of CI by not adding it to the bake target list.
+  stems:
+    profiles: ["stems"]
+    build:
+      context: ./docker-demucs
+      # GPU hosts: switch to the CUDA torch wheel for ~10-30x faster separation
+      # (requires nvidia-container-toolkit + the deploy block below):
+      #   args:
+      #     TORCH_INDEX_URL: https://download.pytorch.org/whl/cu121
+    ports:
+      # Loopback-only, same posture as the DSP sidecar. Front with an
+      # authenticated reverse proxy to expose it beyond this machine.
+      - "127.0.0.1:8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Local-only escape hatch. For any non-local deployment set a strong
+      # JAAD_STEMS_TOKEN instead (and mirror it in localStorage 'jaad_stems_token').
+      - JAAD_STEMS_ALLOW_NO_AUTH=1
+      - JAAD_STEMS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+    volumes:
+      # Persist downloaded Demucs model weights (~300MB-2GB) across restarts.
+      - demucs-models:/home/jaad/.cache
+    restart: unless-stopped
+    container_name: jaad-stems
+    # GPU passthrough (pairs with the CUDA build arg above):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  demucs-models:
+

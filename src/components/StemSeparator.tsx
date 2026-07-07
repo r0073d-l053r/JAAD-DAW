@@ -377,7 +377,7 @@ export const StemSeparator: React.FC = () => {
               <p className="text-[9px] text-zinc-500 leading-relaxed">
                 No Demucs server found and this browser lacks WebGPU/threads — AI-capable stems
                 will use the local filter approximation. Start a server with{" "}
-                <code className="text-zinc-400">docker compose -f docker-compose.stems.yml up -d</code>
+                <code className="text-zinc-400">docker compose --profile stems up -d</code>
               </p>
             )}
           </div>
