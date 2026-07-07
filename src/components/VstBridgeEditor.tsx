@@ -4,12 +4,18 @@ import { X, Cpu, Wifi, WifiOff, RefreshCw, Layers, Monitor } from 'lucide-react'
 import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { LiquidGlassPanel } from './LiquidGlass';
-import { VstParameter } from '../lib/cloudVstBridge';
+import { VstParameter, getDefaultDspUrl } from '../lib/cloudVstBridge';
 
 export const VstBridgeEditor: React.FC = () => {
   const { state, dispatch } = useApp();
   const dragControls = useDragControls();
-  const [wsUrl, setWsUrl] = useState<string>('ws://localhost:8080');
+  // Saved URL first, then the origin-aware default (wss://host/dsp on proxied
+  // https deployments; ws://localhost:8080 in local dev).
+  const [wsUrl, setWsUrl] = useState<string>(
+    () =>
+      (typeof localStorage !== 'undefined' && localStorage.getItem('jaad_dsp_url')) ||
+      getDefaultDspUrl(),
+  );
   const [status, setStatus] = useState<string>('disconnected');
   const [latency, setLatency] = useState<number>(0);
   const [params, setParams] = useState<Record<string, VstParameter>>({});
@@ -43,12 +49,18 @@ export const VstBridgeEditor: React.FC = () => {
   if (!trackId || !track) return null;
 
   const handleConnect = () => {
+    // Persist so future sessions (and other tracks' bridges) reuse what worked.
+    try {
+      localStorage.setItem('jaad_dsp_url', wsUrl.trim());
+    } catch {
+      // Storage unavailable (private mode) — connection still proceeds.
+    }
     let bridge = audioEngine.cloudVstBridges.get(trackId);
     if (!bridge) {
       bridge = audioEngine.addCloudVstBridge(trackId);
     }
     if (bridge) {
-      bridge.connect(wsUrl);
+      bridge.connect(wsUrl.trim());
     }
   };
 

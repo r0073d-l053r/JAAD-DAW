@@ -1,5 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { CloudVstBridge } from './cloudVstBridge';
+import { CloudVstBridge, getDefaultDspUrl } from './cloudVstBridge';
+
+describe('getDefaultDspUrl (origin-aware default)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('uses the local-dev default on http origins', () => {
+    vi.stubGlobal('location', { protocol: 'http:', host: 'localhost:3000' });
+    expect(getDefaultDspUrl()).toBe('ws://localhost:8080');
+  });
+
+  it('uses the same-host /dsp proxy path on https origins (mixed content + wrong host otherwise)', () => {
+    vi.stubGlobal('location', { protocol: 'https:', host: 'musebot.tail7ff9e.ts.net' });
+    expect(getDefaultDspUrl()).toBe('wss://musebot.tail7ff9e.ts.net/dsp');
+  });
+});
 
 class MockWebSocket {
   binaryType: string = '';

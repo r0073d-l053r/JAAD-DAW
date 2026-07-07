@@ -3,6 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/**
+ * Default DSP bridge URL for this origin. On an https page the browser blocks
+ * insecure ws:// (mixed content) and "localhost" points at the viewer's own
+ * machine — so proxied deployments (Tailscale Serve / nginx expose the sidecar
+ * at /dsp) get a same-host wss:// default instead of the local-dev one.
+ */
+export function getDefaultDspUrl(): string {
+  if (typeof location !== 'undefined' && location.protocol === 'https:') {
+    return `wss://${location.host}/dsp`;
+  }
+  return 'ws://localhost:8080';
+}
+
 export interface VstParameter {
   name: string;
   value: number; // 0.0 to 1.0 (normalized)
@@ -93,10 +106,11 @@ export class CloudVstBridge {
 
     // Resolve the sidecar URL and optional shared token from local settings so
     // hardened deployments (JAAD_DSP_TOKEN set on the server) can authenticate.
-    // Defaults preserve the original local behavior (ws://localhost:8080, no token).
+    // Default is origin-aware: ws://localhost:8080 in local dev, wss://host/dsp
+    // on proxied https deployments (see getDefaultDspUrl).
     const storedUrl =
       typeof localStorage !== 'undefined' ? localStorage.getItem('jaad_dsp_url') : null;
-    let target = url ?? storedUrl ?? 'ws://localhost:8080';
+    let target = url ?? storedUrl ?? getDefaultDspUrl();
     const token =
       typeof localStorage !== 'undefined' ? localStorage.getItem('jaad_dsp_token') : null;
     if (token) {
@@ -245,13 +259,24 @@ export class CloudVstBridge {
   /**
    * Derive the noVNC viewer URL from the DSP websocket URL so the editor can embed
    * the real plugin GUI running under the sidecar's virtual display.
-   * ws://host:8080 -> http://host:6080/vnc.html
+   * - explicit override:      localStorage 'jaad_dsp_novnc_url'
+   * - proxied (path) bridge:  wss://host/dsp   -> https://host/vnc/vnc.html
+   * - direct (port) bridge:   ws://host:8080   -> http://host:6080/vnc.html
    */
   public getVncUrl(): string {
-    const base = (this.socket && this.socket.url) || 'ws://localhost:8080';
+    const explicit =
+      typeof localStorage !== 'undefined' ? localStorage.getItem('jaad_dsp_novnc_url') : null;
+    if (explicit) return explicit;
+
+    const base = (this.socket && this.socket.url) || getDefaultDspUrl();
     try {
       const u = new URL(base);
       const proto = u.protocol === 'wss:' ? 'https:' : 'http:';
+      // A path-based bridge URL means a reverse proxy fronts the sidecar; the
+      // GUI is proxied alongside it at /vnc (Tailscale Serve / nginx routing).
+      if (u.pathname && u.pathname !== '/') {
+        return `${proto}//${u.host}/vnc/vnc.html?autoconnect=true&resize=scale`;
+      }
       return `${proto}//${u.hostname}:6080/vnc.html?autoconnect=true&resize=scale`;
     } catch {
       return 'http://localhost:6080/vnc.html?autoconnect=true&resize=scale';
