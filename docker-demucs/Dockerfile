@@ -11,9 +11,11 @@ ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
-# CPU torch first (much smaller than the default CUDA wheel), then demucs.
-# For GPU: replace the index-url with https://download.pytorch.org/whl/cu121
-RUN pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cpu && \
+# torch install index. Default = CPU (small, works everywhere). For GPU, build
+# with --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu121 (or the
+# cuXXX matching the host driver) and enable the GPU block in the compose file.
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir torch torchaudio --index-url ${TORCH_INDEX_URL} && \
     pip install --no-cache-dir "demucs==4.0.1" "fastapi==0.115.6" "uvicorn==0.34.0" "python-multipart==0.0.20"
 
 WORKDIR /app
