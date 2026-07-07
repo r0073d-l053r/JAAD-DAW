@@ -27,18 +27,18 @@ describe('stemServer client', () => {
   });
 
   it('resolveStemServer falls back to the same-origin /stems proxy and persists it', async () => {
-    // Reproduces the musebot HTTPS case: default localhost:8000 is unreachable
+    // Reproduces a proxied-HTTPS deployment: default localhost:8000 is unreachable
     // from a remote device, but the nginx same-origin proxy answers.
-    vi.stubGlobal('location', { origin: 'https://musebot.tail7ff9e.ts.net' });
+    vi.stubGlobal('location', { origin: 'https://jaad.example.ts.net' });
     mockFetch
       .mockRejectedValueOnce(new Error('ERR_CONNECTION_REFUSED')) // localhost:8000
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) }); // /stems
 
     const resolved = await resolveStemServer();
-    expect(resolved).toBe('https://musebot.tail7ff9e.ts.net/stems');
-    expect(mockFetch.mock.calls[1][0]).toBe('https://musebot.tail7ff9e.ts.net/stems/health');
+    expect(resolved).toBe('https://jaad.example.ts.net/stems');
+    expect(mockFetch.mock.calls[1][0]).toBe('https://jaad.example.ts.net/stems/health');
     // Persisted so the upload/poll/download flow uses the working URL too.
-    expect(localStorage.getItem('jaad_stems_url')).toBe('https://musebot.tail7ff9e.ts.net/stems');
+    expect(localStorage.getItem('jaad_stems_url')).toBe('https://jaad.example.ts.net/stems');
     vi.unstubAllGlobals();
     vi.stubGlobal('fetch', mockFetch);
   });
@@ -51,7 +51,7 @@ describe('stemServer client', () => {
   });
 
   it('resolveStemServer returns null when nothing answers', async () => {
-    vi.stubGlobal('location', { origin: 'https://musebot.tail7ff9e.ts.net' });
+    vi.stubGlobal('location', { origin: 'https://jaad.example.ts.net' });
     mockFetch.mockRejectedValue(new Error('down'));
     expect(await resolveStemServer()).toBeNull();
     vi.unstubAllGlobals();
