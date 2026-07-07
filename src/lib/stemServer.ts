@@ -42,11 +42,11 @@ const authHeaders = (): Record<string, string> => {
 };
 
 /** Quick reachability probe so the UI can show AI vs. filter mode honestly. */
-export async function checkStemServer(timeoutMs = 2500): Promise<boolean> {
+export async function checkStemServer(timeoutMs = 2500, url?: string): Promise<boolean> {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    const res = await fetch(`${getStemServerUrl()}/health`, { signal: ctrl.signal });
+    const res = await fetch(`${url ?? getStemServerUrl()}/health`, { signal: ctrl.signal });
     clearTimeout(timer);
     if (!res.ok) return false;
     const body = await res.json().catch(() => null);
@@ -54,6 +54,27 @@ export async function checkStemServer(timeoutMs = 2500): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Find a reachable stems server without user configuration: try the
+ * configured/default URL first, then the same-origin `/stems` reverse proxy
+ * (how nginx deployments expose the sidecar — see nginx docs/ADR-0009). When
+ * the fallback wins it is persisted so later calls in the flow use it too.
+ * Returns the healthy base URL, or null if nothing answers.
+ */
+export async function resolveStemServer(timeoutMs = 2500): Promise<string | null> {
+  const configured = getStemServerUrl();
+  if (await checkStemServer(timeoutMs, configured)) return configured;
+
+  if (typeof location !== 'undefined' && location.origin && location.origin !== 'null') {
+    const sameOrigin = `${location.origin}/stems`;
+    if (sameOrigin !== configured && (await checkStemServer(timeoutMs, sameOrigin))) {
+      setStemServerUrl(sameOrigin);
+      return sameOrigin;
+    }
+  }
+  return null;
 }
 
 /**
