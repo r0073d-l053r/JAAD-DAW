@@ -20,6 +20,13 @@ export interface CloudProjectMetadata {
 export const isGitHubPagesBuild = (): boolean => {
   if (typeof window === 'undefined') return false;
   
+  // Explicit self-hosted builds are never the public GitHub Pages demo. The
+  // Docker image sets VITE_SELF_HOSTED=1, so a self-hoster gets a clean
+  // production app (no welcome modal, no demo-project protection) even when it
+  // is served under the /JAAD-DAW/ base path on a private host or Tailscale IP.
+  const selfHosted = import.meta.env.VITE_SELF_HOSTED;
+  if (selfHosted === '1' || selfHosted === 'true') return false;
+
   // Exclude local development environments explicitly (so localhost/127.0.0.1 is never locked or shown the modal)
   const hostname = window.location?.hostname || '';
   if (
