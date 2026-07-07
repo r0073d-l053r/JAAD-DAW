@@ -99,10 +99,10 @@ describe('syncUtils', () => {
   });
 
   it('treats an explicit self-hosted build as NOT the Pages demo, even under /JAAD-DAW/ on a private IP', () => {
-    // Reproduces the musebot case: Tailscale IP + /JAAD-DAW/ base path would
+    // Reproduces a private-IP (e.g. Tailscale) + /JAAD-DAW/ deployment that would
     // otherwise be misdetected as the public demo (welcome modal + demo lock).
     vi.stubGlobal('location', {
-      hostname: '100.77.248.40',
+      hostname: '100.64.0.1',
       pathname: '/JAAD-DAW/',
     });
     expect(isGitHubPagesBuild()).toBe(true); // without the flag it looks like the demo

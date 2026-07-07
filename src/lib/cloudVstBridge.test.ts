@@ -10,8 +10,8 @@ describe('getDefaultDspUrl (origin-aware default)', () => {
   });
 
   it('uses the same-host /dsp proxy path on https origins (mixed content + wrong host otherwise)', () => {
-    vi.stubGlobal('location', { protocol: 'https:', host: 'musebot.tail7ff9e.ts.net' });
-    expect(getDefaultDspUrl()).toBe('wss://musebot.tail7ff9e.ts.net/dsp');
+    vi.stubGlobal('location', { protocol: 'https:', host: 'jaad.example.ts.net' });
+    expect(getDefaultDspUrl()).toBe('wss://jaad.example.ts.net/dsp');
   });
 });
 
