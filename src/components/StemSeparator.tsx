@@ -13,6 +13,13 @@ import { audioBufferToWav } from "../lib/exportUtils";
 import { saveAsset } from "../lib/assetManager";
 import { uploadAssetCloud } from "../lib/syncUtils";
 import { LiquidGlassPanel } from "./LiquidGlass";
+import {
+  checkStemServer,
+  separateViaServer,
+  getStemServerUrl,
+  setStemServerUrl,
+  DEMUCS_STEM_MAP,
+} from "../lib/stemServer";
 
 const STEM_INSTRUMENTS = [
   { name: "Vocals", icon: <Mic size={14} />, color: "#E91E63", defaultChecked: true },
@@ -66,6 +73,22 @@ export const StemSeparator: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<string>("");
   const [progress, setProgress] = useState<number>(0);
 
+  // Self-hosted Demucs server (AI mode). null = probing, false = filter fallback.
+  const [serverAvailable, setServerAvailable] = useState<boolean | null>(null);
+  const [serverUrl, setServerUrlState] = useState<string>(getStemServerUrl());
+
+  useEffect(() => {
+    let cancelled = false;
+    setServerAvailable(null);
+    checkStemServer().then((ok) => {
+      if (!cancelled) setServerAvailable(ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Re-probe when the panel opens or the server URL changes.
+  }, [clipId, serverUrl]);
+
   const handleToggleStem = (name: string) => {
     setSelectedStems((prev) =>
       prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
@@ -78,6 +101,49 @@ export const StemSeparator: React.FC = () => {
 
   const handleSelectNone = () => {
     setSelectedStems([]);
+  };
+
+  /** Register a finished stem (buffer + file) as a new colored track. */
+  const placeStemOnTrack = async (
+    stem: string,
+    separatedBuffer: AudioBuffer,
+    wavBlob: Blob,
+    aiGenerated: boolean,
+  ) => {
+    const slug = stem.toLowerCase().replace(/\s+/g, "_");
+    const newClipId = `clip_${Date.now()}_stem_${slug}_${Math.random().toString(36).substring(2, 6)}`;
+    const suffix = aiGenerated ? "AI_STEM" : "STEM";
+    const stemFileName = `${targetClip.audioData?.replace(/\.[^/.]+$/, "") || "Audio"}_[${suffix}_${stem.toUpperCase().replace(/\s+/g, "_")}].wav`;
+    const stemFile = new File([wavBlob], stemFileName, { type: "audio/wav" });
+
+    audioEngine.buffers.set(newClipId, separatedBuffer);
+    await saveAsset(newClipId, stemFile);
+    uploadAssetCloud(newClipId, stemFile).catch((err) =>
+      console.error(`Failed to push stem ${stem} to cloud:`, err)
+    );
+
+    const matchConfig = STEM_INSTRUMENTS.find((x) => x.name === stem);
+    dispatch({
+      type: "ADD_TRACK",
+      payload: {
+        id: `track_${Date.now()}_stem_${slug}`,
+        name: aiGenerated ? stem : `${stem} (approx)`,
+        volume: 0.8,
+        pan: 0,
+        muted: false,
+        solo: false,
+        color: matchConfig?.color || "#FFFFFF",
+        clips: [
+          {
+            id: newClipId,
+            start: targetClip.start,
+            duration: Math.min(targetClip.duration, separatedBuffer.duration),
+            audioData: stemFileName,
+          },
+        ],
+      },
+    });
+    dispatch({ type: "INCREMENT_BUFFERS_VERSION" });
   };
 
   const handleProcessSeparation = async () => {
@@ -93,72 +159,57 @@ export const StemSeparator: React.FC = () => {
       return;
     }
 
+    // Split the selection: Demucs-capable stems go to the AI server when it's
+    // reachable; everything else uses the local filter approximation.
+    const useServer = serverAvailable === true;
+    const aiStems = useServer ? selectedStems.filter((s) => DEMUCS_STEM_MAP[s]) : [];
+    const filterStems = selectedStems.filter((s) => !aiStems.includes(s));
+    const aiShare = aiStems.length > 0 ? (filterStems.length > 0 ? 80 : 100) : 0;
+
     try {
-      const totalSteps = selectedStems.length;
-      
-      for (let i = 0; i < selectedStems.length; i++) {
-        const stem = selectedStems[i];
-        setCurrentStep(`Isolating ${stem}...`);
-        
-        // Let the event loop refresh the browser UI before rendering next heavy DSP array
-        await new Promise((res) => setTimeout(res, 50));
+      // --- AI path: real source separation via the Demucs sidecar -----------
+      if (aiStems.length > 0) {
+        setCurrentStep("Encoding source audio...");
+        const sourceWav = audioBufferToWav(originalBuffer);
 
-        // Call our advanced DSP processor
-        const separatedBuffer = await separateAudioStem(originalBuffer, stem, { lowCut, highCut });
-        
-        // Convert separated buffer to native audio Blob
-        const wavBlob = audioBufferToWav(separatedBuffer);
-        const newClipId = `clip_${Date.now()}_stem_${stem.toLowerCase().replace(/\s+/g, '_')}`;
-        const stemFileName = `${targetClip.audioData?.replace(/\.[^/.]+$/, "") || 'Audio'}_[STEM_${stem.toUpperCase().replace(/\s+/g, '_')}].wav`;
-        const stemFile = new File([wavBlob], stemFileName, { type: "audio/wav" });
-
-        // Register new Audio Buffer into the engine
-        audioEngine.buffers.set(newClipId, separatedBuffer);
-
-        // Store into asset database & upload asynchronously
-        await saveAsset(newClipId, stemFile);
-        uploadAssetCloud(newClipId, stemFile).catch((err) =>
-          console.error(`Failed to push stem ${stem} to cloud:`, err)
-        );
-
-        // Dispatch addition to state store
-        const matchConfig = STEM_INSTRUMENTS.find(x => x.name === stem);
-        const trackColor = matchConfig?.color || "#FFFFFF";
-        const newTrackId = `track_${Date.now()}_stem_${stem.toLowerCase().replace(/\s+/g, '_')}`;
-
-        dispatch({
-          type: "ADD_TRACK",
-          payload: {
-            id: newTrackId,
-            name: stem,
-            volume: 0.8,
-            pan: 0,
-            muted: false,
-            solo: false,
-            color: trackColor,
-            clips: [
-              {
-                id: newClipId,
-                start: targetClip.start,
-                duration: targetClip.duration,
-                audioData: stemFileName,
-              },
-            ],
-          },
+        const remoteStems = await separateViaServer(sourceWav, aiStems, (pct, step) => {
+          setCurrentStep(step);
+          setProgress(Math.round((pct / 100) * aiShare));
         });
 
-        dispatch({ type: "INCREMENT_BUFFERS_VERSION" });
-
-        // Incremental progress step calculation
-        setProgress(Math.round(((i + 1) / totalSteps) * 100));
+        const decodeCtx = new OfflineAudioContext(2, 1, originalBuffer.sampleRate);
+        for (const { instrument, blob } of remoteStems) {
+          setCurrentStep(`Placing ${instrument} on the timeline...`);
+          const decoded = await decodeCtx.decodeAudioData(await blob.arrayBuffer());
+          await placeStemOnTrack(instrument, decoded, blob, true);
+        }
       }
 
+      // --- Filter path: local approximation for non-Demucs selections -------
+      for (let i = 0; i < filterStems.length; i++) {
+        const stem = filterStems[i];
+        setCurrentStep(
+          useServer ? `Isolating ${stem} (filter approximation)...` : `Isolating ${stem}...`
+        );
+        // Let the event loop refresh the browser UI before the next heavy DSP pass
+        await new Promise((res) => setTimeout(res, 50));
+
+        const separatedBuffer = await separateAudioStem(originalBuffer, stem, { lowCut, highCut });
+        const wavBlob = audioBufferToWav(separatedBuffer);
+        await placeStemOnTrack(stem, separatedBuffer, wavBlob, false);
+
+        setProgress(aiShare + Math.round(((i + 1) / filterStems.length) * (100 - aiShare)));
+      }
+
+      setProgress(100);
       setCurrentStep("Complete!");
       await new Promise((res) => setTimeout(res, 400));
       dispatch({ type: "SET_STEM_SEPARATOR_CLIP", payload: null });
     } catch (err) {
-      console.error("DSP Audio Separation failed:", err);
-      setCurrentStep("Error isolating audio clips.");
+      console.error("Stem separation failed:", err);
+      setCurrentStep(
+        err instanceof Error ? `Error: ${err.message}` : "Error isolating audio clips."
+      );
     } finally {
       setIsProcessing(false);
     }
@@ -214,6 +265,43 @@ export const StemSeparator: React.FC = () => {
             </span>
           </div>
 
+          {/* Self-hosted Demucs server (AI mode) */}
+          <div className="bg-white/5 rounded-xl border border-white/5 p-3 flex flex-col space-y-2">
+            <span className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider">
+              Stem Server (self-hosted Demucs)
+            </span>
+            <div className="flex items-center space-x-2">
+              <div
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                  serverAvailable === null
+                    ? "bg-yellow-400 animate-pulse"
+                    : serverAvailable
+                      ? "bg-[#00E871] shadow-[0_0_6px_#00E871]"
+                      : "bg-zinc-600"
+                }`}
+              />
+              <input
+                type="text"
+                value={serverUrl}
+                disabled={isProcessing}
+                onChange={(e) => setServerUrlState(e.target.value)}
+                onBlur={() => setStemServerUrl(serverUrl.trim().replace(/\/+$/, ""))}
+                placeholder="http://localhost:8000"
+                className="flex-1 bg-zinc-900/80 border border-white/10 rounded-lg px-2.5 py-1.5 text-[11px] text-zinc-200 font-mono focus:outline-none focus:border-primary/50"
+              />
+              <span className={`text-[9px] font-bold uppercase ${serverAvailable ? "text-[#00E871]" : "text-zinc-500"}`}>
+                {serverAvailable === null ? "Probing" : serverAvailable ? "AI Ready" : "Offline"}
+              </span>
+            </div>
+            {serverAvailable === false && (
+              <p className="text-[9px] text-zinc-500 leading-relaxed">
+                No Demucs server found — Vocals/Drums/Bass/Guitar/Keyboard will use the local
+                filter approximation. Start one with{" "}
+                <code className="text-zinc-400">docker compose -f docker-compose.stems.yml up -d</code>
+              </p>
+            )}
+          </div>
+
           {/* Draggable Instruments Toggle Matrix */}
           <div className="flex flex-col flex-1">
             <div className="flex justify-between items-center mb-2">
@@ -248,8 +336,13 @@ export const StemSeparator: React.FC = () => {
                     >
                       {inst.icon}
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 flex items-center gap-1.5">
                       <p className="text-xs font-medium truncate">{inst.name}</p>
+                      {serverAvailable && DEMUCS_STEM_MAP[inst.name] && (
+                        <span className="text-[8px] font-black text-[#00E871] bg-[#00E871]/10 border border-[#00E871]/30 rounded px-1 py-px flex-shrink-0">
+                          AI
+                        </span>
+                      )}
                     </div>
                     <div>
                       {isSelected ? (
@@ -357,10 +450,14 @@ export const StemSeparator: React.FC = () => {
           </div>
         </div>
 
-        {/* Security badge footer */}
+        {/* Mode badge footer — honest about AI vs. approximation */}
         <div className="px-4 py-2.5 bg-zinc-950 flex items-center justify-center space-x-1.5 text-[10px] text-zinc-500 font-semibold">
-          <ShieldCheck size={12} className="text-[#00E871]" />
-          <span>OFFLINE LOCAL DSP ENVELOPE ISOLATION MODE ACTIVE</span>
+          <ShieldCheck size={12} className={serverAvailable ? "text-[#00E871]" : "text-zinc-500"} />
+          <span>
+            {serverAvailable
+              ? "DEMUCS AI SOURCE SEPARATION · SELF-HOSTED"
+              : "LOCAL FILTER APPROXIMATION MODE (no AI server)"}
+          </span>
         </div>
       </motion.div>
     </div>
