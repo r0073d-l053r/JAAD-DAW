@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, useDragControls } from 'motion/react';
-import { X, Cpu, Wifi, WifiOff, RefreshCw, Layers } from 'lucide-react';
+import { X, Cpu, Wifi, WifiOff, RefreshCw, Layers, Monitor } from 'lucide-react';
 import { useApp } from '../lib/store';
 import { audioEngine } from '../lib/audioEngine';
 import { LiquidGlassPanel } from './LiquidGlass';
@@ -13,7 +13,9 @@ export const VstBridgeEditor: React.FC = () => {
   const [status, setStatus] = useState<string>('disconnected');
   const [latency, setLatency] = useState<number>(0);
   const [params, setParams] = useState<Record<string, VstParameter>>({});
-  
+  const [pluginPath, setPluginPath] = useState<string>('');
+  const [showGui, setShowGui] = useState<boolean>(false);
+
   const trackId = state.vstEditorTrackId;
   const track = state.tracks.find(t => t.id === trackId);
   const bridgeRef = useRef<any>(null);
@@ -54,6 +56,12 @@ export const VstBridgeEditor: React.FC = () => {
     audioEngine.removeCloudVstBridge(trackId);
     setStatus('disconnected');
     setLatency(0);
+    setShowGui(false);
+  };
+
+  const handleLoadPlugin = () => {
+    const bridge = bridgeRef.current;
+    if (bridge && pluginPath.trim()) bridge.loadPlugin(pluginPath.trim());
   };
 
   // Virtual control knob component
@@ -150,10 +158,9 @@ export const VstBridgeEditor: React.FC = () => {
 
         {/* Display value */}
         <span className="text-[9px] font-mono font-bold text-zinc-300 tracking-tight">
-          {paramKey === 'cutoff' 
-            ? `${Math.round(param.min + param.value * (param.max - param.min))} Hz`
-            : `${Math.round(param.value * 100)} %`
-          }
+          {param.unit && param.unit !== '%'
+            ? `${Math.round(param.min + param.value * (param.max - param.min))} ${param.unit}`
+            : `${Math.round(param.value * 100)} %`}
         </span>
       </div>
     );
@@ -259,10 +266,54 @@ export const VstBridgeEditor: React.FC = () => {
           </div>
         </div>
 
-        {/* DSP Knobs Area */}
-        <div 
+        {/* Plugin load + live GUI (noVNC) */}
+        <div
           onPointerDown={(e) => e.stopPropagation()}
-          className="bg-[#070411]/95 p-4 flex justify-between items-center gap-2.5"
+          className="bg-[#05030e]/80 p-4 space-y-2.5 border-b border-[#231242]/50"
+        >
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={pluginPath}
+              onChange={(e) => setPluginPath(e.target.value)}
+              className="flex-1 bg-[#100a23] border border-[#30165a] rounded-lg px-3 py-1.5 text-xs text-purple-200 focus:outline-none focus:border-[#a882fa] font-mono"
+              placeholder="MyPlugin.dll  (in /vst)"
+            />
+            <button
+              onClick={handleLoadPlugin}
+              disabled={status !== 'connected' || !pluginPath.trim()}
+              className="bg-[#a882fa]/20 hover:bg-[#a882fa]/30 disabled:opacity-40 text-purple-300 border border-[#a882fa]/40 text-xs px-3 py-1.5 rounded-lg font-bold transition font-mono uppercase"
+            >
+              Load
+            </button>
+          </div>
+          <button
+            onClick={() => setShowGui((v) => !v)}
+            disabled={status !== 'connected'}
+            className="w-full flex items-center justify-center gap-2 bg-[#100a23]/60 hover:bg-[#160c30] disabled:opacity-40 border border-[#30165a] text-purple-300 text-xs px-3 py-1.5 rounded-lg font-bold transition font-mono uppercase"
+          >
+            <Monitor size={12} />
+            {showGui ? 'Hide Plugin GUI' : 'Show Plugin GUI'}
+          </button>
+          {showGui && (
+            <div className="rounded-lg overflow-hidden border border-[#30165a] bg-black">
+              <iframe
+                title="VST Plugin GUI (noVNC)"
+                src={bridgeRef.current ? bridgeRef.current.getVncUrl() : ''}
+                className="w-full h-64 border-0"
+              />
+              <div className="text-[9px] text-zinc-500 font-mono px-2 py-1.5 border-t border-[#231242]/60 leading-relaxed">
+                Live plugin GUI streamed from the Wine sidecar — use the plugin's own
+                controls when the auto-generated knobs don't cover everything.
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* DSP Knobs Area */}
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          className="bg-[#070411]/95 p-4 flex justify-between items-center gap-2.5 flex-wrap"
         >
           {Object.keys(params).length > 0 ? (
             Object.keys(params).map(key => (

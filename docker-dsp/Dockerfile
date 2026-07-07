@@ -12,6 +12,9 @@ RUN dpkg --add-architecture i386 && \
     apt-transport-https \
     software-properties-common \
     xvfb \
+    x11vnc \
+    novnc \
+    websockify \
     jackd2 \
     libjack-jackd2-dev \
     python3 \
@@ -55,6 +58,7 @@ ENV HOME=/home/jaad \
 RUN mkdir -p /home/jaad/.run && chown -R jaad:jaad /home/jaad
 USER jaad
 
-EXPOSE 8080
+# 8080 = DSP/parameter WebSocket · 6080 = noVNC (live plugin GUI)
+EXPOSE 8080 6080
 
 CMD ["./start.sh"]

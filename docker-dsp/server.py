@@ -14,6 +14,14 @@ clients = set()
 vst_process = None
 osc_client = None
 
+# Carla backend host (libcarla) — used to load a plugin AND introspect its real
+# parameters so the client can auto-populate matching knobs. Lazily initialized;
+# falls back to the fire-and-forget carla-single path if the backend is unavailable.
+carla_host = None
+param_ranges = {}  # {param_index: (min, max)} kept for de/normalizing wire values
+CARLA_LIB = os.environ.get("JAAD_CARLA_LIB", "/usr/lib/carla/libcarla_standalone2.so")
+CARLA_BIN = os.environ.get("JAAD_CARLA_BIN", "/usr/lib/carla")
+
 input_queue = queue.Queue(maxsize=20)
 output_queue = queue.Queue(maxsize=20)
 
@@ -158,62 +166,169 @@ async def handle_connection(websocket):
                     if data.get('type') == 'ping':
                         await websocket.send(json.dumps({'type': 'pong', 'id': data.get('id')}))
                     elif data.get('type') == 'load_plugin':
-                        path = data.get('path')
-                        load_carla_plugin(path)
+                        params = load_carla_plugin(data.get('path'))
+                        # Broadcast the plugin's real parameters so every client
+                        # repopulates its knobs to match the loaded plugin.
+                        if params is not None:
+                            msg = json.dumps({'type': 'param_list', 'parameters': params})
+                            for client in list(clients):
+                                try:
+                                    await client.send(msg)
+                                except Exception:
+                                    pass
                     elif data.get('type') == 'param_change':
                         key = data.get('key')
                         val = data.get('value')
-
-                        # Forward parameter change to all clients
-                        for client in clients:
+                        # Echo to other clients so multiple editors stay in sync.
+                        for client in list(clients):
                             if client != websocket:
-                                await client.send(json.dumps({'type': 'param_change', 'key': key, 'value': val}))
-
-                        # Forward to Carla via OSC
-                        if osc_client:
-                            try:
-                                # We assume key is the numeric index of the VST parameter
-                                param_index = int(key)
-                                osc_client.send_message("/Carla/0/set_parameter_value", [param_index, float(val)])
-                                print(f"🎛️ Sent OSC: Param {param_index} = {val}")
-                            except ValueError:
-                                print(f"⚠️ Non-numeric parameter key received: {key}, ignoring for OSC.")
+                                try:
+                                    await client.send(json.dumps({'type': 'param_change', 'key': key, 'value': val}))
+                                except Exception:
+                                    pass
+                        # Apply to the loaded plugin (Carla host, or OSC fallback).
+                        apply_param_change(key, val)
                 except Exception as e:
                     print(f"⚠️ Error parsing message: {e}")
     finally:
         clients.discard(websocket)
         print("❌ Client disconnected")
 
+def _get_carla_host():
+    """Lazily create the Carla backend host with a JACK engine. Returns the host
+    or None if the Carla Python bindings aren't available in this image."""
+    global carla_host
+    if carla_host is not None:
+        return carla_host
+    try:
+        from carla_backend import CarlaHostDLL, ENGINE_OPTION_PATH_BINARIES
+        host = CarlaHostDLL(CARLA_LIB, False)
+        host.set_engine_option(ENGINE_OPTION_PATH_BINARIES, 0, CARLA_BIN)
+        if not host.engine_init("JACK", "JAAD_Carla"):
+            print(f"⚠️ Carla engine_init failed: {host.get_last_error()}")
+            return None
+        carla_host = host
+        print("🎛️ Carla backend host initialized (JACK engine).")
+        return carla_host
+    except Exception as e:
+        print(f"⚠️ Carla backend host unavailable ({e}); falling back to carla-single.")
+        return None
+
+
+def _plugin_type_for(path):
+    from carla_backend import PLUGIN_VST2, PLUGIN_VST3
+    return PLUGIN_VST3 if path.lower().endswith(".vst3") else PLUGIN_VST2
+
+
+def enumerate_parameters(host, plugin_id=0):
+    """Read the loaded plugin's real parameters and return a JSON-friendly list
+    the client renders directly as knobs. Values are normalized 0..1."""
+    global param_ranges
+    params = []
+    param_ranges = {}
+    try:
+        count = host.get_parameter_count(plugin_id)
+        for i in range(count):
+            info = host.get_parameter_info(plugin_id, i) or {}
+            ranges = host.get_parameter_ranges(plugin_id, i) or {}
+            pmin = float(ranges.get("min", 0.0))
+            pmax = float(ranges.get("max", 1.0))
+            cur = float(host.get_current_parameter_value(plugin_id, i))
+            span = (pmax - pmin) or 1.0
+            param_ranges[i] = (pmin, pmax)
+            params.append({
+                "index": i,
+                "name": info.get("name") or f"Param {i}",
+                "unit": info.get("unit") or "",
+                "min": pmin,
+                "max": pmax,
+                "value": max(0.0, min(1.0, (cur - pmin) / span)),  # normalized
+            })
+    except Exception as e:
+        print(f"⚠️ Failed to enumerate parameters: {e}")
+    return params
+
+
 def load_carla_plugin(path):
+    """Load a plugin and return its parameter list (or None on rejection/failure).
+    Prefers the Carla backend host (real introspection); falls back to carla-single."""
     global vst_process, osc_client
 
     plugin_path = safe_plugin_path(path)
     if plugin_path is None:
-        return  # rejected: outside /vst, missing, or malformed
+        return None  # rejected: outside /vst, missing, or malformed
 
+    host = _get_carla_host()
+    if host is not None:
+        try:
+            # One plugin at a time: clear any previously loaded plugin.
+            try:
+                host.remove_all_plugins()
+            except Exception:
+                pass
+            print(f"🚀 Loading VST via Carla backend host: {plugin_path}")
+            from carla_backend import BINARY_NATIVE
+            ok = host.add_plugin(
+                BINARY_NATIVE, _plugin_type_for(plugin_path),
+                plugin_path, None, None, 0, None, 0x0,
+            )
+            if not ok:
+                print(f"⚠️ add_plugin failed: {host.get_last_error()}")
+                return []
+            # Show the plugin's native editor on the virtual display so the
+            # noVNC side-panel can stream the real GUI as a fallback for knobs
+            # the auto-generated dials don't fully cover.
+            try:
+                host.show_custom_ui(0, True)
+            except Exception:
+                pass
+            threading.Timer(2.0, connect_jack_ports).start()
+            return enumerate_parameters(host, 0)
+        except Exception as e:
+            print(f"⚠️ Carla host load failed ({e}); falling back to carla-single.")
+
+    # Fallback: fire-and-forget carla-single (no introspection → empty knob list).
     if vst_process:
         print("🛑 Terminating existing Carla instance...")
         vst_process.terminate()
         vst_process.wait()
-
-    print(f"🚀 Loading VST plugin via Carla: {plugin_path}")
-    # Carla single command. plugin_path is validated to live inside VST_DIR.
+    print(f"🚀 Loading VST plugin via carla-single: {plugin_path}")
     vst_process = subprocess.Popen(["carla-single", "vst", plugin_path])
-
-    # Default OSC port for carla-single
     osc_client = udp_client.SimpleUDPClient("127.0.0.1", 22752)
-
     threading.Timer(3.0, connect_jack_ports).start()
+    return []
+
+
+def apply_param_change(key, value):
+    """Set a normalized (0..1) parameter value on the loaded plugin."""
+    try:
+        index = int(key)
+    except (TypeError, ValueError):
+        print(f"⚠️ Non-numeric parameter key: {key}")
+        return
+    if carla_host is not None:
+        pmin, pmax = param_ranges.get(index, (0.0, 1.0))
+        denorm = pmin + float(value) * (pmax - pmin)
+        try:
+            carla_host.set_parameter_value(0, index, denorm)
+            return
+        except Exception as e:
+            print(f"⚠️ set_parameter_value failed: {e}")
+    if osc_client:
+        osc_client.send_message("/Carla/0/set_parameter_value", [index, float(value)])
 
 def connect_jack_ports():
     if not jack_client: return
     try:
-        carla_in = jack_client.get_ports("carla-single.*:AudioIn.*", is_audio=True)
-        carla_out = jack_client.get_ports("carla-single.*:AudioOut.*", is_audio=True)
+        # Match either the backend host (JAAD_Carla:*) or carla-single (carla*:*).
+        carla_in = (jack_client.get_ports("JAAD_Carla:.*", is_audio=True, is_input=True)
+                    or jack_client.get_ports("carla.*:.*", is_audio=True, is_input=True))
+        carla_out = (jack_client.get_ports("JAAD_Carla:.*", is_audio=True, is_output=True)
+                     or jack_client.get_ports("carla.*:.*", is_audio=True, is_output=True))
         if carla_in and carla_out:
             jack_client.connect(outport, carla_in[0])
             jack_client.connect(carla_out[0], inport)
-            print("🔗 Connected JACK ports to Carla-Single")
+            print("🔗 Connected JACK ports to Carla")
         else:
             print("⚠️ Carla JACK ports not found yet.")
     except Exception as e:
