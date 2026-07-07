@@ -20,6 +20,9 @@ services:
       # Bind to loopback only so the VST bridge is not exposed on every host
       # interface. Front it with an authenticated reverse proxy to expose it.
       - "127.0.0.1:8080:8080"
+      # noVNC (live plugin GUI). Also loopback-only; set JAAD_VNC_PASSWORD and
+      # proxy it if you need remote access.
+      - "127.0.0.1:6080:6080"
     volumes:
       # Mount plugins read-only; the bridge only needs to load them.
       - ./vst:/vst:ro

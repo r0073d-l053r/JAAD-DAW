@@ -5,10 +5,11 @@
 
 export interface VstParameter {
   name: string;
-  value: number; // 0.0 to 1.0
+  value: number; // 0.0 to 1.0 (normalized)
   min: number;
   max: number;
   unit: string;
+  index?: number; // real plugin parameter index, used for param_change over the wire
 }
 
 export class CloudVstBridge {
@@ -29,6 +30,10 @@ export class CloudVstBridge {
   public latencyMs: number = 0;
   public onStatusChange: ((status: string) => void) | null = null;
   public onLatencyUpdate: ((latency: number) => void) | null = null;
+  public onParametersChange: (() => void) | null = null;
+
+  /** Set once a real plugin is loaded and enumerated by the sidecar. */
+  public pluginLoaded = false;
 
   // Latency ring buffer / queuing
   private inputBufferQueue: Float32Array[] = [];
@@ -123,6 +128,9 @@ export class CloudVstBridge {
             if (this.onLatencyUpdate) this.onLatencyUpdate(this.latencyMs);
             this.pingTimestamp = 0; // reset
           }
+        } else if (typeof event.data === 'string') {
+          // JSON control messages: param_list (real knobs), param_change echoes, pong.
+          this.handleControlMessage(event.data);
         }
       };
 
@@ -156,9 +164,10 @@ export class CloudVstBridge {
   public setParameter(name: string, value: number) {
     if (this.parameters[name]) {
       this.parameters[name].value = value;
-      this.syncParameters();
+      this.sendParamChange(name, value);
 
-      // Sync local fallback controls
+      // Keep the native fallback filter in step with a cutoff-like control so
+      // the sound still moves when the sidecar is offline.
       if (name === 'cutoff') {
         const p = this.parameters[name];
         const hz = p.min + value * (p.max - p.min);
@@ -167,17 +176,85 @@ export class CloudVstBridge {
     }
   }
 
+  /**
+   * Send a single parameter change to the sidecar. `key` is the real plugin
+   * parameter index when known (what Carla's OSC/host API expects), else the name.
+   */
+  private sendParamChange(name: string, value: number) {
+    if (!(this.socket && this.socket.readyState === WebSocket.OPEN)) return;
+    const p = this.parameters[name];
+    const key = p && p.index !== undefined ? p.index : name;
+    this.socket.send(JSON.stringify({ type: 'param_change', key, value }));
+  }
+
   private syncParameters() {
+    if (!(this.socket && this.socket.readyState === WebSocket.OPEN)) return;
+    for (const name of Object.keys(this.parameters)) {
+      this.sendParamChange(name, this.parameters[name].value);
+    }
+  }
+
+  /**
+   * Ask the sidecar to load a native VST/DLL plugin. `path` is relative to the
+   * container's mounted /vst directory. The sidecar responds with a `param_list`
+   * that repopulates the knobs with the plugin's real parameters.
+   */
+  public loadPlugin(path: string) {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      const payload = {
-        type: 'parameters',
-        trackId: this.trackId,
-        params: Object.keys(this.parameters).reduce((acc, key) => {
-          acc[key] = this.parameters[key].value;
-          return acc;
-        }, {} as Record<string, number>)
-      };
-      this.socket.send(JSON.stringify(payload));
+      this.socket.send(JSON.stringify({ type: 'load_plugin', path }));
+    }
+  }
+
+  private handleControlMessage(raw: string) {
+    let msg: any;
+    try {
+      msg = JSON.parse(raw);
+    } catch {
+      return;
+    }
+
+    if (msg.type === 'param_list' && Array.isArray(msg.parameters)) {
+      // Replace the generic fallback knobs with the plugin's real parameters.
+      const next: Record<string, VstParameter> = {};
+      for (const p of msg.parameters) {
+        const key = String(p.name ?? p.index);
+        next[key] = {
+          name: p.name ?? `Param ${p.index}`,
+          value: typeof p.value === 'number' ? p.value : 0,
+          min: typeof p.min === 'number' ? p.min : 0,
+          max: typeof p.max === 'number' ? p.max : 1,
+          unit: p.unit ?? '',
+          index: p.index,
+        };
+      }
+      if (Object.keys(next).length > 0) {
+        this.parameters = next;
+        this.pluginLoaded = true;
+        if (this.onParametersChange) this.onParametersChange();
+      }
+    } else if (msg.type === 'param_change' && msg.key !== undefined && typeof msg.value === 'number') {
+      // A change echoed from the server or another connected client.
+      const entry =
+        Object.values(this.parameters).find((p) => p.index === Number(msg.key)) ??
+        this.parameters[String(msg.key)];
+      if (entry) entry.value = msg.value;
+    }
+    // 'pong' and anything else: ignored (latency is measured on the binary path).
+  }
+
+  /**
+   * Derive the noVNC viewer URL from the DSP websocket URL so the editor can embed
+   * the real plugin GUI running under the sidecar's virtual display.
+   * ws://host:8080 -> http://host:6080/vnc.html
+   */
+  public getVncUrl(): string {
+    const base = (this.socket && this.socket.url) || 'ws://localhost:8080';
+    try {
+      const u = new URL(base);
+      const proto = u.protocol === 'wss:' ? 'https:' : 'http:';
+      return `${proto}//${u.hostname}:6080/vnc.html?autoconnect=true&resize=scale`;
+    } catch {
+      return 'http://localhost:6080/vnc.html?autoconnect=true&resize=scale';
     }
   }
 
