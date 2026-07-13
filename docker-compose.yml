@@ -12,6 +12,18 @@ services:
     depends_on:
       dsp:
         condition: service_healthy
+    # --- Hardening (defense in depth) ---------------------------------------
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 512m
+    # Tighter still — enable after a smoke test on your host: drop all caps and
+    # add back only what nginx needs to bind :80 and drop to its worker user,
+    # then make the root FS read-only with tmpfs for the paths it writes.
+    # cap_drop: ["ALL"]
+    # cap_add: ["CHOWN", "SETUID", "SETGID", "NET_BIND_SERVICE"]
+    # read_only: true
+    # tmpfs: ["/tmp", "/var/cache/nginx", "/var/run"]
 
   dsp:
     build:
@@ -24,21 +36,37 @@ services:
       # proxy it if you need remote access.
       - "127.0.0.1:6080:6080"
     volumes:
-      # Plugins live here. Read-write so the drag-and-drop upload feature can
-      # save a .dll/.vst3 into it (uploads are extension- and size-checked and
-      # path-sanitized server-side). Make ./vst writable by the container's
-      # non-root uid (1000) — e.g. `mkdir -p vst && chmod 777 vst`.
+      # Plugins live here, plus the auto-generated .dsp_token (mode 0600). Make
+      # ./vst writable by the container's non-root uid (1000) — e.g.
+      # `mkdir -p vst && chown 1000:1000 vst`. Because it now holds a secret,
+      # avoid world-readable perms on a shared host.
       - ./vst:/vst
     environment:
       - PYTHONUNBUFFERED=1
-      # Origin-checked but token-less by default so it starts out of the box.
-      # For any non-local deployment, set a strong JAAD_DSP_TOKEN instead and
-      # configure it in the app (localStorage 'jaad_dsp_token'), then remove this.
-      - JAAD_DSP_ALLOW_NO_AUTH=1
+      # Authenticated by DEFAULT. With no token set, the sidecar auto-generates
+      # one on first boot and prints it in the logs (`docker compose logs dsp`) —
+      # paste it into JAAD Settings → DSP token. To pin a fixed token instead,
+      # uncomment and set JAAD_DSP_TOKEN (mirror it in localStorage
+      # 'jaad_dsp_token'). Trusted localhost only: JAAD_DSP_ALLOW_NO_AUTH=1
+      # disables the token entirely — never on an exposed host.
+      # - JAAD_DSP_TOKEN=change-me-to-a-long-random-secret
       # Comma-separated browser origins allowed to connect.
       - JAAD_DSP_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      # Over-the-wire plugin upload EXECUTES the uploaded binary under Wine. Off
+      # by default; enable ONLY on a trusted, single-operator host:
+      # - JAAD_ENABLE_PLUGIN_UPLOAD=1
     restart: unless-stopped
     container_name: jaad-dsp
+    # --- Hardening (defense in depth around the Wine plugin surface) ---------
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    mem_limit: 3g
+    # This container runs plugin code under Wine, so dropping caps has the most
+    # value here — but Wine/JACK/Xvfb are cap-sensitive, so enable and smoke-test
+    # before relying on it. (read_only is impractical: Wine writes ~/.wine, Xvfb
+    # writes /tmp.)
+    # cap_drop: ["ALL"]
     healthcheck:
       test: ["CMD", "python3", "-c", "import socket; s = socket.socket(); s.connect(('127.0.0.1', 8080))"]
       interval: 10s
@@ -71,15 +99,25 @@ services:
       - "127.0.0.1:8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
-      # Local-only escape hatch. For any non-local deployment set a strong
-      # JAAD_STEMS_TOKEN instead (and mirror it in localStorage 'jaad_stems_token').
-      - JAAD_STEMS_ALLOW_NO_AUTH=1
+      # Authenticated by DEFAULT. With no token set, the sidecar auto-generates
+      # one on first boot and prints it in the logs (`docker compose logs stems`)
+      # — mirror it in localStorage 'jaad_stems_token'. To pin a fixed token,
+      # uncomment JAAD_STEMS_TOKEN. (JAAD_STEMS_ALLOW_NO_AUTH=1 disables auth —
+      # trusted localhost only.)
+      # - JAAD_STEMS_TOKEN=change-me-to-a-long-random-secret
       - JAAD_STEMS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
     volumes:
-      # Persist downloaded Demucs model weights (~300MB-2GB) across restarts.
+      # Persist downloaded Demucs model weights (~300MB-2GB) + the auto-generated
+      # .stems_token across restarts.
       - demucs-models:/home/jaad/.cache
     restart: unless-stopped
     container_name: jaad-stems
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    # Demucs (torch) memory scales with track length + model; set a ceiling that
+    # fits your host to bound abuse (too low will OOM-kill a real separation):
+    # mem_limit: 8g
     # GPU passthrough (pairs with the CUDA build arg above):
     # deploy:
     #   resources:

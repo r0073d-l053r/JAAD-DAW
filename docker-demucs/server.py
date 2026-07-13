@@ -13,6 +13,7 @@ Security posture mirrors the DSP sidecar:
 import asyncio
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -25,8 +26,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 # --- Configuration -----------------------------------------------------------
+# Token resolution mirrors the DSP sidecar (see _resolve_auth_token): explicit
+# JAAD_STEMS_TOKEN wins; else an explicit JAAD_STEMS_ALLOW_NO_AUTH=1 opt-out;
+# else auto-generate + persist a token so the service is authenticated by default
+# with zero configuration. The token lands in the persisted models cache volume.
 AUTH_TOKEN = os.environ.get("JAAD_STEMS_TOKEN")
 ALLOW_NO_AUTH = os.environ.get("JAAD_STEMS_ALLOW_NO_AUTH") == "1"
+_HOME = os.environ.get("HOME", "/home/jaad")
+TOKEN_FILE = os.environ.get("JAAD_STEMS_TOKEN_FILE", os.path.join(_HOME, ".cache", ".stems_token"))
 ALLOWED_ORIGINS = [
     o.strip()
     for o in os.environ.get(
@@ -50,6 +57,32 @@ app.add_middleware(
 #             dir: tempdir, stems: {name: path}, error: str}
 jobs: dict = {}
 _job_lock = asyncio.Lock()  # one separation at a time (model is heavy)
+
+
+def _resolve_auth_token():
+    """Make 'authenticated' the zero-config default. Returns the token to require,
+    or None ONLY when the operator explicitly set JAAD_STEMS_ALLOW_NO_AUTH=1."""
+    if AUTH_TOKEN:
+        return AUTH_TOKEN
+    if ALLOW_NO_AUTH:
+        return None
+    try:
+        with open(TOKEN_FILE, "r") as f:
+            existing = f.read().strip()
+        if existing:
+            return existing
+    except OSError:
+        pass
+    token = secrets.token_hex(24)
+    try:
+        os.makedirs(os.path.dirname(TOKEN_FILE) or ".", exist_ok=True)
+        fd = os.open(TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(token)
+    except OSError as e:
+        print(f"⚠️ Could not persist auth token to {TOKEN_FILE} ({e}); "
+              "it will change on the next restart.")
+    return token
 
 
 def _check_auth(authorization: str | None):
@@ -198,12 +231,17 @@ def cleanup(job_id: str, authorization: str | None = Header(default=None)):
 
 
 if __name__ == "__main__":
-    if not AUTH_TOKEN and not ALLOW_NO_AUTH:
-        raise SystemExit(
-            "Refusing to start: set JAAD_STEMS_TOKEN, or JAAD_STEMS_ALLOW_NO_AUTH=1 "
-            "to explicitly run without a token (local only)."
-        )
-    if not AUTH_TOKEN:
-        print("⚠️ JAAD_STEMS_TOKEN not set — running WITHOUT token auth (CORS-restricted only).")
+    _env_token = os.environ.get("JAAD_STEMS_TOKEN")
+    AUTH_TOKEN = _resolve_auth_token()
+    if AUTH_TOKEN and not _env_token:
+        # Auto-generated or restored — surface it so the operator can paste it
+        # into JAAD (localStorage 'jaad_stems_token').
+        print("🔐 Stems auth token (set this in JAAD → stems token):")
+        print(f"       {AUTH_TOKEN}")
+    elif AUTH_TOKEN:
+        print("🔐 Stems auth: using the token from JAAD_STEMS_TOKEN.")
+    else:
+        print("⚠️ JAAD_STEMS_ALLOW_NO_AUTH=1 — running WITHOUT token auth "
+              "(CORS-restricted only). Use ONLY on a trusted localhost bind.")
     print(f"🎚️ JAAD Stems sidecar (Demucs) on :8000 · origins: {ALLOWED_ORIGINS}")
     uvicorn.run(app, host=os.environ.get("JAAD_STEMS_HOST", "0.0.0.0"), port=8000)
