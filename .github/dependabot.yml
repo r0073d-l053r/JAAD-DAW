@@ -1,0 +1,34 @@
+version: 2
+# Keeps dependencies — including GitHub Actions and Docker base images — patched,
+# and lets us pin Actions to commit SHAs while Dependabot bumps them safely.
+updates:
+  # App dependencies
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      # One PR for routine patch/minor bumps to cut review noise.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # GitHub Actions used by the workflows (supply-chain: pin + keep current)
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  # Docker base images for the app + sidecars
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: "/docker-dsp"
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: "/docker-demucs"
+    schedule:
+      interval: weekly
