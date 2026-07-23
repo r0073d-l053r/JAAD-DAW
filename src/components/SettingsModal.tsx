@@ -122,6 +122,77 @@ function GlassSelect({
   );
 }
 
+// A masked credential input backed directly by localStorage. Used for the
+// self-hosted sidecar tokens: the DSP bridge and stem sidecars are authenticated
+// by default and print a token in their container logs on first boot, which the
+// operator pastes here. Mirrors the Gemini-key masking (shows only the last 4).
+function SecretField({
+  label,
+  storageKey,
+  placeholder,
+  help,
+}: {
+  label: string;
+  storageKey: string;
+  placeholder: string;
+  help: string;
+}) {
+  const [val, setVal] = useState(() => {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(storageKey) : null;
+    return saved ? `••••••••${saved.slice(-4)}` : '';
+  });
+  const [isSaved, setIsSaved] = useState(
+    () => typeof localStorage !== 'undefined' && !!localStorage.getItem(storageKey),
+  );
+
+  const save = (raw: string) => {
+    const trimmed = raw.trim();
+    if (trimmed === '') {
+      localStorage.removeItem(storageKey);
+      setVal('');
+      setIsSaved(false);
+      return;
+    }
+    // Don't overwrite the stored secret with its own masked placeholder.
+    if (trimmed.startsWith('••••')) return;
+    localStorage.setItem(storageKey, trimmed);
+    setVal(`••••••••${trimmed.slice(-4)}`);
+    setIsSaved(true);
+  };
+
+  return (
+    <div className="space-y-2">
+      <label className="text-[11px] font-semibold text-gray-400">{label}</label>
+      <div className="flex space-x-2">
+        <input
+          type="text"
+          aria-label={label}
+          placeholder={placeholder}
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              save(val);
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          onBlur={() => save(val)}
+          className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-zinc-700 outline-none focus:border-primary/50 transition-all font-mono"
+        />
+        {isSaved && (
+          <button
+            onClick={() => save('')}
+            className="px-3 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-xs font-medium transition-colors flex-shrink-0"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <p className="text-[11px] text-zinc-500 leading-relaxed">{help}</p>
+    </div>
+  );
+}
+
 export function SettingsModal() {
   const { state, dispatch } = useApp();
   const [activeTab, setActiveTab] = useState('Audio');
@@ -369,6 +440,27 @@ export function SettingsModal() {
                           ? "Custom Key loaded! Showing last 4 digits. Your key is stored ONLY in your browser's Local Storage and is never sent anywhere except directly to Google's API." 
                           : "Paste your custom paid Gemini API Key and press Enter to save locally."}
                       </p>
+                    </div>
+
+                    <div className="space-y-4 pt-6 border-t border-white/5">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Self-Hosted Sidecar Access</label>
+                      <p className="text-[11px] text-zinc-500 leading-relaxed -mt-1">
+                        Self-hosted DSP and stem sidecars are authenticated by default. Each prints a
+                        token in its container logs on first boot (<span className="font-mono text-zinc-400">docker compose logs dsp</span>{' '}
+                        / <span className="font-mono text-zinc-400">stems</span>). Paste it here — it is stored only in this browser.
+                      </p>
+                      <SecretField
+                        label="VST / DSP Bridge Token"
+                        storageKey="jaad_dsp_token"
+                        placeholder="Paste the DSP token…"
+                        help="From `docker compose logs dsp` → the “DSP auth token” line."
+                      />
+                      <SecretField
+                        label="Stem Separation Token"
+                        storageKey="jaad_stems_token"
+                        placeholder="Paste the stems token…"
+                        help="From `docker compose logs stems` → the “Stems auth token” line."
+                      />
                     </div>
 
                     <div className="space-y-4 pt-6 border-t border-white/5">
