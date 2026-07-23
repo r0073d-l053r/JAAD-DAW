@@ -72,10 +72,11 @@ ports:
   - "127.0.0.1:8000:8000"   # stems
 ```
 
-**Do not change these to `0.0.0.0:...`** to reach the sidecar from another
-machine. Instead, expose the **app** over HTTPS and let it proxy to the sidecar
-on the internal Docker network (the app's `nginx.conf` already proxies the plugin
-GUI at `/pluginui/`). This keeps one authenticated front door instead of many.
+**Do not change these to `0.0.0.0:...`** to reach a sidecar from another machine.
+Instead, expose the **app** over HTTPS and reverse-proxy to the sidecar on the
+internal Docker network through your own front proxy (nginx / Caddy / Traefik, or
+Tailscale Serve) — with auth. This keeps one authenticated front door instead of
+publishing each sidecar port.
 
 ---
 
@@ -104,13 +105,14 @@ strip them at the proxy.
 
 ## 6. Tighten the containers
 
-The compose file ships with `no-new-privileges`, `pids_limit`, memory limits, and
-**`cap_drop: ["ALL"]`** on every service — the app adds back only the four caps
-nginx needs (`CHOWN`, `SETUID`, `SETGID`, `NET_BIND_SERVICE`); the dsp/Wine host
-needs none. This was smoke-tested: plugins load and the app serves normally with
-all capabilities dropped. (On the dsp container, jackd logs a harmless "Cannot
-lock down memory" — dropping `CAP_IPC_LOCK` blocks `mlock`, but `--no-realtime`
-doesn't need it.)
+The compose file ships with `no-new-privileges`, `pids_limit`, and
+**`cap_drop: ["ALL"]`** on **every** service — the app adds back only the four
+caps nginx needs (`CHOWN`, `SETUID`, `SETGID`, `NET_BIND_SERVICE`); the dsp (Wine)
+and stems (torch) containers need none. `mem_limit` is set on the app and dsp
+(stems is opt-in — see below). All three were smoke-tested with caps dropped: the
+app serves, the Wine bridge loads plugins, and GPU Demucs separates. (On dsp,
+jackd logs a harmless "Cannot lock down memory" — dropping `CAP_IPC_LOCK` blocks
+`mlock`, but `--no-realtime` doesn't need it.)
 
 Two further tightenings are left opt-in (commented) because they need a test on
 your host:

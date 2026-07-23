@@ -169,6 +169,11 @@ function SecretField({
           aria-label={label}
           placeholder={placeholder}
           value={val}
+          // Select the masked value on focus so typing replaces it wholesale —
+          // otherwise editing a saved token (which shows as ••••…last4) would
+          // produce a bullet-prefixed string that save() ignores, silently
+          // dropping the edit. Blurring without typing leaves the mask intact.
+          onFocus={(e) => e.currentTarget.select()}
           onChange={(e) => setVal(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {

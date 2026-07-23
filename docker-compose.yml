@@ -117,8 +117,12 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 512
-    # Demucs (torch) memory scales with track length + model; set a ceiling that
-    # fits your host to bound abuse (too low will OOM-kill a real separation):
+    # Smoke-tested on musebot 2026-07-23: GPU Demucs separates fine with all caps
+    # dropped (nvidia device access uses cgroups, not Linux caps).
+    cap_drop: ["ALL"]
+    # Demucs (torch) memory scales with track length + model, so mem_limit is left
+    # opt-in: set a ceiling that fits your host to bound abuse (too low will
+    # OOM-kill a real separation):
     # mem_limit: 8g
     # GPU passthrough (pairs with the CUDA build arg above):
     # deploy:

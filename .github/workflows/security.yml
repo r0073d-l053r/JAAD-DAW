@@ -24,6 +24,10 @@ jobs:
           fetch-depth: 0            # scan the whole history, not just the tip
           persist-credentials: false
       # Blocking: a detected secret fails the run so it can't merge.
+      # NOTE: gitleaks-action@v2 is free for personal/user repos. If this repo is
+      # ever moved under a GitHub *Organization*, add a GITLEAKS_LICENSE secret
+      # (or switch to the gitleaks CLI, which has no org gate) — otherwise this
+      # job hard-fails on every run.
       - name: gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:

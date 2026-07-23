@@ -183,24 +183,29 @@ async def separate(
     _check_auth(authorization)
     if model not in ALLOWED_MODELS:
         raise HTTPException(status_code=400, detail=f"model must be one of {sorted(ALLOWED_MODELS)}")
-    # Reject before writing the upload to disk if we're already at capacity.
+    # Reserve a slot SYNCHRONOUSLY, before the first await, so a burst of
+    # concurrent requests can't all pass the gate before any of them registers
+    # (the upload stream below yields the event loop). Register the job now — it
+    # counts toward _active_jobs immediately — then stream the upload into it.
     if _active_jobs() >= MAX_ACTIVE_JOBS:
         raise HTTPException(status_code=429, detail="server busy — too many active separations, retry shortly")
-
+    job_id = uuid.uuid4().hex
     job_dir = tempfile.mkdtemp(prefix="jaad_stems_")
+    jobs[job_id] = {"status": "queued", "progress": 0.0, "dir": job_dir, "stems": {}, "error": ""}
     wav_path = os.path.join(job_dir, "input.wav")
     size = 0
-    with open(wav_path, "wb") as out:
-        while chunk := await file.read(1024 * 1024):
-            size += len(chunk)
-            if size > MAX_UPLOAD_MB * 1024 * 1024:
-                out.close()
-                shutil.rmtree(job_dir, ignore_errors=True)
-                raise HTTPException(status_code=413, detail=f"upload exceeds {MAX_UPLOAD_MB}MB")
-            out.write(chunk)
-
-    job_id = uuid.uuid4().hex
-    jobs[job_id] = {"status": "queued", "progress": 0.0, "dir": job_dir, "stems": {}, "error": ""}
+    try:
+        with open(wav_path, "wb") as out:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_UPLOAD_MB * 1024 * 1024:
+                    raise HTTPException(status_code=413, detail=f"upload exceeds {MAX_UPLOAD_MB}MB")
+                out.write(chunk)
+    except BaseException:
+        # Release the reserved slot + temp dir on any failure (413, client abort).
+        jobs.pop(job_id, None)
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise
     asyncio.create_task(_process_job(job_id, wav_path, model))
     return {"job_id": job_id}
 
