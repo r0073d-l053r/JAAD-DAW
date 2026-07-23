@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Report a security vulnerability
+    url: https://github.com/r0073d-l053r/JAAD-DAW/security/advisories/new
+    about: Please report vulnerabilities privately — do NOT open a public issue. See SECURITY.md.
+  - name: 💬 Questions & discussion
+    url: https://github.com/r0073d-l053r/JAAD-DAW/discussions
+    about: Ask questions and share ideas here rather than opening an issue.

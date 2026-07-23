@@ -2,10 +2,15 @@ node_modules/
 build/
 dist/
 coverage/
+__pycache__/
+*.pyc
 .DS_Store
 *.log
 .env*
 !.env.example
+# Self-hosted VST plugin dir + the sidecar's auto-generated .dsp_token secret.
+# Never commit a contributor's plugins or their sidecar token.
+vst/
 liquid-glass-package
 patchnotes.md
 .~lock.*#
