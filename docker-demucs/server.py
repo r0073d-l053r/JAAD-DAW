@@ -44,6 +44,9 @@ ALLOWED_ORIGINS = [
 ]
 MAX_UPLOAD_MB = int(os.environ.get("JAAD_STEMS_MAX_UPLOAD_MB", "200"))
 ALLOWED_MODELS = {"htdemucs", "htdemucs_ft", "htdemucs_6s"}
+# Cap simultaneously queued/processing jobs so a flood of /separate calls can't
+# fill the disk with uploads or pile up heavy (GPU/CPU) separations.
+MAX_ACTIVE_JOBS = int(os.environ.get("JAAD_STEMS_MAX_ACTIVE_JOBS", "3"))
 
 app = FastAPI(title="JAAD Stems", docs_url=None, redoc_url=None)
 app.add_middleware(
@@ -57,6 +60,10 @@ app.add_middleware(
 #             dir: tempdir, stems: {name: path}, error: str}
 jobs: dict = {}
 _job_lock = asyncio.Lock()  # one separation at a time (model is heavy)
+
+
+def _active_jobs() -> int:
+    return sum(1 for j in jobs.values() if j["status"] in ("queued", "processing"))
 
 
 def _resolve_auth_token():
@@ -176,6 +183,9 @@ async def separate(
     _check_auth(authorization)
     if model not in ALLOWED_MODELS:
         raise HTTPException(status_code=400, detail=f"model must be one of {sorted(ALLOWED_MODELS)}")
+    # Reject before writing the upload to disk if we're already at capacity.
+    if _active_jobs() >= MAX_ACTIVE_JOBS:
+        raise HTTPException(status_code=429, detail="server busy — too many active separations, retry shortly")
 
     job_dir = tempfile.mkdtemp(prefix="jaad_stems_")
     wav_path = os.path.join(job_dir, "input.wav")

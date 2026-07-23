@@ -40,6 +40,10 @@ ALLOWED_PLUGIN_EXT = (".dll", ".vst3", ".so")
 # Headroom for base64 expansion (4/3) plus the small JSON envelope.
 WS_MAX_SIZE = int(MAX_PLUGIN_BYTES * 4 / 3) + 65536
 
+# Cap concurrent WebSocket clients so a connection flood can't exhaust the single
+# JACK graph / Wine host. Already token-gated; this is defense in depth.
+MAX_CLIENTS = int(os.environ.get("JAAD_DSP_MAX_CLIENTS", "8"))
+
 # Uploading a plugin over the wire writes an attacker-supplied binary that Carla
 # then EXECUTES under Wine — arbitrary code execution by design. So it is OFF
 # unless a deploy explicitly opts in, and it is trusted-operator-only: never
@@ -228,6 +232,12 @@ if jack_client:
 async def handle_connection(websocket):
     if not _authorize(websocket):
         await websocket.close(code=1008, reason="unauthorized")
+        return
+
+    # Bound concurrent connections so a flood can't exhaust the JACK/Wine host.
+    if len(clients) >= MAX_CLIENTS:
+        print(f"🚫 Rejected connection: at capacity ({MAX_CLIENTS} clients)")
+        await websocket.close(code=1013, reason="server at capacity")
         return
 
     clients.add(websocket)
