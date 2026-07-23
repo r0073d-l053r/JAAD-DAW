@@ -28,6 +28,10 @@ This directory serves as the source of truth for the architectural evolution of 
 | **0004** | [Real-time Multiplayer Collaboration Engine](0004-real-time-collaboration.md) | 🟡 Proposed | Sync / Networking | 2026-05-20 |
 | **0005** | [Professional DSP Tools & Outer Platform Bridges](0005-professional-tools-and-dsp.md) | 🟢 Accepted | DSP / Visuals / Cloud | 2026-06-11 |
 | **0006** | [Cloud Headless Rendering & Remote App Ecosystem](0006-cloud-rendering-and-ecosystem.md) | 🟡 Proposed | Render Engine / Mobile | 2026-05-20 |
+| **0007** | [Unit Testing Framework & Component Mocking Strategy](0007-unit-testing-framework-and-component-strategy.md) | 🟢 Accepted | Testing / QA | 2026-05-20 |
+| **0008** | [Wine VST Server — Real Parameter Knobs & noVNC Plugin GUI](0008-vst-server-knobs-and-novnc.md) | 🟡 Proposed | DSP / VST Bridge | 2026-07-04 |
+| **0009** | [Suno-Grade Stem Separation via a Self-Hosted Demucs Sidecar](0009-demucs-stem-separation.md) | 🟢 Accepted | AI / Stems | 2026-07-04 |
+| **0010** | [On-Device (WebGPU/WASM) Stem Separation Tier](0010-browser-webgpu-stem-separation.md) | 🟢 Accepted | AI / Stems | 2026-07-07 |
 
 ---
 

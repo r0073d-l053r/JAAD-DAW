@@ -86,4 +86,5 @@ beyond `localhost`:
   the only, trusted operator — uploaded plugins execute as native code.
 - Only load VST/VST3 plugins you trust.
 
-The full self-hosting hardening guide lives in the project docs.
+The full guide, with a pre-exposure checklist, is in
+[docs/self-hosting-hardening.md](docs/self-hosting-hardening.md).
