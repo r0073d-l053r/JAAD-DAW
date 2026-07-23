@@ -104,25 +104,21 @@ strip them at the proxy.
 
 ## 6. Tighten the containers
 
-The compose file already applies `no-new-privileges`, `pids_limit`, and memory
-limits to every service. For an exposed host, also enable capability-dropping and
-a read-only root filesystem — they ship **commented** because they need a smoke
-test against Wine/JACK/nginx on your host. Enable, then verify audio + plugin GUI
-still work:
+The compose file ships with `no-new-privileges`, `pids_limit`, memory limits, and
+**`cap_drop: ["ALL"]`** on every service — the app adds back only the four caps
+nginx needs (`CHOWN`, `SETUID`, `SETGID`, `NET_BIND_SERVICE`); the dsp/Wine host
+needs none. This was smoke-tested: plugins load and the app serves normally with
+all capabilities dropped. (On the dsp container, jackd logs a harmless "Cannot
+lock down memory" — dropping `CAP_IPC_LOCK` blocks `mlock`, but `--no-realtime`
+doesn't need it.)
 
-```yaml
-# app (nginx):
-  cap_drop: ["ALL"]
-  cap_add: ["CHOWN", "SETUID", "SETGID", "NET_BIND_SERVICE"]
-  read_only: true
-  tmpfs: ["/tmp", "/var/cache/nginx", "/var/run"]
+Two further tightenings are left opt-in (commented) because they need a test on
+your host:
 
-# dsp (Wine host — test carefully; Wine/JACK are capability-sensitive):
-  cap_drop: ["ALL"]
-```
-
-Set a `mem_limit` on the stems service sized to your host so a large separation
-can't exhaust RAM.
+- **Read-only root filesystem** on the app, with `tmpfs` for nginx's writable
+  paths. (Impractical for the dsp container — Wine writes `~/.wine`, Xvfb `/tmp`.)
+- A **`mem_limit` on the stems service** sized to your host so one big separation
+  can't exhaust RAM.
 
 ---
 

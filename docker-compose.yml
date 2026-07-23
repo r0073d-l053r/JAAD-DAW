@@ -17,11 +17,12 @@ services:
       - no-new-privileges:true
     pids_limit: 256
     mem_limit: 512m
-    # Tighter still — enable after a smoke test on your host: drop all caps and
-    # add back only what nginx needs to bind :80 and drop to its worker user,
-    # then make the root FS read-only with tmpfs for the paths it writes.
-    # cap_drop: ["ALL"]
-    # cap_add: ["CHOWN", "SETUID", "SETGID", "NET_BIND_SERVICE"]
+    # Drop all Linux caps, add back only what nginx needs to bind :80 and drop to
+    # its worker user. Smoke-tested on musebot 2026-07-23: serves normally.
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "SETUID", "SETGID", "NET_BIND_SERVICE"]
+    # Optional further tightening (untested here): read-only root FS + tmpfs for
+    # the paths nginx writes.
     # read_only: true
     # tmpfs: ["/tmp", "/var/cache/nginx", "/var/run"]
 
@@ -62,11 +63,12 @@ services:
       - no-new-privileges:true
     pids_limit: 512
     mem_limit: 3g
-    # This container runs plugin code under Wine, so dropping caps has the most
-    # value here — but Wine/JACK/Xvfb are cap-sensitive, so enable and smoke-test
-    # before relying on it. (read_only is impractical: Wine writes ~/.wine, Xvfb
-    # writes /tmp.)
-    # cap_drop: ["ALL"]
+    # Drop all Linux caps — highest-value here since this container runs plugin
+    # code under Wine. Smoke-tested on musebot 2026-07-23: the Wine bridge loads
+    # plugins fine with ALL caps dropped. (jackd logs a harmless "Cannot lock down
+    # memory" — dropping CAP_IPC_LOCK blocks mlock, but --no-realtime doesn't need
+    # it. read_only is impractical: Wine writes ~/.wine, Xvfb writes /tmp.)
+    cap_drop: ["ALL"]
     healthcheck:
       test: ["CMD", "python3", "-c", "import socket; s = socket.socket(); s.connect(('127.0.0.1', 8080))"]
       interval: 10s

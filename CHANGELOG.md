@@ -20,8 +20,9 @@ safe for a stranger to self-host. Branch: `harden/community-edition`.
 - **Over-the-wire plugin upload is off by default.** Uploading a plugin executes
   its code under Wine, so it is gated behind `JAAD_ENABLE_PLUGIN_UPLOAD=1`
   (trusted operators only), enforced at both the message handler and the writer.
-- **Container isolation** on every service: `no-new-privileges`, `pids_limit`, and
-  memory limits, with `cap_drop` / `read_only` provided as ready-to-enable blocks.
+- **Container isolation** on every service: `no-new-privileges`, `pids_limit`,
+  memory limits, and `cap_drop: ["ALL"]` (smoke-tested; the app keeps only the
+  four caps nginx needs). `read_only` is left as an opt-in further tightening.
 - **DoS / denial-of-wallet caps:** DSP bounds concurrent WebSocket clients
   (`JAAD_DSP_MAX_CLIENTS`, default 8); the stem sidecar bounds queued/processing
   jobs (`JAAD_STEMS_MAX_ACTIVE_JOBS`, default 3), rejected before the upload hits
