@@ -234,7 +234,9 @@ export async function processAnalogMaster(
     wet.forEach((c) => applyBiquad(c, bq));
   }
   if (settings.air > 0) {
-    const bq = highShelf(sampleRate, 11000, settings.air * 5);
+    // Clamp below Nyquist so the RBJ shelf stays valid for low-rate clips.
+    const airFreq = Math.min(11000, sampleRate * 0.45);
+    const bq = highShelf(sampleRate, airFreq, settings.air * 5);
     wet.forEach((c) => applyBiquad(c, bq));
   }
 
@@ -266,5 +268,6 @@ export async function processAnalogMaster(
     return o;
   });
 
-  return { channels: out, gpu: acc.available };
+  // The exciter is the only FFT consumer, so only report GPU use when it ran.
+  return { channels: out, gpu: acc.available && settings.exciter > 0 };
 }

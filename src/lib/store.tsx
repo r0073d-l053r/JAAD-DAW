@@ -1125,6 +1125,19 @@ export function appReducer(
                   ? { ...c, ...action.payload.changes }
                   : c,
               ),
+              // Also update take/comp-lane clips so the target can live in a lane.
+              ...(t.lanes
+                ? {
+                    lanes: t.lanes.map((l) => ({
+                      ...l,
+                      clips: l.clips.map((c) =>
+                        c.id === action.payload.clipId
+                          ? { ...c, ...action.payload.changes }
+                          : c,
+                      ),
+                    })),
+                  }
+                : {}),
             }
           : t,
       );

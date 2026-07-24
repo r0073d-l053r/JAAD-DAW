@@ -8,6 +8,7 @@ import {
   ANALOG_MASTER_DEFAULTS,
   ANALOG_MASTER_PRESETS,
 } from '../lib/analogMaster';
+import { getGPUFFTAccelerator } from '../lib/gpuFFT';
 import { saveAsset } from '../lib/assetManager';
 import { uploadAssetCloud } from '../lib/syncUtils';
 import { audioBufferToWav } from '../lib/exportUtils';
@@ -82,7 +83,18 @@ export function AnalogMaster() {
   }
   const bufferId = clip?.bufferId || clipId || '';
 
-  useEffect(() => { probeGPU().then(setGpu); }, []);
+  // Reflect the accelerator's ACTUAL availability (real init + self-test + device
+  // limits), not just whether an adapter exists — so the badge can't claim GPU
+  // while processing silently runs on CPU.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const probe = await probeGPU();
+      const acc = await getGPUFFTAccelerator();
+      if (!cancelled) setGpu({ available: acc.available, name: acc.available ? probe.name : 'Multi-core CPU' });
+    })();
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => () => stop(), []); // stop preview on unmount
 
   const set = <K extends keyof AnalogMasterSettings>(key: K, v: AnalogMasterSettings[K]) => {
@@ -99,6 +111,7 @@ export function AnalogMaster() {
 
   function stop() {
     if (srcRef.current) {
+      srcRef.current.onended = null; // detach so its async 'ended' can't clobber state
       try { srcRef.current.stop(); } catch { /* already stopped */ }
       try { srcRef.current.disconnect(); } catch { /* noop */ }
       srcRef.current = null;
@@ -116,7 +129,9 @@ export function AnalogMaster() {
     s.loop = true;
     s.connect(ctx.destination);
     s.start();
-    s.onended = () => setPlaying('off');
+    // Guard: only clear state if this is still the current source (a direct
+    // Original↔Processed switch stops the old node, whose 'ended' fires later).
+    s.onended = () => { if (srcRef.current === s) setPlaying('off'); };
     srcRef.current = s;
     setPlaying(which);
   };
@@ -171,6 +186,11 @@ export function AnalogMaster() {
       const t = state.tracks.find((tr) => tr.id === trackId);
       if (t) { targets = [...t.clips]; (t.lanes || []).forEach((l) => targets.push(...l.clips)); }
     }
+    // Only clips with a resident audio buffer — skip MIDI/instrument clips and
+    // any not-yet-decoded audio, so one bufferless clip can't abort the batch.
+    targets = targets.filter((tc) => audioEngine.buffers.get(tc.bufferId || tc.id));
+    if (targets.length === 0) { setError('No audio clips with a loaded buffer to process.'); return; }
+
     setProcessing(true); setError(null);
     try {
       for (const tc of targets) {
@@ -178,6 +198,7 @@ export function AnalogMaster() {
         setLastRunGpu(res.gpu);
         dispatch({ type: 'UPDATE_CLIP', payload: { trackId, clipId: tc.id, changes: { bufferId: res.newBufferId } } });
       }
+      dispatch({ type: 'INCREMENT_BUFFERS_VERSION' });
       close();
     } catch (e) { setError((e as Error).message); }
     finally { setProcessing(false); }

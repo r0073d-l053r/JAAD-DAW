@@ -213,6 +213,20 @@ export interface GPUFFTConfig {
  * are processed. The GPU path amortizes transfer overhead across the
  * entire batch, yielding 5-20× speedups on modern hardware.
  */
+/** Correct per-frame FFT/IFFT on the CPU (the transparent fallback). */
+function cpuBatchFFT(frames: { real: Float32Array; imag: Float32Array }[], inverse: boolean): void {
+  for (const frame of frames) {
+    const r64 = new Float64Array(frame.real);
+    const i64 = new Float64Array(frame.imag);
+    if (inverse) optimizedIFFT(r64, i64);
+    else optimizedFFT(r64, i64);
+    // TypedArray.set() does a proper numeric Float64→Float32 conversion (do NOT
+    // build a Float32Array *view* over r64.buffer — that reinterprets the bytes).
+    frame.real.set(r64);
+    frame.imag.set(i64);
+  }
+}
+
 export class GPUFFTAccelerator {
   private device: GPUDevice | null = null;
   private bitReversePipeline: GPUComputePipeline | null = null;
@@ -242,12 +256,11 @@ export class GPUFFTAccelerator {
         return false;
       }
 
-      this.device = await adapter.requestDevice({
-        requiredLimits: {
-          maxStorageBufferBindingSize: 256 * 1024 * 1024, // 256 MB
-          maxBufferSize: 256 * 1024 * 1024,
-        },
-      });
+      // Request DEFAULT limits (don't demand 256 MB — many adapters cap
+      // maxStorageBufferBindingSize at 128 MB and would reject the device,
+      // silently forcing CPU). We stay within default limits by chunking the
+      // batch in batchFFT().
+      this.device = await adapter.requestDevice();
 
       this.device.lost.then((info) => {
         console.warn('[GPUFFTAccelerator] Device lost:', info.message);
@@ -256,10 +269,51 @@ export class GPUFFTAccelerator {
 
       this.createPipelines();
       this._available = true;
-      console.info('[GPUFFTAccelerator] GPU acceleration initialized successfully');
+
+      // Self-test: the GPU compute path can't be exercised by the CPU-only unit
+      // tests, so validate it at runtime against the CPU reference. If the GPU
+      // result doesn't match (wrong twiddle sign, driver quirk, etc.), disable
+      // the GPU path so we transparently use the correct CPU implementation
+      // instead of ever emitting corrupted audio.
+      if (!(await this.selfTest())) {
+        console.warn('[GPUFFTAccelerator] GPU FFT self-test failed — using CPU path');
+        this._available = false;
+        return false;
+      }
+      console.info('[GPUFFTAccelerator] GPU acceleration initialized + self-test passed');
       return true;
     } catch (err) {
       console.info('[GPUFFTAccelerator] Init failed — using optimized CPU path:', err);
+      this._available = false;
+      return false;
+    }
+  }
+
+  /** Validate the GPU FFT against the CPU reference (forward spectrum + round trip). */
+  private async selfTest(): Promise<boolean> {
+    try {
+      const N = 16;
+      const real = new Float32Array(N);
+      const imag = new Float32Array(N);
+      for (let i = 0; i < N; i++) {
+        real[i] = Math.sin((2 * Math.PI * 3 * i) / N) + 0.5 * Math.cos((2 * Math.PI * 5 * i) / N);
+      }
+      const orig = new Float32Array(real);
+      // CPU reference forward transform.
+      const cr = new Float64Array(real);
+      const ci = new Float64Array(imag);
+      optimizedFFT(cr, ci);
+      // GPU forward (this._available is true here, so batchFFT uses the GPU path).
+      const f = [{ real: new Float32Array(real), imag: new Float32Array(imag) }];
+      await this.batchFFT(f, false);
+      let fErr = 0;
+      for (let k = 0; k < N; k++) fErr += Math.abs(f[0].real[k] - cr[k]) + Math.abs(f[0].imag[k] - ci[k]);
+      // GPU inverse → must reconstruct the original (identity round trip).
+      await this.batchFFT(f, true);
+      let rtErr = 0;
+      for (let k = 0; k < N; k++) rtErr += Math.abs(f[0].real[k] - orig[k]);
+      return Number.isFinite(fErr) && Number.isFinite(rtErr) && fErr < 1e-2 && rtErr < 1e-2;
+    } catch {
       return false;
     }
   }
@@ -309,20 +363,17 @@ export class GPUFFTAccelerator {
     inverse = false,
   ): Promise<void> {
     if (!this._available || !this.device || frames.length === 0) {
-      // CPU fallback — process each frame individually
-      for (const frame of frames) {
-        const r64 = new Float64Array(frame.real);
-        const i64 = new Float64Array(frame.imag);
-        if (inverse) {
-          optimizedIFFT(r64, i64);
-        } else {
-          optimizedFFT(r64, i64);
-        }
-        // TypedArray.set() does a proper numeric Float64→Float32 conversion.
-        // (Do NOT construct a Float32Array *view* over r64.buffer — that would
-        // reinterpret the 8-byte doubles as 4-byte floats and yield garbage.)
-        frame.real.set(r64);
-        frame.imag.set(i64);
+      cpuBatchFFT(frames, inverse);
+      return;
+    }
+
+    // Chunk large batches so no single dispatch exceeds the default WebGPU limits
+    // (maxComputeWorkgroupsPerDimension = 65535 and the ~128 MB default buffer
+    // cap). Without this, clips longer than ~87s silently corrupt on the GPU.
+    const maxFramesPerBatch = Math.max(1, Math.floor((65535 * 256) / (frames[0].real.length * 2)));
+    if (frames.length > maxFramesPerBatch) {
+      for (let i = 0; i < frames.length; i += maxFramesPerBatch) {
+        await this.batchFFT(frames.slice(i, i + maxFramesPerBatch), inverse);
       }
       return;
     }
@@ -377,7 +428,13 @@ export class GPUFFTAccelerator {
       const view = new DataView(params);
       view.setUint32(0, fftSize, true);
       view.setUint32(4, 0, true);
-      view.setFloat32(8, inverse ? 1.0 : -1.0, true);
+      // Twiddle direction is +1.0 for BOTH passes: the butterfly then computes
+      // W = e^{-i·2π j/len} (the standard DFT, matching the CPU reference). The
+      // inverse transform is realized entirely by the conjugate-in / 1-N-normalize
+      // / conjugate-out wrapper below, NOT by flipping this sign. (Using -1.0 on
+      // the forward pass computed the CONJUGATE DFT, so a forward→inverse round
+      // trip time-reversed every frame → garbled audio on real GPUs.)
+      view.setFloat32(8, 1.0, true);
       view.setUint32(12, batchCount, true);
 
       const paramsBuffer = this.device.createBuffer({
@@ -412,7 +469,13 @@ export class GPUFFTAccelerator {
       const view = new DataView(params);
       view.setUint32(0, fftSize, true);
       view.setUint32(4, s, true);
-      view.setFloat32(8, inverse ? 1.0 : -1.0, true);
+      // Twiddle direction is +1.0 for BOTH passes: the butterfly then computes
+      // W = e^{-i·2π j/len} (the standard DFT, matching the CPU reference). The
+      // inverse transform is realized entirely by the conjugate-in / 1-N-normalize
+      // / conjugate-out wrapper below, NOT by flipping this sign. (Using -1.0 on
+      // the forward pass computed the CONJUGATE DFT, so a forward→inverse round
+      // trip time-reversed every frame → garbled audio on real GPUs.)
+      view.setFloat32(8, 1.0, true);
       view.setUint32(12, batchCount, true);
 
       const paramsBuffer = this.device.createBuffer({
