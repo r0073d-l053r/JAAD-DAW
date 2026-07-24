@@ -116,7 +116,8 @@ You need Node.js installed on your machine.
    npm run dev
    ```
 
-6. Open your browser and navigate to `http://localhost:3000`.
+6. Open your browser and navigate to `http://localhost:3000/JAAD-DAW/`
+   (the app's base path is `/JAAD-DAW/`, so the bare root will 404 in dev).
 
 ### Securing your Firebase backend
 
@@ -127,22 +128,36 @@ Anonymous provider is enabled and the rules are deployed.
 
 ### Running with Docker
 
-You can easily self-host JAAD using Docker and Docker Compose. This ensures a consistent environment and serves the production build out of the box.
+You can easily self-host JAAD using Docker and Docker Compose. This ensures a consistent environment and serves the production build out of the box. This runs the app plus the **DSP/VST sidecar**.
 
-1. Make sure you have your `.env` file configured with your `GEMINI_API_KEY`.
-2. Build and start the container in detached mode:
+1. *(Optional, private deployments only)* set `GEMINI_API_KEY` in a `.env` file.
+   **Do not** set it for a publicly reachable build — it gets baked into the
+   bundle and is extractable. Public builds are BYOK (key entered in Settings).
+2. Build and start in detached mode:
 
    ```bash
-   docker-compose up -d --build
+   docker compose up -d --build
    ```
 
-3. Open your browser and navigate to `http://localhost:3000`.
+3. The DSP/VST sidecar is **authenticated by default**. Grab the token it printed
+   and paste it into the app (Settings → AI & Cloud → *Self-Hosted Sidecar Access*):
 
-To stop the container, run:
+   ```bash
+   docker compose logs dsp | grep -A1 "auth token"
+   ```
+
+4. Open your browser and navigate to `http://localhost:3000`.
+
+To stop the containers, run:
 
 ```bash
-docker-compose down
+docker compose down
 ```
+
+The stem-separation sidecar is opt-in: `docker compose --profile stems up -d`.
+
+> **Before exposing any of this beyond your own machine, read
+> [docs/self-hosting-hardening.md](./docs/self-hosting-hardening.md).**
 
 ## Keyboard Shortcuts
 
@@ -174,15 +189,25 @@ docker-compose down
 - [ ] **Multiplayer Audio Streaming** (Real-time voice and audio sharing via WebRTC)
 - [ ] **Mobile Touch-Optimized Layout** & Gesture Controls
 
+## Security
+
+- **Found a vulnerability?** Please report it privately — see
+  [SECURITY.md](./SECURITY.md). Do **not** open a public issue.
+- **Self-hosting the backend?** Read
+  [docs/self-hosting-hardening.md](./docs/self-hosting-hardening.md) before
+  exposing it. The sidecars are authenticated by default; the guide covers tokens,
+  HTTPS, container isolation, and the plugin-execution risk.
+
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.  
+Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for
+dev setup, the lint/test gate, and the review process, and note our
+[Code of Conduct](./CODE_OF_CONDUCT.md). In short:
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+1. Fork and create a feature branch (`git checkout -b feat/amazing-feature`)
+2. Make your change; run `npm run lint` and `npm run test` (both must pass)
+3. Commit (sign off with `git commit -s`)
+4. Push and open a Pull Request against `main`, filling in the template
 
 ## License and Editions
 

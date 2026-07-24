@@ -13,6 +13,7 @@ Security posture mirrors the DSP sidecar:
 import asyncio
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -25,8 +26,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 # --- Configuration -----------------------------------------------------------
+# Token resolution mirrors the DSP sidecar (see _resolve_auth_token): explicit
+# JAAD_STEMS_TOKEN wins; else an explicit JAAD_STEMS_ALLOW_NO_AUTH=1 opt-out;
+# else auto-generate + persist a token so the service is authenticated by default
+# with zero configuration. The token lands in the persisted models cache volume.
 AUTH_TOKEN = os.environ.get("JAAD_STEMS_TOKEN")
 ALLOW_NO_AUTH = os.environ.get("JAAD_STEMS_ALLOW_NO_AUTH") == "1"
+_HOME = os.environ.get("HOME", "/home/jaad")
+TOKEN_FILE = os.environ.get("JAAD_STEMS_TOKEN_FILE", os.path.join(_HOME, ".cache", ".stems_token"))
 ALLOWED_ORIGINS = [
     o.strip()
     for o in os.environ.get(
@@ -37,6 +44,9 @@ ALLOWED_ORIGINS = [
 ]
 MAX_UPLOAD_MB = int(os.environ.get("JAAD_STEMS_MAX_UPLOAD_MB", "200"))
 ALLOWED_MODELS = {"htdemucs", "htdemucs_ft", "htdemucs_6s"}
+# Cap simultaneously queued/processing jobs so a flood of /separate calls can't
+# fill the disk with uploads or pile up heavy (GPU/CPU) separations.
+MAX_ACTIVE_JOBS = int(os.environ.get("JAAD_STEMS_MAX_ACTIVE_JOBS", "3"))
 
 app = FastAPI(title="JAAD Stems", docs_url=None, redoc_url=None)
 app.add_middleware(
@@ -50,6 +60,36 @@ app.add_middleware(
 #             dir: tempdir, stems: {name: path}, error: str}
 jobs: dict = {}
 _job_lock = asyncio.Lock()  # one separation at a time (model is heavy)
+
+
+def _active_jobs() -> int:
+    return sum(1 for j in jobs.values() if j["status"] in ("queued", "processing"))
+
+
+def _resolve_auth_token():
+    """Make 'authenticated' the zero-config default. Returns the token to require,
+    or None ONLY when the operator explicitly set JAAD_STEMS_ALLOW_NO_AUTH=1."""
+    if AUTH_TOKEN:
+        return AUTH_TOKEN
+    if ALLOW_NO_AUTH:
+        return None
+    try:
+        with open(TOKEN_FILE, "r") as f:
+            existing = f.read().strip()
+        if existing:
+            return existing
+    except OSError:
+        pass
+    token = secrets.token_hex(24)
+    try:
+        os.makedirs(os.path.dirname(TOKEN_FILE) or ".", exist_ok=True)
+        fd = os.open(TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(token)
+    except OSError as e:
+        print(f"⚠️ Could not persist auth token to {TOKEN_FILE} ({e}); "
+              "it will change on the next restart.")
+    return token
 
 
 def _check_auth(authorization: str | None):
@@ -143,21 +183,29 @@ async def separate(
     _check_auth(authorization)
     if model not in ALLOWED_MODELS:
         raise HTTPException(status_code=400, detail=f"model must be one of {sorted(ALLOWED_MODELS)}")
-
+    # Reserve a slot SYNCHRONOUSLY, before the first await, so a burst of
+    # concurrent requests can't all pass the gate before any of them registers
+    # (the upload stream below yields the event loop). Register the job now — it
+    # counts toward _active_jobs immediately — then stream the upload into it.
+    if _active_jobs() >= MAX_ACTIVE_JOBS:
+        raise HTTPException(status_code=429, detail="server busy — too many active separations, retry shortly")
+    job_id = uuid.uuid4().hex
     job_dir = tempfile.mkdtemp(prefix="jaad_stems_")
+    jobs[job_id] = {"status": "queued", "progress": 0.0, "dir": job_dir, "stems": {}, "error": ""}
     wav_path = os.path.join(job_dir, "input.wav")
     size = 0
-    with open(wav_path, "wb") as out:
-        while chunk := await file.read(1024 * 1024):
-            size += len(chunk)
-            if size > MAX_UPLOAD_MB * 1024 * 1024:
-                out.close()
-                shutil.rmtree(job_dir, ignore_errors=True)
-                raise HTTPException(status_code=413, detail=f"upload exceeds {MAX_UPLOAD_MB}MB")
-            out.write(chunk)
-
-    job_id = uuid.uuid4().hex
-    jobs[job_id] = {"status": "queued", "progress": 0.0, "dir": job_dir, "stems": {}, "error": ""}
+    try:
+        with open(wav_path, "wb") as out:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_UPLOAD_MB * 1024 * 1024:
+                    raise HTTPException(status_code=413, detail=f"upload exceeds {MAX_UPLOAD_MB}MB")
+                out.write(chunk)
+    except BaseException:
+        # Release the reserved slot + temp dir on any failure (413, client abort).
+        jobs.pop(job_id, None)
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise
     asyncio.create_task(_process_job(job_id, wav_path, model))
     return {"job_id": job_id}
 
@@ -198,12 +246,17 @@ def cleanup(job_id: str, authorization: str | None = Header(default=None)):
 
 
 if __name__ == "__main__":
-    if not AUTH_TOKEN and not ALLOW_NO_AUTH:
-        raise SystemExit(
-            "Refusing to start: set JAAD_STEMS_TOKEN, or JAAD_STEMS_ALLOW_NO_AUTH=1 "
-            "to explicitly run without a token (local only)."
-        )
-    if not AUTH_TOKEN:
-        print("⚠️ JAAD_STEMS_TOKEN not set — running WITHOUT token auth (CORS-restricted only).")
+    _env_token = os.environ.get("JAAD_STEMS_TOKEN")
+    AUTH_TOKEN = _resolve_auth_token()
+    if AUTH_TOKEN and not _env_token:
+        # Auto-generated or restored — surface it so the operator can paste it
+        # into JAAD (localStorage 'jaad_stems_token').
+        print("🔐 Stems auth token (set this in JAAD → stems token):")
+        print(f"       {AUTH_TOKEN}")
+    elif AUTH_TOKEN:
+        print("🔐 Stems auth: using the token from JAAD_STEMS_TOKEN.")
+    else:
+        print("⚠️ JAAD_STEMS_ALLOW_NO_AUTH=1 — running WITHOUT token auth "
+              "(CORS-restricted only). Use ONLY on a trusted localhost bind.")
     print(f"🎚️ JAAD Stems sidecar (Demucs) on :8000 · origins: {ALLOWED_ORIGINS}")
     uvicorn.run(app, host=os.environ.get("JAAD_STEMS_HOST", "0.0.0.0"), port=8000)

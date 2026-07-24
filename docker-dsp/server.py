@@ -7,6 +7,7 @@ import jack
 import queue
 import subprocess
 import os
+import secrets
 import threading
 from urllib.parse import urlparse, parse_qs
 from pythonosc import udp_client
@@ -39,10 +40,31 @@ ALLOWED_PLUGIN_EXT = (".dll", ".vst3", ".so")
 # Headroom for base64 expansion (4/3) plus the small JSON envelope.
 WS_MAX_SIZE = int(MAX_PLUGIN_BYTES * 4 / 3) + 65536
 
-# Shared secret required to connect. If unset, the bridge refuses to start
-# unless JAAD_DSP_ALLOW_NO_AUTH=1 is explicitly set (local/dev escape hatch).
+# Cap concurrent WebSocket clients so a connection flood can't exhaust the single
+# JACK graph / Wine host. Already token-gated; this is defense in depth.
+MAX_CLIENTS = int(os.environ.get("JAAD_DSP_MAX_CLIENTS", "8"))
+
+# Uploading a plugin over the wire writes an attacker-supplied binary that Carla
+# then EXECUTES under Wine — arbitrary code execution by design. So it is OFF
+# unless a deploy explicitly opts in, and it is trusted-operator-only: never
+# enable it on a shared, multi-user, or internet-exposed host. (Loading a plugin
+# already present in VST_DIR is unaffected; this gate is only about accepting NEW
+# binaries from the browser.)
+ENABLE_PLUGIN_UPLOAD = os.environ.get("JAAD_ENABLE_PLUGIN_UPLOAD") == "1"
+
+# Shared secret required to connect. Resolution (see _resolve_auth_token):
+#   1. JAAD_DSP_TOKEN if set — use it verbatim.
+#   2. else JAAD_DSP_ALLOW_NO_AUTH=1 — explicit, origin-checked, localhost-only
+#      opt-out (prints a loud warning).
+#   3. else — AUTO-GENERATE a token, persist it to TOKEN_FILE (survives restarts
+#      so the app's saved token keeps working), and REQUIRE it.
+# Net effect: the bridge is authenticated by default with zero configuration, and
+# is never silently open just because nobody set a token.
 AUTH_TOKEN = os.environ.get("JAAD_DSP_TOKEN")
 ALLOW_NO_AUTH = os.environ.get("JAAD_DSP_ALLOW_NO_AUTH") == "1"
+# Auto-generated tokens live inside VST_DIR because that is already a persisted,
+# container-writable volume in the shipped compose.
+TOKEN_FILE = os.environ.get("JAAD_DSP_TOKEN_FILE", os.path.join(VST_DIR, ".dsp_token"))
 
 # Only browsers served from these origins may connect. This blocks
 # DNS-rebinding / CSRF-to-localhost from arbitrary websites. Comma-separated.
@@ -54,6 +76,36 @@ ALLOWED_ORIGINS = {
     ).split(",")
     if o.strip()
 }
+
+
+def _resolve_auth_token():
+    """Decide the token the bridge will require, making 'authenticated' the
+    zero-config default. Returns the token string, or None ONLY when the operator
+    explicitly opted out with JAAD_DSP_ALLOW_NO_AUTH=1."""
+    if AUTH_TOKEN:
+        return AUTH_TOKEN
+    if ALLOW_NO_AUTH:
+        return None
+    # Reuse a previously generated token so the app's saved token survives a
+    # restart; otherwise mint a fresh one and persist it 0600.
+    try:
+        with open(TOKEN_FILE, "r") as f:
+            existing = f.read().strip()
+        if existing:
+            return existing
+    except OSError:
+        pass
+    token = secrets.token_hex(24)
+    try:
+        os.makedirs(os.path.dirname(TOKEN_FILE) or ".", exist_ok=True)
+        fd = os.open(TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(token)
+    except OSError as e:
+        print(f"⚠️ Could not persist auth token to {TOKEN_FILE} ({e}); "
+              "it will change on the next restart.")
+    return token
+
 
 try:
     jack_client = jack.Client("JAAD_Bridge")
@@ -95,7 +147,8 @@ def _authorize(websocket) -> bool:
             print("🚫 Rejected connection: missing/invalid token")
             return False
     elif not ALLOW_NO_AUTH:
-        # Should never reach here (main() refuses to start), but fail closed.
+        # Fail closed: main() always resolves a token unless ALLOW_NO_AUTH is set,
+        # so reaching here means misconfiguration — refuse rather than run open.
         print("🚫 Rejected connection: auth not configured")
         return False
 
@@ -119,6 +172,10 @@ def safe_plugin_path(path):
 def save_uploaded_plugin(name, b64data):
     """Validate and write a drag-and-dropped plugin into VST_DIR. Returns the
     stored basename, or raises ValueError with a user-facing reason."""
+    # Defense in depth: the message handler already gates on this, but never let
+    # a new binary be written unless upload was explicitly enabled.
+    if not ENABLE_PLUGIN_UPLOAD:
+        raise ValueError("plugin upload is disabled on this server")
     if not name or not isinstance(name, str):
         raise ValueError("missing filename")
     # Strip any path components a client might send; only a bare filename lands.
@@ -177,6 +234,12 @@ async def handle_connection(websocket):
         await websocket.close(code=1008, reason="unauthorized")
         return
 
+    # Bound concurrent connections so a flood can't exhaust the JACK/Wine host.
+    if len(clients) >= MAX_CLIENTS:
+        print(f"🚫 Rejected connection: at capacity ({MAX_CLIENTS} clients)")
+        await websocket.close(code=1013, reason="server at capacity")
+        return
+
     clients.add(websocket)
     print("🔗 Client connected to Cloud VST Bridge")
 
@@ -210,11 +273,17 @@ async def handle_connection(websocket):
                     elif data.get('type') == 'upload_plugin':
                         # Drag-and-drop: write the plugin into /vst, then the
                         # client follows up with a normal load_plugin by name.
-                        try:
-                            saved = save_uploaded_plugin(data.get('name'), data.get('data'))
-                            await websocket.send(json.dumps({'type': 'upload_complete', 'name': saved}))
-                        except Exception as e:
-                            await websocket.send(json.dumps({'type': 'upload_error', 'error': str(e)}))
+                        # Gated — accepting new executables over the wire is off
+                        # unless the operator opted in (trusted hosts only).
+                        if not ENABLE_PLUGIN_UPLOAD:
+                            await websocket.send(json.dumps({'type': 'upload_error',
+                                'error': 'plugin upload is disabled on this server'}))
+                        else:
+                            try:
+                                saved = save_uploaded_plugin(data.get('name'), data.get('data'))
+                                await websocket.send(json.dumps({'type': 'upload_complete', 'name': saved}))
+                            except Exception as e:
+                                await websocket.send(json.dumps({'type': 'upload_error', 'error': str(e)}))
                     elif data.get('type') == 'load_plugin':
                         params = load_carla_plugin(data.get('path'))
                         # Broadcast the plugin's real parameters so every client
@@ -385,13 +454,22 @@ def connect_jack_ports():
         print(f"❌ Failed to connect JACK ports: {e}")
 
 async def main():
-    if not AUTH_TOKEN and not ALLOW_NO_AUTH:
-        raise SystemExit(
-            "Refusing to start: set JAAD_DSP_TOKEN to a shared secret, or set "
-            "JAAD_DSP_ALLOW_NO_AUTH=1 to explicitly run without a token (local only)."
-        )
-    if not AUTH_TOKEN:
-        print("⚠️ JAAD_DSP_TOKEN not set — running WITHOUT token auth (origin-checked only).")
+    global AUTH_TOKEN
+    env_token = os.environ.get("JAAD_DSP_TOKEN")
+    AUTH_TOKEN = _resolve_auth_token()
+    if AUTH_TOKEN and not env_token:
+        # Auto-generated or restored from TOKEN_FILE — surface it so the operator
+        # can paste it into JAAD Settings (localStorage 'jaad_dsp_token').
+        print("🔐 DSP auth token (set this in JAAD Settings → DSP token):")
+        print(f"       {AUTH_TOKEN}")
+    elif AUTH_TOKEN:
+        print("🔐 DSP auth: using the token from JAAD_DSP_TOKEN.")
+    else:
+        print("⚠️ JAAD_DSP_ALLOW_NO_AUTH=1 — running WITHOUT token auth "
+              "(origin-checked only). Use ONLY on a trusted localhost bind.")
+    if ENABLE_PLUGIN_UPLOAD:
+        print("⚠️ JAAD_ENABLE_PLUGIN_UPLOAD=1 — over-the-wire plugin upload is ON "
+              "(uploaded binaries run under Wine). Trusted operators only.")
 
     host = os.environ.get("JAAD_DSP_HOST", "0.0.0.0")
     print(f"🚀 JAAD Headless VST/DSP Sidecar running on {host}:8080")
