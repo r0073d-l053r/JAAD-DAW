@@ -29,7 +29,7 @@ jobs:
       # (or switch to the gitleaks CLI, which has no org gate) — otherwise this
       # job hard-fails on every run.
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
