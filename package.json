@@ -25,7 +25,7 @@
     "idb-keyval": "^6.2.2",
     "jszip": "^3.10.1",
     "lamejs": "^1.2.1",
-    "lucide-react": "^0.546.0",
+    "lucide-react": "^1.26.0",
     "motion": "^12.23.24",
     "onnxruntime-web": "^1.27.0",
     "react": "^19.0.1",
