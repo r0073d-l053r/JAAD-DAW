@@ -9,7 +9,6 @@ import { runAnalogMasterWorker } from '../lib/runAnalogMaster';
 import { loadCustomPresets } from '../lib/analogPresets';
 import { getGPUFFTAccelerator } from '../lib/gpuFFT';
 import { saveAsset } from '../lib/assetManager';
-import { uploadAssetCloud } from '../lib/syncUtils';
 import { audioBufferToWav } from '../lib/exportUtils';
 
 interface TrackResult { track: string; archetype: string; notes: string; gpu: boolean; }
@@ -35,7 +34,7 @@ export function MasterMix() {
         .filter((c: any) => audioEngine.buffers.get(c.bufferId || c.id));
       return { track: t, clips };
     }).filter((x) => x.clips.length > 0);
-  }, [state.tracks]);
+  }, [state.tracks, state.buffersVersion]);
 
   const totalClips = targets.reduce((n, x) => n + x.clips.length, 0);
 
@@ -70,6 +69,8 @@ export function MasterMix() {
           const rbuf = audioEngine.buffers.get(rep.bufferId || rep.id)!;
           const rchans: Float32Array[] = [];
           for (let c = 0; c < rbuf.numberOfChannels; c++) rchans.push(rbuf.getChannelData(c));
+          setProgress({ done, total: totalClips, label: `Analyzing ${track.name}…` });
+          await new Promise((r) => setTimeout(r, 0)); // let the label paint before the sync FFT sweep
           const decision = autoMaster(rchans, rbuf.sampleRate);
           settings = decision.settings; archetype = decision.archetype; notes = decision.notes || 'balanced';
         } else {
@@ -78,7 +79,11 @@ export function MasterMix() {
 
         let usedGpu = false;
         for (const clip of clips) {
-          const buf = audioEngine.buffers.get(clip.bufferId || clip.id)!;
+          const curId = clip.bufferId || clip.id;
+          // Already restored in a prior pass → skip, so a second run can't stack
+          // the effect and over-process the audio.
+          if (String(curId).startsWith('amaster_')) { done++; continue; }
+          const buf = audioEngine.buffers.get(curId)!;
           const chans: Float32Array[] = [];
           for (let c = 0; c < buf.numberOfChannels; c++) chans.push(buf.getChannelData(c));
           setProgress({ done, total: totalClips, label: `${track.name} — ${archetype}` });
@@ -89,9 +94,9 @@ export function MasterMix() {
           const newId = `amaster_${clip.id}_${Date.now()}`;
           audioEngine.buffers.set(newId, nb);
           try {
-            const wav = audioBufferToWav(nb);
-            saveAsset(newId, wav).catch(() => {});
-            uploadAssetCloud(newId, wav).catch(() => {});
+            // Local (OPFS) only; the cloud upload happens on the next project save,
+            // so a whole-song restore doesn't fire one upload per stem.
+            saveAsset(newId, audioBufferToWav(nb)).catch(() => {});
           } catch { /* best-effort persistence */ }
           dispatch({ type: 'UPDATE_CLIP', payload: { trackId: track.id, clipId: clip.id, changes: { bufferId: newId } } });
           done++;
@@ -189,17 +194,24 @@ export function MasterMix() {
 
           {error && <p className="text-[11px] text-red-400">{error}</p>}
           {finished && !error && (
-            <p className="flex items-center gap-2 text-[11px] text-emerald-400"><CheckCircle2 size={14} /> Restored {results.length} stems. Play it back and A/B with undo (Ctrl+Z).</p>
+            <p className="flex items-center gap-2 text-[11px] text-emerald-400"><CheckCircle2 size={14} /> Restored {results.length} stems. Play it back — each stem is undoable individually from its track.</p>
           )}
         </div>
 
         {/* Action */}
         <div className="p-6 pt-0">
-          <button onClick={run} disabled={processing || targets.length === 0}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black bg-[#a882fa]/20 border border-[#a882fa]/40 text-[#a882fa] hover:bg-[#a882fa]/30 transition disabled:opacity-40">
-            {processing ? <><Loader2 size={16} className="animate-spin" /> Restoring…</> : <><Sparkles size={16} /> {mode === 'auto' ? 'Analyze & Restore All Stems' : 'Master All Stems'}</>}
-          </button>
-          {targets.length === 0 && <p className="text-[10px] text-zinc-500 text-center mt-2">No stems with loaded audio to process.</p>}
+          {finished && !error ? (
+            <button onClick={close}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25 transition">
+              <CheckCircle2 size={16} /> Done · Close
+            </button>
+          ) : (
+            <button onClick={run} disabled={processing || targets.length === 0}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black bg-[#a882fa]/20 border border-[#a882fa]/40 text-[#a882fa] hover:bg-[#a882fa]/30 transition disabled:opacity-40">
+              {processing ? <><Loader2 size={16} className="animate-spin" /> Restoring…</> : <><Sparkles size={16} /> {mode === 'auto' ? 'Analyze & Restore All Stems' : 'Master All Stems'}</>}
+            </button>
+          )}
+          {targets.length === 0 && !finished && <p className="text-[10px] text-zinc-500 text-center mt-2">No stems with loaded audio to process.</p>}
         </div>
       </div>
     </div>,

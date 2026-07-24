@@ -140,29 +140,62 @@ function highpass(sampleRate: number, freq: number, Q = 0.707): Biquad {
   return { b0: ((1 + cos) / 2) / a0, b1: (-(1 + cos)) / a0, b2: ((1 + cos) / 2) / a0, a1: (-2 * cos) / a0, a2: (1 - alpha) / a0 };
 }
 
-// ── Dynamic de-harsher (parallel de-esser on the 3–8 kHz band) ─────────────
-// Source separation leaves "musical noise" in the presence band; this isolates
-// 3–8 kHz, follows its envelope, and subtracts only the energy that spikes over
-// a threshold — so harsh transients are tamed while the tone is untouched.
+// RBJ peaking EQ. A negative gainDb is a pure CUT at the center frequency, so it
+// can only remove energy there — never add it (unlike parallel band subtraction,
+// where the bandpass's phase shift can make the subtraction constructive).
+function peakingEQ(sampleRate: number, freq: number, gainDb: number, Q: number): Biquad {
+  const A = Math.pow(10, gainDb / 40);
+  const w0 = (2 * Math.PI * Math.min(freq, sampleRate * 0.49)) / sampleRate;
+  const cos = Math.cos(w0), sin = Math.sin(w0), alpha = sin / (2 * Q);
+  const a0 = 1 + alpha / A;
+  return {
+    b0: (1 + alpha * A) / a0,
+    b1: (-2 * cos) / a0,
+    b2: (1 - alpha * A) / a0,
+    a1: (-2 * cos) / a0,
+    a2: (1 - alpha / A) / a0,
+  };
+}
+
+// ── Dynamic de-harsher (envelope-driven peaking CUT at ~5.5 kHz) ───────────
+// Source separation leaves "musical noise" in the presence band. We detect its
+// level from a 3–8 kHz bandpass envelope, then apply a dynamic peaking *cut*
+// (updated per small block, carrying filter state so it stays click-free) whose
+// depth scales with how hot the band is. Because it's a minimum-phase cut, it can
+// only attenuate the harsh band — never boost it, even on broadband material.
 function applyDeHarsh(data: Float32Array, sampleRate: number, amount: number): void {
   if (amount <= 0) return;
+
+  // Detection band (phase doesn't matter — used only to measure level).
   const band = new Float32Array(data);
-  applyBiquad(band, highpass(sampleRate, 3000));
+  applyBiquad(band, highpass(sampleRate, Math.min(3000, sampleRate * 0.49)));
   applyBiquad(band, lowpass(sampleRate, 8000));
 
   const atk = Math.exp(-1 / (sampleRate * 0.002)); // 2 ms
   const rel = Math.exp(-1 / (sampleRate * 0.05));  // 50 ms
-  const thresh = 0.02 + (1 - amount) * 0.08;        // more amount → lower threshold
-  const floor = 1 - amount;                          // max attenuation of the band
+  const thresh = 0.02 + (1 - amount) * 0.08;
+  const maxCutDb = amount * 18;
+
+  const BLOCK = 128;
   let env = 0;
-  let g = 1;
-  for (let i = 0; i < data.length; i++) {
-    const a = Math.abs(band[i]);
-    env = a > env ? atk * env + (1 - atk) * a : rel * env + (1 - rel) * a;
-    const target = env > thresh ? Math.max(floor, thresh / env) : 1;
-    // Smooth the gain (fast to duck, slow to recover) to avoid clicks.
-    g = target < g ? atk * g + (1 - atk) * target : rel * g + (1 - rel) * target;
-    data[i] -= band[i] * (1 - g); // subtract the over-threshold portion of the band
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0; // peaking-EQ state, carried across blocks
+  for (let start = 0; start < data.length; start += BLOCK) {
+    const end = Math.min(start + BLOCK, data.length);
+    // Envelope over the block, then set the cut from its peak.
+    let blkPeak = 0;
+    for (let i = start; i < end; i++) {
+      const a = Math.abs(band[i]);
+      env = a > env ? atk * env + (1 - atk) * a : rel * env + (1 - rel) * a;
+      if (env > blkPeak) blkPeak = env;
+    }
+    const cutDb = blkPeak > thresh ? -Math.min(maxCutDb, 20 * Math.log10(blkPeak / thresh)) : 0;
+    const bq = peakingEQ(sampleRate, 5500, cutDb, 1.2);
+    for (let i = start; i < end; i++) {
+      const x0 = data[i];
+      const y0 = bq.b0 * x0 + bq.b1 * x1 + bq.b2 * x2 - bq.a1 * y1 - bq.a2 * y2;
+      x2 = x1; x1 = x0; y2 = y1; y1 = y0;
+      data[i] = y0;
+    }
   }
 }
 
