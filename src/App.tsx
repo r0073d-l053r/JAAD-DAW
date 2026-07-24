@@ -32,6 +32,7 @@ import { VideoSyncPanel } from './components/VideoSyncPanel';
 import { VstBridgeEditor } from './components/VstBridgeEditor';
 import { SidechainEditor } from './components/SidechainEditor';
 import { AuthenticityProcessor } from './components/AuthenticityProcessor';
+import { AnalogMaster } from './components/AnalogMaster';
 import { LiveAnalyzers } from './components/LiveAnalyzers';
 import { StemSeparator } from './components/StemSeparator';
 import { PianoRoll } from './components/PianoRoll';
@@ -425,6 +426,7 @@ function AppContent() {
         {state.vstEditorTrackId && <VstBridgeEditor />}
         {state.sidechainEditorTrackId && <SidechainEditor />}
         {state.authenticityProcessorClipId && <AuthenticityProcessor />}
+        {state.analogMasterClipId && <AnalogMaster />}
         {state.stemSeparatorClipId && <StemSeparator />}
         {state.pianoRollClipId && <PianoRoll />}
         

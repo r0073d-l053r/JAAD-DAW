@@ -788,6 +788,15 @@ export const ClipItem = React.memo(function ClipItem({
             >
               AI Authenticity
             </button>
+            <button
+              className="w-full text-left px-4 py-2 text-sm text-[#a882fa] hover:bg-white/10 transition-colors"
+              onClick={() => {
+                dispatch({ type: "SET_ANALOG_MASTER_CLIP", payload: clip.id });
+                dispatch({ type: "SET_ACTIVE_CONTEXT_MENU", payload: null });
+              }}
+            >
+              Analog Master
+            </button>
             <div className="h-px bg-white/10 my-1 w-full" />
             <button
               className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/10 transition-colors"
