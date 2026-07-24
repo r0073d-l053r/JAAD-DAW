@@ -14,7 +14,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@google/genai": "^1.52.0",
+    "@google/genai": "^2.13.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "audio-encoder": "^1.0.4",
