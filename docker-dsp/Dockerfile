@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:26.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -37,7 +37,12 @@ RUN wget https://launchpad.net/~kxstudio-debian/+archive/kxstudio/+files/kxstudi
     rm -rf /var/lib/apt/lists/*
 
 # Install Python packages (pinned for reproducible, auditable builds).
-RUN pip3 install --no-cache-dir \
+# --break-system-packages: Ubuntu 26.04 ships Python 3.14, which marks the system
+# interpreter PEP 668 "externally-managed" and refuses a bare `pip install`. This
+# container is a single-purpose appliance (no OS Python apps to protect) and the
+# Carla/numpy bindings we rely on are apt-installed system-wide, so installing
+# these three pure-Python packages alongside them is safe and intentional.
+RUN pip3 install --no-cache-dir --break-system-packages \
     "websockets==13.1" \
     "JACK-Client==0.5.4" \
     "python-osc==1.8.3"
