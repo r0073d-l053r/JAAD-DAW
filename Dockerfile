@@ -1,5 +1,5 @@
 # Stage 1: Build the application
-FROM node:20-alpine AS build
+FROM node:26-alpine AS build
 
 # Accept the API key as a build argument so it can be baked into the static
 # bundle. ONLY pass this for private/self-hosted builds — a key baked into the
