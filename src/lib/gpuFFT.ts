@@ -318,8 +318,11 @@ export class GPUFFTAccelerator {
         } else {
           optimizedFFT(r64, i64);
         }
-        frame.real.set(new Float32Array(r64.buffer, r64.byteOffset, r64.length));
-        frame.imag.set(new Float32Array(i64.buffer, i64.byteOffset, i64.length));
+        // TypedArray.set() does a proper numeric Float64→Float32 conversion.
+        // (Do NOT construct a Float32Array *view* over r64.buffer — that would
+        // reinterpret the 8-byte doubles as 4-byte floats and yield garbage.)
+        frame.real.set(r64);
+        frame.imag.set(i64);
       }
       return;
     }
