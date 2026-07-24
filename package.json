@@ -16,7 +16,7 @@
   "dependencies": {
     "@google/genai": "^1.52.0",
     "@tailwindcss/vite": "^4.1.14",
-    "@vitejs/plugin-react": "^5.0.4",
+    "@vitejs/plugin-react": "^6.0.4",
     "audio-encoder": "^1.0.4",
     "browser-id3-writer": "^6.3.1",
     "demucs-web": "^1.0.2",
