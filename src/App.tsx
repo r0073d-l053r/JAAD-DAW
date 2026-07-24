@@ -33,6 +33,7 @@ import { VstBridgeEditor } from './components/VstBridgeEditor';
 import { SidechainEditor } from './components/SidechainEditor';
 import { AuthenticityProcessor } from './components/AuthenticityProcessor';
 import { AnalogMaster } from './components/AnalogMaster';
+import { MasterMix } from './components/MasterMix';
 import { LiveAnalyzers } from './components/LiveAnalyzers';
 import { StemSeparator } from './components/StemSeparator';
 import { PianoRoll } from './components/PianoRoll';
@@ -427,6 +428,7 @@ function AppContent() {
         {state.sidechainEditorTrackId && <SidechainEditor />}
         {state.authenticityProcessorClipId && <AuthenticityProcessor />}
         {state.analogMasterClipId && <AnalogMaster />}
+        {state.masterMixOpen && <MasterMix />}
         {state.stemSeparatorClipId && <StemSeparator />}
         {state.pianoRollClipId && <PianoRoll />}
         

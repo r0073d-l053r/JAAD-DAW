@@ -9,6 +9,7 @@ import {
   ANALOG_MASTER_PRESETS,
 } from '../lib/analogMaster';
 import { getGPUFFTAccelerator } from '../lib/gpuFFT';
+import { loadCustomPresets, saveCustomPreset } from '../lib/analogPresets';
 import { saveAsset } from '../lib/assetManager';
 import { uploadAssetCloud } from '../lib/syncUtils';
 import { audioBufferToWav } from '../lib/exportUtils';
@@ -103,10 +104,23 @@ export function AnalogMaster() {
     setPreviewBuffer(null); // settings changed → preview is stale
   };
 
+  const [customPresets, setCustomPresets] = useState(() => loadCustomPresets());
+  const [saveName, setSaveName] = useState('');
+  const allPresets = { ...ANALOG_MASTER_PRESETS, ...customPresets };
+
   const applyPreset = (name: string) => {
-    setSettings({ ...ANALOG_MASTER_PRESETS[name] });
+    if (!allPresets[name]) return;
+    setSettings({ ...allPresets[name] });
     setActivePreset(name);
     setPreviewBuffer(null);
+  };
+
+  const savePreset = () => {
+    const name = saveName.trim();
+    if (!name) return;
+    setCustomPresets(saveCustomPreset(name, settings));
+    setActivePreset(name);
+    setSaveName('');
   };
 
   function stop() {
@@ -245,12 +259,21 @@ export function AnalogMaster() {
 
         {/* Presets */}
         <div className="px-6 pt-4 flex flex-wrap gap-2">
-          {Object.keys(ANALOG_MASTER_PRESETS).map((name) => (
+          {Object.keys(allPresets).map((name) => (
             <button key={name} onClick={() => applyPreset(name)}
               className={`text-[10px] px-3 py-1.5 rounded-full border transition ${
                 activePreset === name ? 'bg-[#a882fa]/20 border-[#a882fa]/40 text-[#a882fa]' : 'bg-white/[0.03] border-white/10 text-zinc-400 hover:text-white'
-              }`}>{name}</button>
+              }`}>{name}{customPresets[name] ? ' ★' : ''}</button>
           ))}
+        </div>
+        {/* Save current settings as a custom preset */}
+        <div className="px-6 pt-2 flex gap-2">
+          <input value={saveName} onChange={(e) => setSaveName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') savePreset(); }}
+            placeholder="Save current as preset…" aria-label="Preset name"
+            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white placeholder-zinc-600 outline-none focus:border-[#a882fa]/50" />
+          <button onClick={savePreset} disabled={!saveName.trim()}
+            className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white/[0.04] border border-white/10 text-zinc-300 hover:bg-white/10 transition disabled:opacity-40">Save</button>
         </div>
 
         {/* Sliders */}
@@ -267,6 +290,8 @@ export function AnalogMaster() {
             display={`${Math.round(settings.air * 100)}%`} onChange={(v) => set('air', v)} />
           <Slider label="Warmth" value={settings.warmth} min={0} max={1} step={0.01}
             display={`${Math.round(settings.warmth * 100)}%`} onChange={(v) => set('warmth', v)} />
+          <Slider label="De-harsh" value={settings.deHarsh} min={0} max={1} step={0.01}
+            display={`${Math.round(settings.deHarsh * 100)}%`} onChange={(v) => set('deHarsh', v)} />
           <div className="col-span-2">
             <Slider label="Dry / Wet Mix" value={settings.mix} min={0} max={1} step={0.01}
               display={`${Math.round(settings.mix * 100)}%`} onChange={(v) => set('mix', v)} />

@@ -92,6 +92,24 @@ describe('analogMaster DSP', () => {
     expect(isFiniteBounded(res.channels[0])).toBe(true);
     expect(isFiniteBounded(res.channels[1])).toBe(true);
   });
+
+  it('de-harsher ducks the 3-8kHz band while preserving low content', async () => {
+    const len = 24000;
+    const x = new Float32Array(len);
+    for (let i = 0; i < len; i++) {
+      x[i] = (Math.sin((2 * Math.PI * 500 * i) / SR) + Math.sin((2 * Math.PI * 5000 * i) / SR)) * 0.4;
+    }
+    const before5k = goertzel(x, SR, 5000);
+    const before500 = goertzel(x, SR, 500);
+    const res = await processAnalogMaster([x], SR, {
+      ...ANALOG_MASTER_DEFAULTS, exciter: 0, air: 0, warmth: 0, saturation: 0, width: 1, mix: 1, deHarsh: 0.85,
+    });
+    const after5k = goertzel(res.channels[0], SR, 5000);
+    const after500 = goertzel(res.channels[0], SR, 500);
+    expect(after5k).toBeLessThan(before5k * 0.9);      // harsh band attenuated
+    expect(after500).toBeGreaterThan(before500 * 0.8); // low tone preserved
+    expect(isFiniteBounded(res.channels[0])).toBe(true);
+  });
 });
 
 function sideEnergy(l: Float32Array, r: Float32Array): number {

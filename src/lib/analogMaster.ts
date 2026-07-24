@@ -32,6 +32,9 @@ export interface AnalogMasterSettings {
   air: number;
   /** Low-shelf "warmth" boost, 0..1. */
   warmth: number;
+  /** Dynamic de-harsher amount — tames 3–8 kHz "musical noise" that source
+   *  separation leaves behind (the tinny/harsh AI-stem tell), 0..1. */
+  deHarsh: number;
   /** Output makeup gain (linear). */
   outputGain: number;
 }
@@ -44,14 +47,17 @@ export const ANALOG_MASTER_DEFAULTS: AnalogMasterSettings = {
   width: 1.12,
   air: 0.3,
   warmth: 0.2,
+  deHarsh: 0.25,
   outputGain: 1,
 };
 
 export const ANALOG_MASTER_PRESETS: Record<string, AnalogMasterSettings> = {
-  'Subtle Glue': { mix: 0.8, saturation: 0.18, exciter: 0.2, exciterFreq: 8000, width: 1.05, air: 0.18, warmth: 0.15, outputGain: 1 },
-  'Warm Tape': { mix: 1, saturation: 0.45, exciter: 0.25, exciterFreq: 7500, width: 1.08, air: 0.2, warmth: 0.4, outputGain: 1 },
-  'Air & Sheen': { mix: 1, saturation: 0.22, exciter: 0.6, exciterFreq: 6000, width: 1.15, air: 0.5, warmth: 0.12, outputGain: 1 },
-  'Wide Master': { mix: 1, saturation: 0.3, exciter: 0.4, exciterFreq: 7000, width: 1.4, air: 0.35, warmth: 0.2, outputGain: 1 },
+  'Subtle Glue': { mix: 0.8, saturation: 0.18, exciter: 0.2, exciterFreq: 8000, width: 1.05, air: 0.18, warmth: 0.15, deHarsh: 0.15, outputGain: 1 },
+  'Warm Tape': { mix: 1, saturation: 0.45, exciter: 0.25, exciterFreq: 7500, width: 1.08, air: 0.2, warmth: 0.4, deHarsh: 0.2, outputGain: 1 },
+  'Air & Sheen': { mix: 1, saturation: 0.22, exciter: 0.6, exciterFreq: 6000, width: 1.15, air: 0.5, warmth: 0.12, deHarsh: 0.3, outputGain: 1 },
+  'Wide Master': { mix: 1, saturation: 0.3, exciter: 0.4, exciterFreq: 7000, width: 1.4, air: 0.35, warmth: 0.2, deHarsh: 0.25, outputGain: 1 },
+  'Vocal Rescue': { mix: 1, saturation: 0.18, exciter: 0.45, exciterFreq: 6500, width: 1.05, air: 0.4, warmth: 0.18, deHarsh: 0.6, outputGain: 1 },
+  'Bass Warmth': { mix: 1, saturation: 0.35, exciter: 0.12, exciterFreq: 9000, width: 0.85, air: 0.1, warmth: 0.5, deHarsh: 0.1, outputGain: 1 },
 };
 
 // ── Windowing ──────────────────────────────────────────────────────────────
@@ -116,6 +122,47 @@ function applySaturation(data: Float32Array, amount: number): void {
   for (let i = 0; i < data.length; i++) {
     const sat = Math.tanh(data[i] * drive) / norm;
     data[i] = data[i] * (1 - amount) + sat * amount;
+  }
+}
+
+// ── RBJ resonance filters (for the de-harsher band) ────────────────────────
+function lowpass(sampleRate: number, freq: number, Q = 0.707): Biquad {
+  const w0 = (2 * Math.PI * Math.min(freq, sampleRate * 0.49)) / sampleRate;
+  const cos = Math.cos(w0), sin = Math.sin(w0), alpha = sin / (2 * Q);
+  const a0 = 1 + alpha;
+  return { b0: ((1 - cos) / 2) / a0, b1: (1 - cos) / a0, b2: ((1 - cos) / 2) / a0, a1: (-2 * cos) / a0, a2: (1 - alpha) / a0 };
+}
+
+function highpass(sampleRate: number, freq: number, Q = 0.707): Biquad {
+  const w0 = (2 * Math.PI * freq) / sampleRate;
+  const cos = Math.cos(w0), sin = Math.sin(w0), alpha = sin / (2 * Q);
+  const a0 = 1 + alpha;
+  return { b0: ((1 + cos) / 2) / a0, b1: (-(1 + cos)) / a0, b2: ((1 + cos) / 2) / a0, a1: (-2 * cos) / a0, a2: (1 - alpha) / a0 };
+}
+
+// ── Dynamic de-harsher (parallel de-esser on the 3–8 kHz band) ─────────────
+// Source separation leaves "musical noise" in the presence band; this isolates
+// 3–8 kHz, follows its envelope, and subtracts only the energy that spikes over
+// a threshold — so harsh transients are tamed while the tone is untouched.
+function applyDeHarsh(data: Float32Array, sampleRate: number, amount: number): void {
+  if (amount <= 0) return;
+  const band = new Float32Array(data);
+  applyBiquad(band, highpass(sampleRate, 3000));
+  applyBiquad(band, lowpass(sampleRate, 8000));
+
+  const atk = Math.exp(-1 / (sampleRate * 0.002)); // 2 ms
+  const rel = Math.exp(-1 / (sampleRate * 0.05));  // 50 ms
+  const thresh = 0.02 + (1 - amount) * 0.08;        // more amount → lower threshold
+  const floor = 1 - amount;                          // max attenuation of the band
+  let env = 0;
+  let g = 1;
+  for (let i = 0; i < data.length; i++) {
+    const a = Math.abs(band[i]);
+    env = a > env ? atk * env + (1 - atk) * a : rel * env + (1 - rel) * a;
+    const target = env > thresh ? Math.max(floor, thresh / env) : 1;
+    // Smooth the gain (fast to duck, slow to recover) to avoid clicks.
+    g = target < g ? atk * g + (1 - atk) * target : rel * g + (1 - rel) * target;
+    data[i] -= band[i] * (1 - g); // subtract the over-threshold portion of the band
   }
 }
 
@@ -238,6 +285,11 @@ export async function processAnalogMaster(
     const airFreq = Math.min(11000, sampleRate * 0.45);
     const bq = highShelf(sampleRate, airFreq, settings.air * 5);
     wet.forEach((c) => applyBiquad(c, bq));
+  }
+
+  // 1b. De-harsh: tame the 3–8 kHz separation "musical noise" BEFORE adding air.
+  if (settings.deHarsh > 0) {
+    wet.forEach((c) => applyDeHarsh(c, sampleRate, settings.deHarsh));
   }
 
   // 2. Spectral HF exciter (GPU FFT). Track whether the GPU path was used.

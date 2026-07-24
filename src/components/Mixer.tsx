@@ -110,6 +110,9 @@ export function Mixer() {
       // Add a master limiter
       audioEngine.addTrackEffect('master', 'limiter');
     }
+    // Balanced the levels (best-effort, needs a Gemini key) — now open the
+    // per-stem analog restoration panel to fix tone/fidelity.
+    dispatch({ type: 'SET_MASTER_MIX_OPEN', payload: true });
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {

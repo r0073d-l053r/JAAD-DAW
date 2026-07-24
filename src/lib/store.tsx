@@ -185,6 +185,7 @@ interface AppState {
   sidechainEditorTrackId: string | null;
   authenticityProcessorClipId: string | null;
   analogMasterClipId: string | null;
+  masterMixOpen: boolean;
   stemSeparatorClipId: string | null;
   pianoRollClipId: string | null;
   showLiveAnalyzers: boolean;
@@ -208,6 +209,7 @@ export type Action =
   | { type: "SET_SIDECHAIN_EDITOR_TRACK"; payload: string | null }
   | { type: "SET_AUTHENTICITY_PROCESSOR_CLIP"; payload: string | null }
   | { type: "SET_ANALOG_MASTER_CLIP"; payload: string | null }
+  | { type: "SET_MASTER_MIX_OPEN"; payload: boolean }
   | { type: "SET_BPM"; payload: number }
   | { type: "SET_ORIGINAL_BPM"; payload: number }
   | { type: "SET_TIME"; payload: number }
@@ -444,6 +446,7 @@ export const initialState: AppStateWithHistory = {
   sidechainEditorTrackId: null,
   authenticityProcessorClipId: null,
   analogMasterClipId: null,
+  masterMixOpen: false,
   stemSeparatorClipId: null,
   pianoRollClipId: null,
   showLiveAnalyzers: false,
@@ -869,6 +872,8 @@ export function appReducer(
       return { ...state, authenticityProcessorClipId: action.payload };
     case "SET_ANALOG_MASTER_CLIP":
       return { ...state, analogMasterClipId: action.payload };
+    case "SET_MASTER_MIX_OPEN":
+      return { ...state, masterMixOpen: action.payload };
     case "SET_STEM_SEPARATOR_CLIP":
       return { ...state, stemSeparatorClipId: action.payload };
     case "SET_PIANO_ROLL_CLIP":
