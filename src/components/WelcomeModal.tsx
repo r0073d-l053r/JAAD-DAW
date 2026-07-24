@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { APP_VERSION } from '../version';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -73,7 +74,7 @@ export function WelcomeModal({ isOpen: manualIsOpen }: WelcomeModalProps) {
                     {/* Alpha Build Badge */}
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider bg-primary/20 border border-primary/40 text-primary shadow-[0_0_12px_rgba(255,45,85,0.25)] animate-pulse">
                       <AlertTriangle size={10} className="text-primary" />
-                      Alpha Build v1.2
+                      Alpha Build v{APP_VERSION}
                     </div>
 
                     <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white flex items-center gap-2">

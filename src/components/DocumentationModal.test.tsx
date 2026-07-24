@@ -1,5 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { APP_VERSION } from '../version';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { DocumentationModal } from './DocumentationModal';
 
@@ -73,7 +74,7 @@ describe('DocumentationModal', () => {
     render(<DocumentationModal {...defaultProps} />);
 
     expect(screen.queryByText('JAAD Wiki')).not.toBeNull();
-    expect(screen.queryByText('User Manual v1.1')).not.toBeNull();
+    expect(screen.queryByText(`User Manual v${APP_VERSION}`)).not.toBeNull();
     expect(screen.queryAllByText('Getting Started', { selector: 'button' }).length).toBeGreaterThan(0);
   });
 

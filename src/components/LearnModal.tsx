@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { APP_VERSION } from '../version';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -282,7 +283,7 @@ export function LearnModal({ isOpen, onClose }: { isOpen: boolean, onClose: () =
               </div>
               <div className="text-left">
                 <h2 className="text-3xl font-black text-white tracking-tighter uppercase leading-none">LEARN</h2>
-                <p className="text-[10px] text-primary font-bold tracking-[0.4em] uppercase mt-2">QUICKSTART J.A.A.D. USER GUIDE • v1.2.0</p>
+                <p className="text-[10px] text-primary font-bold tracking-[0.4em] uppercase mt-2">QUICKSTART J.A.A.D. USER GUIDE • v{APP_VERSION}</p>
               </div>
             </div>
 

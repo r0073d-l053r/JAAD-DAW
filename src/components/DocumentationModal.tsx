@@ -1,4 +1,5 @@
 import React, { useMemo, useEffect } from 'react';
+import { APP_VERSION } from '../version';
 import { createPortal } from 'react-dom';
 import { LiquidGlassPanel } from './LiquidGlass';
 import { X, BookOpen, ExternalLink, HelpCircle } from 'lucide-react';
@@ -165,7 +166,7 @@ export function DocumentationModal({ isOpen, onClose }: DocumentationModalProps)
                 </div>
                 <div>
                   <h2 className="text-xl font-black text-white tracking-tighter uppercase">JAAD Wiki</h2>
-                  <p className="text-[9px] text-zinc-500 font-bold tracking-[0.2em] uppercase">User Manual v1.1</p>
+                  <p className="text-[9px] text-zinc-500 font-bold tracking-[0.2em] uppercase">User Manual v{APP_VERSION}</p>
                 </div>
               </div>
 

@@ -1,4 +1,5 @@
 import React from 'react';
+import { APP_VERSION } from '../version';
 import { createPortal } from 'react-dom';
 import { LiquidGlassPanel } from './LiquidGlass';
 import { X, Github, Linkedin, Globe, Heart, Music, Sparkles, Code } from 'lucide-react';
@@ -41,7 +42,7 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
                     <Sparkles size={40} className="text-white group-hover:scale-110 transition-transform duration-500" />
                  </div>
                  <h2 className="text-3xl font-black text-white tracking-tighter uppercase">JAAD</h2>
-                 <p className="text-[10px] text-primary font-bold tracking-[0.4em] uppercase mt-1">v1.2.0 • Built with Passion</p>
+                 <p className="text-[10px] text-primary font-bold tracking-[0.4em] uppercase mt-1">v{APP_VERSION} • Built with Passion</p>
               </div>
 
              <button 
