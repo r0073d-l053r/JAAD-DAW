@@ -36,7 +36,7 @@ isPublic : true   (boolean)
 Without this, demos disappear from the hosted build's project browser
 (deep links still work).
 
-## 4. Storage CORS (CLI, one-time — see FIX_CORS.md)
+## 4. Storage CORS (CLI, one-time — see [firebase-cors.md](firebase-cors.md))
 
 ```bash
 gsutil cors set cors.json gs://YOUR_BUCKET_NAME

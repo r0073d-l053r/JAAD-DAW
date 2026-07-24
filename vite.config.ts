@@ -8,6 +8,10 @@ export default defineConfig(({ mode }) => {
   return {
     base: '/JAAD-DAW/',
     plugins: [react(), tailwindcss()],
+    // Strip noisy debug logging from production bundles (keeps console.warn /
+    // console.error for real diagnostics). `pure` lets esbuild drop these calls
+    // since their return value is always unused.
+    esbuild: mode === 'production' ? { pure: ['console.log', 'console.debug', 'console.info'] } : {},
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
