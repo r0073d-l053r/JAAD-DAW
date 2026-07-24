@@ -1,6 +1,6 @@
 # ADR-0005: Professional DSP Tools & Outer Platform Bridges
 
-- **Status**: 🟡 Proposed
+- **Status**: 🟢 Accepted
 - **Date**: 2026-05-20
 - **Author**: Antigravity & USER
 

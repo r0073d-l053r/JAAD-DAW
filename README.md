@@ -44,6 +44,7 @@ Just Another AI DAW (JAAD) is a modern, web-browser-based Digital Audio Workstat
 - **Hybrid BPM Detection Engine**: Integrated `essentia.js` for fast offline tempo analysis with an automatic Gemini AI fallback to calculate track BPM dynamically and sync it with WebGL visuals.
 - **Generative AI Copilot & Creation**: Natural language generation of audio stems, lyrics-to-vocals, and MIDI patterns directly onto the timeline, powered by Google Gemini.
 - **AI "Fix My Mix" Automator**: One-click intelligent analysis that applies corrective parametric EQ, multi-band compression, and mastering presets.
+- **AI Authenticity Processor**: Spectral-repair DSP (inspired by iZotope RX) that removes the telltale artifacts left by AI-generated audio for a natural, high-fidelity analog sound — with a live "AI Score" gauge showing before/after. The same processing also lowers AI-detector scores.
 - **Interactive Timeline & Mixer**: Complete DAW workspace with dynamic resizing, volume/panning faders, mute, solo, and real-time routing buses.
 - **Piano Roll MIDI Editor**: Full note editor for AI-generated and imported MIDI clips — draw, move, resize, and delete notes on a snapping beat grid with clickable preview keys, plus built-in synth playback on the timeline.
 - **Clip Fade Handles**: Drag the top corners of any clip for instant fade-in/fade-out, applied identically in live playback, track freeze, and all exports.
@@ -71,7 +72,7 @@ Just Another AI DAW (JAAD) is a modern, web-browser-based Digital Audio Workstat
 
 ### Prerequisites
 
-You need Node.js installed on your machine.
+You need Node.js **20 or newer** installed on your machine (matches CI).
 
 ### Installation
 
@@ -180,7 +181,7 @@ The stem-separation sidecar is opt-in: `docker compose --profile stems up -d`.
 ## Roadmap
 
 - [x] **Complete MIDI Support** & Interactive Piano Roll Integration
-- [x] **VST/AudioUnit Emulation** via WebAssembly Wrapper
+- [x] **Cloud VST Bridge** — self-hosted Wine/Carla Docker sidecar hosting native Windows VST/VST3 plugins, with auto-populated parameter knobs and a live noVNC plugin GUI (ADR-0008)
 - [x] **Real-time Collaborative Sync** (Firestore Database Sync & Delta Caching)
 - [x] **Advanced AI Features** (Stem Separation, Automatic Mastering, essentia.js BPM Detection)
 - [x] **Fully Gated Cloud Share & Deep Link System** with Firebase Integration

@@ -1,6 +1,8 @@
 # JAAD - Finished Features
 
-All of the following features have been successfully implemented:
+Implemented features across the build. A couple of entries below track the
+*intended* scope of an area rather than a fully shipped capability — those are
+called out inline. For current roadmap status see the README and `docs/adr/`.
 
 ## 1. Core DAW Infrastructure
 - [x] Basic React & Tailwind setup with UI layout.
@@ -44,9 +46,9 @@ All of the following features have been successfully implemented:
 ## 5. Collaboration, Cloud & Ecosystem
 - [x] **Offline Support:** App detects offline state and functions using local caching via Service Workers.
 - [x] **Cloud Save & Sync:** Save project states to a database (e.g., Firebase Firestore).
-- [x] **Real-time Multiplayer / Collaboration:** Multiple users editing the timeline, adding tracks, and mixing simultaneously via WebSockets (similar to Figma/Google Docs).
+- [x] **Cloud Sync (last-write-wins):** Projects sync through Firebase Firestore; the most recent save wins. *True simultaneous multi-user editing (CRDT / WebSocket presence) is NOT yet implemented — it is Proposed in ADR-0004.*
 - [x] **Version Control:** Branching projects (e.g., "Mix 1", "Mix 2 - Vocal Up") and rolling back changes.
-- [x] **Shareable Links:** Export a unique URL for clients or collaborators to listen to the bounce with a built-in comment system at specific timestamps.
+- [x] **Shareable Links:** Generate a unique deep-link URL (`?project=…`) so collaborators can load the full project from the cloud. *(A timestamped-comment system is a roadmap idea, not yet built.)*
 
 ## 6. High-Performance Architectural Overhaul (Systems Architect Phase)
 - [x] **Wasm SIMD Optimization:** Vectorized DSP loops for 4x faster processing per CPU cycle. (Completed: 2026-05-13 13:58)

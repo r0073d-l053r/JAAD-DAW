@@ -1,6 +1,6 @@
 # ADR-0002: Web Audio API Real-time FX Pipeline
 
-- **Status**: 🟡 Proposed
+- **Status**: 🟢 Accepted
 - **Date**: 2026-05-20
 - **Author**: Antigravity & USER
 

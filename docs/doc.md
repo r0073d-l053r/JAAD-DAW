@@ -5,7 +5,7 @@ Welcome to **JAAD** (Just Another AI DAW), a high-fidelity, local-first Digital 
 ## 🚀 Quick Start & Installation
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (v18 or higher recommended)
+- [Node.js](https://nodejs.org/) (v20 or higher — matches CI)
 - [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
 
 ### Installation Steps
@@ -52,10 +52,13 @@ VITE_FIREBASE_APP_ID=your_app_id
 
 ### Firebase Setup
 If you want to use cloud saving, you'll need to create a Firebase project at the [Firebase Console](https://console.firebase.google.com/).
-1. Enable **Authentication** (Google or Email).
+1. Enable the **Anonymous** sign-in provider (Authentication → Sign-in method). The app signs in anonymously — Google/Email providers are not used.
 2. Create a **Firestore Database**.
 3. Create a **Storage Bucket**.
 4. Copy your Web App configuration into your `.env` file.
+5. **Deploy the security rules:** `firebase deploy --only firestore:rules,storage`. Until you do, cloud writes are rejected. See [firebase-deploy-checklist.md](firebase-deploy-checklist.md) for the full backend setup.
+
+> **Note on the Gemini key:** `VITE_GEMINI_API_KEY` is for private/self-hosted builds only — Vite bakes it into the bundle. Public builds are BYOK (users paste their own key in Settings).
 
 ---
 
@@ -100,14 +103,14 @@ J.A.A.D supports professional Windows VSTs (like Waves) via a robust headless Do
 2. Ensure you have Docker and Docker Compose installed on your system.
 3. Open a terminal in the project directory and run the following command to boot the DSP Sidecar:
    ```bash
-   docker-compose up dsp -d
+   docker compose up dsp -d --build
    ```
-4. This will build and start an Ubuntu-based environment with Wine, KXStudio/Carla, and a Python WebSocket bridge that seamlessly connects the DAW frontend to your VSTs.
+4. This builds and starts an Ubuntu-based environment with Wine, KXStudio/Carla, and a Python WebSocket bridge that connects the DAW frontend to your VSTs.
 
 ### How to Use VSTs
-- Once the sidecar is running, J.A.A.D will detect it.
-- You can route your stems to specific VST effects, and the audio will be streamed to the container and processed in real-time.
-- Adjust parameters in the DAW UI to send OSC commands to Carla.
+- The sidecar is **authenticated by default**. Grab its token with `docker compose logs dsp | grep -A1 "auth token"` and paste it into **Settings → AI & Cloud → Self-Hosted Sidecar Access → VST / DSP Bridge Token**. Once pasted, J.A.A.D connects.
+- Route your stems to specific VST effects; the audio is streamed to the container and processed there.
+- Adjust parameters in the DAW UI to control Carla. See [self-hosting-hardening.md](self-hosting-hardening.md) before exposing the sidecar beyond localhost.
 
 ---
 
