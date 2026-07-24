@@ -1,6 +1,6 @@
 # ADR-0003: Generative AI Music Composition Pipelines
 
-- **Status**: 🟡 Proposed
+- **Status**: 🟢 Accepted
 - **Date**: 2026-05-20
 - **Author**: Antigravity & USER
 
