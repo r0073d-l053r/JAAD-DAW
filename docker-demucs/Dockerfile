@@ -3,7 +3,7 @@
 # docker-compose.stems.yml — uncomment the `gpus` block and swap in the CUDA
 # torch index URL below for ~10-30x faster separations.
 
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1
 
